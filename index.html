@@ -37,6 +37,15 @@
           </svg>
           <span>AI Sales</span>
         </a>
+        <a href="#" class="nav-item" data-page="posts">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M19.07 4.93a10 10 0 010 14.14" />
+            <path d="M15.54 8.46a5 5 0 010 7.07" />
+          </svg>
+          <span>Posts Generator</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -283,6 +292,106 @@
               <tbody id="callLogBody"></tbody>
             </table>
           </div>
+        </section>
+
+      </div>
+
+      <!-- ═══ PAGE: POSTS GENERATOR ═════════════════════ -->
+      <div class="page" id="pagePosts" style="display:none;">
+
+        <div class="dashboard-header">
+          <div>
+            <h1>Posts Generator</h1>
+            <p class="subtitle">Research-driven ad creatives that stop the scroll.</p>
+          </div>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Input Card -->
+          <section class="card bento-left">
+            <h3 class="card-title">Product & Research</h3>
+
+            <form id="adForm">
+              <label for="adProduct">Product / Service</label>
+              <input id="adProduct" type="text" placeholder="e.g. Celeritech ERP, Enterpryze…" required />
+
+              <label for="adDescription">Description & Details</label>
+              <textarea id="adDescription" rows="4"
+                placeholder="What does it do? Who is it for? Key selling points…"></textarea>
+
+              <h4 class="toggle-section-title">Platform Formats</h4>
+              <div class="toggle-grid">
+                <label class="toggle-row"><input type="checkbox" id="togInstagram" /><span
+                    class="toggle-switch"></span><span>📸 Instagram Post</span></label>
+                <label class="toggle-row"><input type="checkbox" id="togReels" /><span
+                    class="toggle-switch"></span><span>🎬 Instagram Reels</span></label>
+                <label class="toggle-row"><input type="checkbox" id="togYoutubeShorts" /><span
+                    class="toggle-switch"></span><span>📺 YouTube Shorts</span></label>
+                <label class="toggle-row"><input type="checkbox" id="togLinkedin" /><span
+                    class="toggle-switch"></span><span>💼 LinkedIn</span></label>
+                <label class="toggle-row"><input type="checkbox" id="togX" /><span class="toggle-switch"></span><span>🐦
+                    X (Twitter)</span></label>
+                <label class="toggle-row"><input type="checkbox" id="togVideoScript" /><span
+                    class="toggle-switch"></span><span>🎥 Video Script</span></label>
+              </div>
+
+              <div class="duration-row" id="durationRow" style="display:none;">
+                <label for="adDuration">Video Duration</label>
+                <input id="adDuration" type="text" placeholder="e.g. 30 seconds, 1 minute" />
+              </div>
+
+              <button type="submit" class="btn-primary" id="adGenerateBtn">
+                <span class="btn-text">🔍 Research & Generate</span>
+                <span class="btn-loader" style="display:none"><span class="spinner"></span>Generating…</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Output Card -->
+          <section class="card bento-right ad-output-card">
+            <h3 class="card-title">Generated Content</h3>
+
+            <!-- Progress -->
+            <div class="ad-progress" id="adProgress" style="display:none;">
+              <div class="progress-bar">
+                <div class="progress-fill" id="adProgressFill"></div>
+              </div>
+              <div class="progress-info">
+                <span id="adProgressText">Starting…</span>
+                <span id="adProgressPct">0%</span>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div class="preview-empty" id="adEmpty">
+              <div class="preview-empty-icon">📣</div>
+              <h3>No content yet</h3>
+              <p>Your AI-generated ads will appear here</p>
+            </div>
+
+            <!-- Streamed content -->
+            <div class="ad-output-body" id="adOutputBody" style="display:none;"></div>
+
+            <!-- Copy button -->
+            <div class="ad-output-actions" id="adOutputActions" style="display:none;">
+              <button class="btn-outline" id="adCopyBtn">📋 Copy All</button>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Post History -->
+        <section class="card blog-history-card" id="adHistoryCard">
+          <div class="call-log-header">
+            <h3>Post History</h3>
+          </div>
+          <div class="blog-history-empty" id="adHistoryEmpty">
+            <div class="empty-icon">📣</div>
+            <h4>No posts generated yet</h4>
+            <p>Generated ad sets will appear here</p>
+          </div>
+          <div class="blog-history-list" id="adHistoryList" style="display:none;"></div>
         </section>
 
       </div>

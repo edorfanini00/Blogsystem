@@ -598,6 +598,287 @@ app.delete('/api/blogs/:id', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// ─── POSTS GENERATOR — Ad Research & Generation ─────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const ADS_FILE = join(__dirname, 'ads.json');
+
+function loadAds() {
+    if (!existsSync(ADS_FILE)) return [];
+    try { return JSON.parse(readFileSync(ADS_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveAds(ads) {
+    writeFileSync(ADS_FILE, JSON.stringify(ads, null, 2), 'utf-8');
+}
+
+// ─── CRUD endpoints ─────────────────────────────────────────────
+app.get('/api/ads', (req, res) => res.json(loadAds()));
+
+app.get('/api/ads/:id', (req, res) => {
+    const ad = loadAds().find(a => a.id === req.params.id);
+    if (!ad) return res.status(404).json({ error: 'Not found' });
+    res.json(ad);
+});
+
+app.delete('/api/ads/:id', (req, res) => {
+    const ads = loadAds().filter(a => a.id !== req.params.id);
+    saveAds(ads);
+    res.json({ success: true });
+});
+
+// ─── POST /api/ads/generate (SSE) ───────────────────────────────
+app.post('/api/ads/generate', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    const {
+        product,
+        description,
+        platforms = {},   // { instagram, reels, youtubeShorts, linkedin, x, videoScript }
+        videoDuration,
+    } = req.body;
+
+    try {
+        // ── Stage 1: Perplexity Deep Research ────────────────────────
+        send({ type: 'progress', stage: 'research', pct: 5, text: 'Starting deep customer research…' });
+
+        const researchPrompt = `You are an expert ad researcher. Search Reddit, X/Twitter, forums, review sites, and communities for REAL people discussing "${product}".
+${description ? `Product context: ${description}` : ''}
+
+Find and return:
+1. **Exact phrases and language** real people use to describe their pain points related to this product/industry
+2. **What makes them stop scrolling** — hooks, headlines, and visuals that catch attention in this niche
+3. **Common objections** to buying or switching to a product like this
+4. **Competitors** they currently use and what they complain about
+5. **Emotional triggers** — fears, aspirations, frustrations that resonate deeply
+6. **The "aha moment"** — what convinced people to finally buy/switch
+
+Focus on VERBATIM quotes, slang, and the RAW way customers talk. Not marketing language — REAL people language.
+Return comprehensive research with specific examples and quotes.`;
+
+        send({ type: 'progress', stage: 'research', pct: 10, text: 'Scanning Reddit, X, forums for real customer language…' });
+
+        const researchRes = await fetch('https://api.perplexity.ai/chat/completions', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'sonar-pro',
+                messages: [{ role: 'user', content: researchPrompt }],
+                search_recency_filter: 'month',
+            }),
+        });
+
+        if (!researchRes.ok) {
+            const err = await researchRes.text();
+            throw new Error(`Perplexity research failed: ${err}`);
+        }
+
+        const researchData = await researchRes.json();
+        const research = researchData.choices?.[0]?.message?.content || '';
+
+        send({ type: 'progress', stage: 'research', pct: 40, text: 'Deep research complete. Analyzing customer language…' });
+        send({ type: 'research', content: research });
+
+        // ── Stage 2: Claude Ad Generation ────────────────────────────
+        send({ type: 'progress', stage: 'generation', pct: 45, text: 'Generating ad creatives from research…' });
+
+        // Build platform-specific instructions
+        let platformInstructions = '';
+
+        if (platforms.instagram) {
+            platformInstructions += `
+## 📸 INSTAGRAM POST
+- 3 caption options (engaging, short, with emojis)
+- 10 relevant hashtags
+- Image description: exact scene, text overlay, colors, mood
+- Square format (1:1) recommendations
+`;
+        }
+
+        if (platforms.reels) {
+            platformInstructions += `
+## 🎬 INSTAGRAM REELS
+- Vertical video script (9:16) ${videoDuration ? `for ${videoDuration}` : 'for 30 seconds'}
+- Hook in first 2 seconds
+- Scene-by-scene breakdown with B-roll suggestions
+- Trending audio style suggestion
+- Text overlay timing
+- CTA at the end
+`;
+        }
+
+        if (platforms.youtubeShorts) {
+            platformInstructions += `
+## 📺 YOUTUBE SHORTS
+- Vertical script ${videoDuration ? `for ${videoDuration}` : 'for 60 seconds'}
+- Retention hook in first 3 seconds
+- Pattern interrupts to maintain watch time
+- End screen CTA
+- Title and description
+`;
+        }
+
+        if (platforms.linkedin) {
+            platformInstructions += `
+## 💼 LINKEDIN POST
+- Professional tone, longer copy
+- 3 post options (story-based, data-driven, question-based)
+- Carousel idea (5–8 slide outline)
+- CTA for engagement
+`;
+        }
+
+        if (platforms.x) {
+            platformInstructions += `
+## 🐦 X (TWITTER)
+- 3 standalone tweets (≤280 chars each, punchy)
+- 1 thread (5–7 tweets) for deeper engagement
+- Engagement hooks
+`;
+        }
+
+        if (platforms.videoScript) {
+            platformInstructions += `
+## 🎥 FULL VIDEO SCRIPT
+- Duration: ${videoDuration || '60 seconds'}
+- Scene-by-scene breakdown
+- Voiceover/narration script
+- B-roll descriptions for each scene
+- Text overlays and graphics descriptions
+- Background music mood suggestion
+- CTA and end card
+`;
+        }
+
+        const adPrompt = `You are a world-class performance marketer and copywriter. You deeply understand that:
+
+"Ad performance is a direct reflection of how deeply you understand your customer."
+- Your hook is only as good as your understanding of what makes them stop scrolling.
+- Your script is only as good as your understanding of how they actually talk.
+- Your angle is only as good as your understanding of what they actually care about.
+
+You've been given DEEP RESEARCH on real customer conversations. Use the EXACT language, phrases, and pain points from this research to write ads that feel impossibly specific — not generic.
+
+## PRODUCT: ${product}
+${description ? `## PRODUCT DETAILS: ${description}` : ''}
+
+## CUSTOMER RESEARCH:
+${research}
+
+---
+
+Generate the following ad content. Use the research to make every word specific and resonant.
+
+## 🎯 STATIC AD CREATIVE (ALWAYS GENERATE)
+
+### Scroll-Stopping Hooks (5 options)
+Write 5 hooks that would make the target customer literally stop scrolling. Use their real language.
+
+### Ad Copy (Primary Text)
+Write 3 versions: short (2-3 sentences), medium (paragraph), long (storytelling).
+
+### CTA Options
+5 call-to-action button texts that create urgency.
+
+### Image/Visual Description
+Describe 3 static ad image concepts:
+- Scene description
+- Text overlay (exact words)
+- Color palette and mood
+- Why this visual would stop the scroll
+
+${platformInstructions || '(No additional platform formats requested)'}
+
+Format your response cleanly with markdown headers. Be specific, not generic. Use the customer's own words.`;
+
+        send({ type: 'progress', stage: 'generation', pct: 50, text: 'Claude is crafting your ads…' });
+
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': process.env.ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 8000,
+                stream: true,
+                messages: [{ role: 'user', content: adPrompt }],
+            }),
+        });
+
+        if (!claudeRes.ok) {
+            const err = await claudeRes.text();
+            throw new Error(`Claude generation failed: ${err}`);
+        }
+
+        let fullContent = '';
+        let pct = 50;
+        const reader = claudeRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const raw = line.slice(6).trim();
+                if (raw === '[DONE]') continue;
+                try {
+                    const evt = JSON.parse(raw);
+                    if (evt.type === 'content_block_delta' && evt.delta?.text) {
+                        fullContent += evt.delta.text;
+                        pct = Math.min(95, pct + 0.3);
+                        send({ type: 'progress', stage: 'generation', pct: Math.round(pct), text: 'Generating ad content…' });
+                        send({ type: 'chunk', content: evt.delta.text });
+                    }
+                } catch { }
+            }
+        }
+
+        send({ type: 'progress', stage: 'done', pct: 100, text: 'Complete!' });
+
+        // Save to ads.json
+        const ad = {
+            id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+            product,
+            description: description || '',
+            platforms,
+            videoDuration: videoDuration || '',
+            research,
+            content: fullContent,
+            createdAt: new Date().toISOString(),
+        };
+        const ads = loadAds();
+        ads.unshift(ad);
+        saveAds(ads);
+
+        send({ type: 'complete', ad });
+        console.log(`📣 Ad generated & saved: "${product}" (${ad.id})`);
+    } catch (err) {
+        console.error('Ad generation error:', err);
+        send({ type: 'error', error: err.message });
+    } finally {
+        res.end();
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // ─── AI SALES — Vapi Outbound Calling ────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 

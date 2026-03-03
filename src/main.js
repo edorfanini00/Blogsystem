@@ -353,6 +353,7 @@ publishBtn.addEventListener('click', async () => {
 const navItems = document.querySelectorAll('.nav-item');
 const pageBlog = document.getElementById('pageBlog');
 const pageSales = document.getElementById('pageSales');
+const pagePosts = document.getElementById('pagePosts');
 
 navItems.forEach(item => {
     item.addEventListener('click', e => {
@@ -363,15 +364,21 @@ navItems.forEach(item => {
         navItems.forEach(n => n.classList.remove('active'));
         item.classList.add('active');
 
-        // Switch pages
+        // Hide all pages
+        pageBlog.style.display = 'none';
+        pageSales.style.display = 'none';
+        pagePosts.style.display = 'none';
+
+        // Show selected page
         if (page === 'blogs') {
             pageBlog.style.display = '';
-            pageSales.style.display = 'none';
             loadBlogHistory();
         } else if (page === 'ai-sales') {
-            pageBlog.style.display = 'none';
             pageSales.style.display = '';
             loadCallLog();
+        } else if (page === 'posts') {
+            pagePosts.style.display = '';
+            loadAdHistory();
         }
     });
 });
@@ -814,4 +821,228 @@ function formatDuration(seconds) {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── POSTS GENERATOR ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const adForm = document.getElementById('adForm');
+const adGenerateBtn = document.getElementById('adGenerateBtn');
+const adProgress = document.getElementById('adProgress');
+const adProgressFill = document.getElementById('adProgressFill');
+const adProgressText = document.getElementById('adProgressText');
+const adProgressPct = document.getElementById('adProgressPct');
+const adEmpty = document.getElementById('adEmpty');
+const adOutputBody = document.getElementById('adOutputBody');
+const adOutputActions = document.getElementById('adOutputActions');
+const adCopyBtn = document.getElementById('adCopyBtn');
+const adHistoryEmpty = document.getElementById('adHistoryEmpty');
+const adHistoryList = document.getElementById('adHistoryList');
+const durationRow = document.getElementById('durationRow');
+
+// Toggles
+const videoToggles = ['togReels', 'togYoutubeShorts', 'togVideoScript'];
+
+// Show/hide duration input when any video toggle is active
+document.querySelectorAll('.toggle-row input').forEach(input => {
+    input.addEventListener('change', () => {
+        const anyVideo = videoToggles.some(id => document.getElementById(id).checked);
+        durationRow.style.display = anyVideo ? '' : 'none';
+    });
+});
+
+let adFullContent = '';
+
+// ─── Generate ───────────────────────────────────────────────────
+adForm.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const product = document.getElementById('adProduct').value.trim();
+    const description = document.getElementById('adDescription').value.trim();
+    if (!product) return;
+
+    const platforms = {
+        instagram: document.getElementById('togInstagram').checked,
+        reels: document.getElementById('togReels').checked,
+        youtubeShorts: document.getElementById('togYoutubeShorts').checked,
+        linkedin: document.getElementById('togLinkedin').checked,
+        x: document.getElementById('togX').checked,
+        videoScript: document.getElementById('togVideoScript').checked,
+    };
+    const videoDuration = document.getElementById('adDuration').value.trim();
+
+    // UI: loading state
+    adGenerateBtn.disabled = true;
+    adGenerateBtn.querySelector('.btn-text').style.display = 'none';
+    adGenerateBtn.querySelector('.btn-loader').style.display = 'inline-flex';
+    adEmpty.style.display = 'none';
+    adOutputBody.style.display = 'block';
+    adOutputBody.innerHTML = '';
+    adOutputActions.style.display = 'none';
+    adProgress.style.display = '';
+    adProgressFill.style.width = '0%';
+    adProgressPct.textContent = '0%';
+    adProgressText.textContent = 'Starting…';
+    adFullContent = '';
+
+    try {
+        const res = await fetch(`${API_BASE}/api/ads/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product, description, platforms, videoDuration }),
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(line.slice(6));
+
+                    if (data.type === 'progress') {
+                        adProgressFill.style.width = data.pct + '%';
+                        adProgressPct.textContent = data.pct + '%';
+                        adProgressText.textContent = data.text;
+                    }
+
+                    if (data.type === 'chunk') {
+                        adFullContent += data.content;
+                        adOutputBody.innerHTML = marked.parse(adFullContent);
+                    }
+
+                    if (data.type === 'complete') {
+                        adOutputBody.innerHTML = marked.parse(adFullContent);
+                        adOutputActions.style.display = 'flex';
+                        adProgress.style.display = 'none';
+                        showToast(`Ad content generated for "${product}"`);
+                        loadAdHistory();
+                    }
+
+                    if (data.type === 'error') {
+                        throw new Error(data.error);
+                    }
+                } catch (parseErr) {
+                    if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Ad generation error:', err);
+        showToast(err.message || 'Ad generation failed', 'error');
+    } finally {
+        adGenerateBtn.disabled = false;
+        adGenerateBtn.querySelector('.btn-text').style.display = 'inline';
+        adGenerateBtn.querySelector('.btn-loader').style.display = 'none';
+    }
+});
+
+// ─── Copy All ───────────────────────────────────────────────────
+adCopyBtn.addEventListener('click', async () => {
+    if (!adFullContent) return;
+    try {
+        await navigator.clipboard.writeText(adFullContent);
+        showToast('Ad content copied to clipboard');
+    } catch {
+        showToast('Failed to copy', 'error');
+    }
+});
+
+// ─── Ad History ─────────────────────────────────────────────────
+async function loadAdHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/api/ads`);
+        if (!res.ok) return;
+        const ads = await res.json();
+
+        if (ads.length === 0) {
+            adHistoryEmpty.style.display = '';
+            adHistoryList.style.display = 'none';
+            return;
+        }
+
+        adHistoryEmpty.style.display = 'none';
+        adHistoryList.style.display = '';
+
+        adHistoryList.innerHTML = ads.map(ad => {
+            const date = new Date(ad.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const toggles = Object.entries(ad.platforms || {}).filter(([, v]) => v).map(([k]) => {
+                const icons = { instagram: '📸', reels: '🎬', youtubeShorts: '📺', linkedin: '💼', x: '🐦', videoScript: '🎥' };
+                return icons[k] || '';
+            }).join(' ');
+            return `
+              <div class="blog-history-item" data-ad-id="${ad.id}">
+                <div class="blog-item-info">
+                  <div class="blog-item-title">${ad.product}</div>
+                  <div class="blog-item-meta">
+                    <span class="blog-item-date">${date}</span>
+                    ${toggles ? `<span class="blog-item-date">${toggles}</span>` : ''}
+                  </div>
+                </div>
+                <div class="blog-item-actions">
+                  <button class="delete-call-btn delete-ad-btn" data-ad-id="${ad.id}" title="Delete">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                  </button>
+                </div>
+              </div>`;
+        }).join('');
+
+        // Click to view
+        adHistoryList.querySelectorAll('.blog-history-item').forEach(item => {
+            item.addEventListener('click', e => {
+                if (e.target.closest('.delete-ad-btn')) return;
+                viewAd(item.dataset.adId);
+            });
+        });
+
+        // Delete
+        adHistoryList.querySelectorAll('.delete-ad-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                deleteAd(btn.dataset.adId);
+            });
+        });
+    } catch (err) {
+        console.error('Failed to load ad history:', err);
+    }
+}
+
+async function viewAd(adId) {
+    try {
+        const res = await fetch(`${API_BASE}/api/ads/${adId}`);
+        if (!res.ok) return;
+        const ad = await res.json();
+
+        adFullContent = ad.content;
+        adEmpty.style.display = 'none';
+        adOutputBody.style.display = 'block';
+        adOutputBody.innerHTML = marked.parse(ad.content);
+        adOutputActions.style.display = 'flex';
+        adProgress.style.display = 'none';
+
+        document.querySelectorAll('#adHistoryList .blog-history-item').forEach(i => {
+            i.classList.toggle('active', i.dataset.adId === adId);
+        });
+
+        showToast(`Loaded: "${ad.product}"`);
+    } catch {
+        showToast('Failed to load ad', 'error');
+    }
+}
+
+async function deleteAd(adId) {
+    const confirmed = await showDeleteModal('Are you sure you want to delete this post? This action cannot be undone.');
+    if (!confirmed) return;
+    await fetch(`${API_BASE}/api/ads/${adId}`, { method: 'DELETE' });
+    loadAdHistory();
+    showToast('Post deleted');
 }
