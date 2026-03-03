@@ -649,7 +649,12 @@ Be conversational, not pushy. Ask follow-up questions based on their answers. If
         // Normalize to E.164 format
         let normalizedPhone = phoneNumber.replace(/[^\d+]/g, '');
         if (!normalizedPhone.startsWith('+')) {
-            normalizedPhone = '+1' + normalizedPhone;
+            // If it starts with country code 1 and has 11 digits, just add +
+            if (normalizedPhone.startsWith('1') && normalizedPhone.length === 11) {
+                normalizedPhone = '+' + normalizedPhone;
+            } else {
+                normalizedPhone = '+1' + normalizedPhone;
+            }
         }
 
         console.log(`\n📞 Initiating call to ${normalizedPhone} (${contactName || 'Unknown'})`);

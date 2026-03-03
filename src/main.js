@@ -735,19 +735,34 @@ function renderCallRow(call) {
     let expandContent = '';
     if (hasAnalysis) {
         const a = call.analysis;
+        const interestClass = a.interestLevel === 'high' ? 'interest-high' : a.interestLevel === 'medium' ? 'interest-medium' : 'interest-low';
         expandContent = `
       <tr class="call-expand-row" id="expand-${call.id}" style="display:none;">
         <td colspan="6">
           <div class="call-expand-content">
-            ${call.recordingUrl ? `<div class="call-recording"><h4>Recording</h4><audio controls src="${call.recordingUrl}"></audio></div>` : ''}
-            <div class="analysis-summary"><strong>Summary:</strong> ${a.summary}</div>
-            ${a.followUpRecommendation ? `<div class="analysis-summary"><strong>Follow-up:</strong> ${a.followUpRecommendation}</div>` : ''}
-            <div class="call-analysis-grid">
-              ${a.painPoints?.length ? `<div class="analysis-card"><h5>Pain Points</h5><ul>${a.painPoints.map(p => `<li>${p}</li>`).join('')}</ul></div>` : ''}
-              ${a.currentSoftware?.length ? `<div class="analysis-card"><h5>Current Software</h5><ul>${a.currentSoftware.map(s => `<li>${s}</li>`).join('')}</ul></div>` : ''}
-              ${a.objections?.length ? `<div class="analysis-card"><h5>Objections</h5><ul>${a.objections.map(o => `<li>${o}</li>`).join('')}</ul></div>` : ''}
-              ${a.keyQuotes?.length ? `<div class="analysis-card"><h5>Key Quotes</h5><ul>${a.keyQuotes.map(q => `<li>"${q}"</li>`).join('')}</ul></div>` : ''}
+            <div class="expand-header">
+              <div class="expand-header-left">
+                <h4>${call.contactName || 'Unknown'}${call.company ? ` · ${call.company}` : ''}</h4>
+                ${a.interestLevel ? `<span class="interest-badge ${interestClass}">${a.interestLevel} interest</span>` : ''}
+              </div>
             </div>
+
+            ${call.recordingUrl ? `<div class="call-recording"><h4>🎙️ Recording</h4><audio controls src="${call.recordingUrl}"></audio></div>` : ''}
+
+            <div class="expand-summary-box">
+              <div class="summary-label">AI Summary</div>
+              <p>${a.summary}</p>
+              ${a.followUpRecommendation ? `<div class="summary-followup"><strong>📋 Follow-up:</strong> ${a.followUpRecommendation}</div>` : ''}
+            </div>
+
+            <div class="call-analysis-grid">
+              ${a.painPoints?.length ? `<div class="analysis-card"><h5>🔴 Pain Points</h5><ul>${a.painPoints.map(p => `<li>${p}</li>`).join('')}</ul></div>` : ''}
+              ${a.currentSoftware?.length ? `<div class="analysis-card"><h5>💻 Current Software</h5><ul>${a.currentSoftware.map(s => `<li>${s}</li>`).join('')}</ul></div>` : ''}
+              ${a.objections?.length ? `<div class="analysis-card"><h5>⚠️ Objections</h5><ul>${a.objections.map(o => `<li>${o}</li>`).join('')}</ul></div>` : ''}
+              ${a.keyQuotes?.length ? `<div class="analysis-card quotes-card"><h5>💬 Key Quotes</h5><ul>${a.keyQuotes.map(q => `<li>"${q}"</li>`).join('')}</ul></div>` : ''}
+            </div>
+
+            ${call.transcript ? `<div class="transcript-section"><h4>📝 Full Transcript</h4><div class="transcript-body">${call.transcript}</div></div>` : ''}
           </div>
         </td>
       </tr>`;
