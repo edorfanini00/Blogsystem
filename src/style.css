@@ -1639,11 +1639,16 @@ body {
   margin-bottom: 16px;
 }
 
+#adForm .form-group {
+  margin-bottom: 20px;
+}
+
 .platform-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 14px;
+  padding: 0 14px;
+  height: 44px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: var(--radius-sm);
@@ -1654,6 +1659,7 @@ body {
   transition: all var(--transition);
   user-select: none;
   text-align: center;
+  white-space: nowrap;
 }
 
 .platform-btn:hover {
@@ -1679,13 +1685,15 @@ body {
 
 /* File Upload Area */
 .file-upload-area {
-  border: 2px dashed var(--border);
+  border: 2px dashed #cbd5e1;
   border-radius: var(--radius-sm);
-  padding: 20px;
+  background: #f8fafc;
+  padding: 24px 20px;
   text-align: center;
   cursor: pointer;
   transition: all var(--transition);
-  margin-bottom: 4px;
+  margin-bottom: 24px;
+  margin-top: 8px;
 }
 
 .file-upload-area:hover,
