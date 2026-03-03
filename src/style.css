@@ -87,6 +87,12 @@ body {
   color: var(--text-primary);
 }
 
+.logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;
