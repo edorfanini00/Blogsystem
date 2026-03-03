@@ -1570,8 +1570,7 @@ body {
   margin-top: 0 !important;
 }
 
-#adForm select,
-#adForm input[type="number"] {
+#adForm select {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--border);
@@ -1584,12 +1583,55 @@ body {
   transition: border-color var(--transition), box-shadow var(--transition);
   box-sizing: border-box;
   appearance: auto;
+  cursor: pointer;
 }
 
-#adForm select:focus,
-#adForm input[type="number"]:focus {
+#adForm select:focus {
   border-color: #ea580c;
   box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
+}
+
+/* Orange +/- Stepper */
+.stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  height: 44px;
+}
+
+.stepper-btn {
+  width: 44px;
+  height: 100%;
+  background: #ea580c;
+  color: white;
+  border: none;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.stepper-btn:hover {
+  background: #c2410c;
+}
+
+.stepper-btn:active {
+  background: #9a3412;
+}
+
+.stepper-value {
+  flex: 1;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  user-select: none;
 }
 
 .toggle-section-title {

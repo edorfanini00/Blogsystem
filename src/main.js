@@ -853,6 +853,17 @@ document.querySelectorAll('.toggle-row input').forEach(input => {
 });
 
 let adFullContent = '';
+
+// ─── Stepper +/- ────────────────────────────────────────────────
+const stepperValue = document.getElementById('adPostCount');
+document.getElementById('stepperMinus').addEventListener('click', () => {
+    const v = Math.max(1, parseInt(stepperValue.textContent) - 1);
+    stepperValue.textContent = v;
+});
+document.getElementById('stepperPlus').addEventListener('click', () => {
+    const v = Math.min(10, parseInt(stepperValue.textContent) + 1);
+    stepperValue.textContent = v;
+});
 let uploadedFiles = [];
 
 // ─── File Upload (drag & drop + click) ──────────────────────────
@@ -977,7 +988,7 @@ adForm.addEventListener('submit', async e => {
         videoScript: document.getElementById('togVideoScript').checked,
     };
     const videoDuration = document.getElementById('adDuration').value.trim();
-    const postCount = parseInt(document.getElementById('adPostCount').value) || 3;
+    const postCount = parseInt(document.getElementById('adPostCount').textContent) || 3;
     const ctaGoal = document.getElementById('adCtaGoal').value;
 
     // UI: loading state

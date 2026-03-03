@@ -8,6 +8,9 @@ import { dirname, join } from 'path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,9 +33,15 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
         for (const file of req.files) {
             let text = '';
             try {
-                text = readFileSync(file.path, 'utf-8');
+                const buf = readFileSync(file.path);
+                if (file.originalname.toLowerCase().endsWith('.pdf')) {
+                    const pdf = await pdfParse(buf);
+                    text = pdf.text;
+                } else {
+                    text = buf.toString('utf-8');
+                }
             } catch {
-                text = `[Binary file: ${file.originalname}, ${(file.size / 1024).toFixed(1)} KB]`;
+                text = `[Could not parse: ${file.originalname}, ${(file.size / 1024).toFixed(1)} KB]`;
             }
             results.push({ name: file.originalname, size: file.size, text: text.slice(0, 50000) });
         }
@@ -832,48 +841,48 @@ Return comprehensive research with specific examples and quotes.`;
         };
         const ctaLabel = ctaLabels[ctaGoal] || 'Book a Meeting';
 
-        const adPrompt = `You are a world-class performance marketer and copywriter.
-
-"Ad performance is a direct reflection of how deeply you understand your customer."
-
-You've been given DEEP RESEARCH on real customer conversations. Use the EXACT language, phrases, and pain points to write ads that feel impossibly specific.
+        const adPrompt = `You are writing ad creative briefs for a design agency. Keep everything SHORT and PUNCHY — no long paragraphs, no walls of text, no excessive emojis. Think like a creative director.
 
 ## PRODUCT: ${product}
-${description ? `## PRODUCT DETAILS: ${description}` : ''}
+${description ? `## PRODUCT INFO: ${description}` : ''}
 
-## CUSTOMER RESEARCH:
+## RESEARCH INSIGHTS:
 ${research}
 
 ## CTA GOAL: ${ctaLabel}
-All calls-to-action must drive this goal.
 
 ---
 
-Generate EXACTLY ${postCount} ad post(s). Number them Post 1, Post 2, etc.
+Generate EXACTLY ${postCount} static ad post(s). Number them Post 1, Post 2, etc.
 
-For EACH post provide:
+For EACH post:
 
-### Scroll-Stopping Hook
-1 hook per post that stops the scroll. Use their real language.
+### Hook
+One scroll-stopping headline. MAX 5-8 words. Bold. Provocative. Uses their real language.
 
 ### Caption
-An engaging social media caption with emojis, value props, and urgency.
+2-3 sentences max. Direct, punchy. 1-2 emojis max. End with the CTA.
 
-### Ad Copy (Primary Text)
-Main ad body — storytelling, addressing pain points from research.
+### Key Benefits
+Exactly 4 bullet points. One short line each (5-10 words). No fluff.
 
-### CTA
-A compelling call-to-action aligned to "${ctaLabel}".
+### CTA Button Text
+One button label aligned to "${ctaLabel}". Max 4 words.
 
-### Visual / Image Description
-- Scene description
-- Text overlay (exact words)
-- Color palette and mood
-- Why this visual stops the scroll
+### Visual Brief
+- **Scene**: What the image shows (1 sentence)
+- **Text Overlay**: Exact words on the image (max 6 words)
+- **Color/Mood**: 3-4 words (e.g. "Dark, bold, orange accents")
+- **Layout**: Where text sits relative to the visual
 
-${platformInstructions || '(No additional platform formats requested)'}
+${platformInstructions || ''}
 
-Format with markdown headers. Be specific, not generic. Use the customer's own words.`;
+RULES:
+- No long descriptions. This goes to a design agency — they need briefs, not essays.
+- Hooks must be SHORT. If it's more than 8 words, rewrite it.
+- No emoji spam. Max 1-2 per caption.
+- Each post must have a DIFFERENT angle/hook.
+- Benefits are short bullet points, not sentences.`;
 
         send({ type: 'progress', stage: 'generation', pct: 50, text: 'Claude is crafting your ads…' });
 
