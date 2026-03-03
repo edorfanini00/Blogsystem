@@ -5,7 +5,9 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import nodemailer from 'nodemailer';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,6 +17,63 @@ dotenv.config({ path: join(__dirname, '.env') });
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// ─── Multer for file uploads ────────────────────────────────────
+const uploadsDir = join(__dirname, 'uploads');
+if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
+const upload = multer({ dest: uploadsDir, limits: { fileSize: 10 * 1024 * 1024 } });
+
+// ─── File Upload Endpoint ───────────────────────────────────────
+app.post('/api/upload', upload.array('files', 10), async (req, res) => {
+    try {
+        const results = [];
+        for (const file of req.files) {
+            let text = '';
+            try {
+                text = readFileSync(file.path, 'utf-8');
+            } catch {
+                text = `[Binary file: ${file.originalname}, ${(file.size / 1024).toFixed(1)} KB]`;
+            }
+            results.push({ name: file.originalname, size: file.size, text: text.slice(0, 50000) });
+        }
+        res.json({ files: results });
+    } catch (err) {
+        console.error('Upload error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Send Email Endpoint (Outlook SMTP) ─────────────────────────
+app.post('/api/send-email', async (req, res) => {
+    const { subject, htmlContent, textContent, recipientEmail } = req.body;
+    const to = recipientEmail || 'Karla@kromaticos.com';
+
+    try {
+        const transporter = nodemailer.createTransport({
+            host: 'smtp.office365.com',
+            port: 587,
+            secure: false,
+            auth: {
+                user: process.env.OUTLOOK_EMAIL,
+                pass: process.env.OUTLOOK_PASSWORD,
+            },
+        });
+
+        await transporter.sendMail({
+            from: process.env.OUTLOOK_EMAIL,
+            to,
+            subject: subject || 'New Ad Creative from Celeritech Orbit',
+            text: textContent,
+            html: htmlContent || `<pre style="font-family:sans-serif;white-space:pre-wrap;">${textContent}</pre>`,
+        });
+
+        console.log(`📧 Email sent to ${to}`);
+        res.json({ success: true, to });
+    } catch (err) {
+        console.error('Email error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 const PORT = process.env.PORT || 3001;
 
@@ -640,8 +699,10 @@ app.post('/api/ads/generate', async (req, res) => {
     const {
         product,
         description,
-        platforms = {},   // { instagram, reels, youtubeShorts, linkedin, x, videoScript }
+        platforms = {},
         videoDuration,
+        postCount = 3,
+        ctaGoal = 'book_meeting',
     } = req.body;
 
     try {
@@ -759,14 +820,23 @@ Return comprehensive research with specific examples and quotes.`;
 `;
         }
 
-        const adPrompt = `You are a world-class performance marketer and copywriter. You deeply understand that:
+        const ctaLabels = {
+            book_meeting: 'Book a Meeting / Schedule a Demo',
+            sign_up_free: 'Sign Up for Free / Create Free Account',
+            download: 'Download Now / Get the Guide',
+            learn_more: 'Learn More / See How It Works',
+            get_quote: 'Get a Quote / Request Pricing',
+            buy_now: 'Buy Now / Shop Now',
+            free_trial: 'Start Free Trial / Try It Free',
+            contact_us: 'Contact Us / Get in Touch',
+        };
+        const ctaLabel = ctaLabels[ctaGoal] || 'Book a Meeting';
+
+        const adPrompt = `You are a world-class performance marketer and copywriter.
 
 "Ad performance is a direct reflection of how deeply you understand your customer."
-- Your hook is only as good as your understanding of what makes them stop scrolling.
-- Your script is only as good as your understanding of how they actually talk.
-- Your angle is only as good as your understanding of what they actually care about.
 
-You've been given DEEP RESEARCH on real customer conversations. Use the EXACT language, phrases, and pain points from this research to write ads that feel impossibly specific — not generic.
+You've been given DEEP RESEARCH on real customer conversations. Use the EXACT language, phrases, and pain points to write ads that feel impossibly specific.
 
 ## PRODUCT: ${product}
 ${description ? `## PRODUCT DETAILS: ${description}` : ''}
@@ -774,31 +844,36 @@ ${description ? `## PRODUCT DETAILS: ${description}` : ''}
 ## CUSTOMER RESEARCH:
 ${research}
 
+## CTA GOAL: ${ctaLabel}
+All calls-to-action must drive this goal.
+
 ---
 
-Generate the following ad content. Use the research to make every word specific and resonant.
+Generate EXACTLY ${postCount} ad post(s). Number them Post 1, Post 2, etc.
 
-## 🎯 STATIC AD CREATIVE (ALWAYS GENERATE)
+For EACH post provide:
 
-### Scroll-Stopping Hooks (5 options)
-Write 5 hooks that would make the target customer literally stop scrolling. Use their real language.
+### Scroll-Stopping Hook
+1 hook per post that stops the scroll. Use their real language.
+
+### Caption
+An engaging social media caption with emojis, value props, and urgency.
 
 ### Ad Copy (Primary Text)
-Write 3 versions: short (2-3 sentences), medium (paragraph), long (storytelling).
+Main ad body — storytelling, addressing pain points from research.
 
-### CTA Options
-5 call-to-action button texts that create urgency.
+### CTA
+A compelling call-to-action aligned to "${ctaLabel}".
 
-### Image/Visual Description
-Describe 3 static ad image concepts:
+### Visual / Image Description
 - Scene description
 - Text overlay (exact words)
 - Color palette and mood
-- Why this visual would stop the scroll
+- Why this visual stops the scroll
 
 ${platformInstructions || '(No additional platform formats requested)'}
 
-Format your response cleanly with markdown headers. Be specific, not generic. Use the customer's own words.`;
+Format with markdown headers. Be specific, not generic. Use the customer's own words.`;
 
         send({ type: 'progress', stage: 'generation', pct: 50, text: 'Claude is crafting your ads…' });
 

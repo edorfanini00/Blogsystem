@@ -320,6 +320,42 @@
               <textarea id="adDescription" rows="4"
                 placeholder="What does it do? Who is it for? Key selling points…"></textarea>
 
+              <div class="ad-row-group">
+                <div class="ad-row-item">
+                  <label for="adPostCount">Number of Posts</label>
+                  <input id="adPostCount" type="number" min="1" max="10" value="3" />
+                </div>
+                <div class="ad-row-item">
+                  <label for="adCtaGoal">CTA Goal</label>
+                  <select id="adCtaGoal">
+                    <option value="book_meeting">📅 Book a Meeting</option>
+                    <option value="sign_up_free">✍️ Sign Up for Free</option>
+                    <option value="download">📥 Download</option>
+                    <option value="learn_more">📖 Learn More</option>
+                    <option value="get_quote">💰 Get a Quote</option>
+                    <option value="buy_now">🛒 Buy Now</option>
+                    <option value="free_trial">🚀 Start Free Trial</option>
+                    <option value="contact_us">📞 Contact Us</option>
+                  </select>
+                </div>
+              </div>
+              <label>Product Files <small>(optional)</small></label>
+              <div class="file-upload-area" id="fileUploadArea">
+                <input type="file" id="adFileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx"
+                  style="display:none" />
+                <div class="file-upload-prompt" id="fileUploadPrompt">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <span>Drop files here or <strong>click to browse</strong></span>
+                  <small>PDF, DOC, TXT, CSV, XLSX</small>
+                </div>
+                <div class="file-list" id="fileList"></div>
+              </div>
+
               <h4 class="toggle-section-title">Platform Formats</h4>
               <div class="toggle-grid">
                 <label class="toggle-row"><input type="checkbox" id="togInstagram" /><span
@@ -376,6 +412,7 @@
             <!-- Copy button -->
             <div class="ad-output-actions" id="adOutputActions" style="display:none;">
               <button class="btn-outline" id="adCopyBtn">📋 Copy All</button>
+              <button class="btn-primary btn-sm" id="adEmailBtn">📧 Send to Agency</button>
             </div>
           </section>
 

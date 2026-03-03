@@ -853,13 +853,119 @@ document.querySelectorAll('.toggle-row input').forEach(input => {
 });
 
 let adFullContent = '';
+let uploadedFiles = [];
+
+// ─── File Upload (drag & drop + click) ──────────────────────────
+const fileUploadArea = document.getElementById('fileUploadArea');
+const fileInputEl = document.getElementById('adFileInput');
+const fileListEl = document.getElementById('fileList');
+const filePromptEl = document.getElementById('fileUploadPrompt');
+
+fileUploadArea.addEventListener('click', () => fileInputEl.click());
+
+fileUploadArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    fileUploadArea.classList.add('drag-over');
+});
+
+fileUploadArea.addEventListener('dragleave', () => {
+    fileUploadArea.classList.remove('drag-over');
+});
+
+fileUploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    fileUploadArea.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+});
+
+fileInputEl.addEventListener('change', () => {
+    handleFiles(fileInputEl.files);
+    fileInputEl.value = '';
+});
+
+async function handleFiles(files) {
+    const formData = new FormData();
+    for (const f of files) formData.append('files', f);
+
+    try {
+        const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
+        const data = await res.json();
+        uploadedFiles.push(...data.files);
+        renderFileList();
+        showToast(`${data.files.length} file(s) uploaded`);
+    } catch (err) {
+        showToast('File upload failed', 'error');
+    }
+}
+
+function renderFileList() {
+    if (uploadedFiles.length === 0) {
+        fileListEl.innerHTML = '';
+        filePromptEl.style.display = '';
+        return;
+    }
+    filePromptEl.style.display = 'none';
+    fileListEl.innerHTML = uploadedFiles.map((f, i) => `
+        <div class="file-item">
+            <span class="file-item-name">📄 ${f.name} <small>(${(f.size / 1024).toFixed(1)} KB)</small></span>
+            <button class="file-item-remove" data-idx="${i}" title="Remove">✕</button>
+        </div>
+    `).join('');
+
+    fileListEl.querySelectorAll('.file-item-remove').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            uploadedFiles.splice(Number(btn.dataset.idx), 1);
+            renderFileList();
+        });
+    });
+}
+
+// ─── Email Send ─────────────────────────────────────────────────
+const adEmailBtn = document.getElementById('adEmailBtn');
+adEmailBtn.addEventListener('click', async () => {
+    if (!adFullContent) return;
+
+    adEmailBtn.disabled = true;
+    adEmailBtn.textContent = '📧 Sending…';
+
+    try {
+        const product = document.getElementById('adProduct').value.trim();
+        const res = await fetch(`${API_BASE}/api/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                subject: `Ad Creative: ${product}`,
+                textContent: adFullContent,
+            }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Email sent to ${data.to}`);
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (err) {
+        showToast(err.message || 'Email failed', 'error');
+    } finally {
+        adEmailBtn.disabled = false;
+        adEmailBtn.textContent = '📧 Send to Agency';
+    }
+});
 
 // ─── Generate ───────────────────────────────────────────────────
 adForm.addEventListener('submit', async e => {
     e.preventDefault();
 
     const product = document.getElementById('adProduct').value.trim();
-    const description = document.getElementById('adDescription').value.trim();
+    let description = document.getElementById('adDescription').value.trim();
+
+    // Append uploaded file contents as context
+    if (uploadedFiles.length > 0) {
+        const fileContext = uploadedFiles.map(f => `--- File: ${f.name} ---\n${f.text}`).join('\n\n');
+        description = (description ? description + '\n\n' : '') + 'ATTACHED PRODUCT FILES:\n' + fileContext;
+    }
+
     if (!product) return;
 
     const platforms = {
@@ -871,6 +977,8 @@ adForm.addEventListener('submit', async e => {
         videoScript: document.getElementById('togVideoScript').checked,
     };
     const videoDuration = document.getElementById('adDuration').value.trim();
+    const postCount = parseInt(document.getElementById('adPostCount').value) || 3;
+    const ctaGoal = document.getElementById('adCtaGoal').value;
 
     // UI: loading state
     adGenerateBtn.disabled = true;
@@ -890,7 +998,7 @@ adForm.addEventListener('submit', async e => {
         const res = await fetch(`${API_BASE}/api/ads/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ product, description, platforms, videoDuration }),
+            body: JSON.stringify({ product, description, platforms, videoDuration, postCount, ctaGoal }),
         });
 
         const reader = res.body.getReader();
