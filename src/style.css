@@ -14,7 +14,7 @@
 :root {
   --font: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --bg-backdrop: #c3cad5;
-  --bg-main: linear-gradient(135deg, #fdfaf6 0%, #fae8d4 50%, #fed7aa 100%);
+  --bg-main: linear-gradient(135deg, #ffffff 0%, #fdf5ec 45%, #fed7aa 100%);
   --bg-sidebar: transparent;
   --bg-card: #ffffff;
   --bg-input: #ffffff;
