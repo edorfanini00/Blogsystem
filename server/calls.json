@@ -1,5 +1,27 @@
 [
   {
+    "id": "019cb47d-6c88-744a-8a5e-f83dec6d204c",
+    "phoneNumber": "17868247739",
+    "contactName": "Edoardo Orfanini",
+    "company": "04/16/2024",
+    "status": "no_answer",
+    "startedAt": "2026-03-03T16:17:25.413Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cb47d-6c88-744a-8a5e-f83dec6d204c-1772554696610-2b97c4aa-a106-4180-8b9c-cbbc7c889401-mono.wav",
+    "transcript": "AI: Hi. Is this Eduardo Orfinini? This is Alex from Cellaritech. Do you have a quick moment to chat?\n",
+    "analysis": {
+      "status": "no_answer",
+      "summary": "Initial outreach call to Eduardo Orfinini where the salesperson introduced themselves and asked if he had time to chat. The call transcript cuts off before any response from the contact, indicating either no answer or the conversation was not captured.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "none",
+      "followUpRecommendation": "Attempt callback at different time or leave voicemail with clear value proposition",
+      "keyQuotes": []
+    },
+    "endedAt": "2026-03-03T16:18:14.054Z"
+  },
+  {
     "id": "019cb46d-fddf-7ffb-bdc3-da3b0f21dd41",
     "phoneNumber": "7865160884",
     "contactName": "",

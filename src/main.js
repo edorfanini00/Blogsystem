@@ -27,6 +27,7 @@ const toastContainer = document.getElementById('toastContainer');
 
 // ─── State ───────────────────────────────────────────────────────
 let generatedBlog = null;
+let currentBlogId = null;
 const API_BASE = 'http://localhost:3001';
 
 // ─── Configure marked ────────────────────────────────────────────
@@ -222,10 +223,33 @@ blogForm.addEventListener('submit', async (e) => {
                             .replace(/<!--\s*META_DESC:.*?-->\n?/g, '')
                             .replace(/<!--\s*SEO_KEYWORDS:.*?-->\n?/g, '');
                         blogBody.innerHTML = cleanContent;
+                        blogBody.contentEditable = 'true';
 
                         showState('content');
                         publishPanel.style.display = 'block';
                         showToast(`Blog generated: "${data.title}"`);
+
+                        // Auto-save to blog history
+                        try {
+                            const saveRes = await fetch(`${API_BASE}/api/blogs`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: data.title,
+                                    html: data.htmlContent || cleanContent,
+                                    markdown: data.content,
+                                    seoTitle: data.metaTitle,
+                                    seoDescription: data.metaDescription,
+                                    seoKeywords: data.seoKeywords,
+                                    keywords, description, wordCount,
+                                }),
+                            });
+                            const saved = await saveRes.json();
+                            currentBlogId = saved.id;
+                            loadBlogHistory();
+                        } catch (saveErr) {
+                            console.error('Blog save error:', saveErr);
+                        }
                     }
 
                     if (data.type === 'error') {
@@ -265,6 +289,9 @@ copyBtn.addEventListener('click', async () => {
 publishBtn.addEventListener('click', async () => {
     if (!generatedBlog) return;
 
+    // Use the current (possibly edited) content from the preview
+    const editedHtml = blogBody.innerHTML;
+
     publishBtn.disabled = true;
     publishBtn.querySelector('.btn-text').style.display = 'none';
     publishBtn.querySelector('.btn-loader').style.display = 'inline-flex';
@@ -276,7 +303,7 @@ publishBtn.addEventListener('click', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 title: generatedBlog.title,
-                htmlContent: generatedBlog.htmlContent,
+                htmlContent: editedHtml,
                 featuredMediaId: generatedBlog.featuredMediaId || null,
             }),
         });
@@ -291,9 +318,19 @@ publishBtn.addEventListener('click', async () => {
         publishResult.className = 'publish-result success';
         publishResult.innerHTML = `
       ✓ Draft created successfully!<br/>
-      <a href="${result.editUrl}" target="_blank">Edit in WordPress →</a>
+      <a href="https://celeritech.biz/ent_reg/" target="_blank">Edit in WordPress →</a>
     `;
         publishResult.style.display = 'block';
+
+        // Mark blog as published in history
+        if (currentBlogId) {
+            await fetch(`${API_BASE}/api/blogs/${currentBlogId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ published: true, html: editedHtml }),
+            });
+            loadBlogHistory();
+        }
 
         showToast('Draft sent to WordPress!');
     } catch (err) {
@@ -330,6 +367,7 @@ navItems.forEach(item => {
         if (page === 'blogs') {
             pageBlog.style.display = '';
             pageSales.style.display = 'none';
+            loadBlogHistory();
         } else if (page === 'ai-sales') {
             pageBlog.style.display = 'none';
             pageSales.style.display = '';
@@ -339,6 +377,154 @@ navItems.forEach(item => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// ─── BLOG HISTORY ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const blogHistoryEmpty = document.getElementById('blogHistoryEmpty');
+const blogHistoryList = document.getElementById('blogHistoryList');
+const newBlogBtn = document.getElementById('newBlogBtn');
+
+// Load on init
+loadBlogHistory();
+
+// ─── New Blog ───────────────────────────────────────────────────
+newBlogBtn.addEventListener('click', () => {
+    currentBlogId = null;
+    generatedBlog = null;
+    blogForm.reset();
+    wordCountValue.textContent = wordCountInput.value;
+    keywordTags.innerHTML = '';
+    previewEmpty.style.display = 'flex';
+    previewLoading.style.display = 'none';
+    previewContent.style.display = 'none';
+    previewActions.style.display = 'none';
+    seoBar.style.display = 'none';
+    publishPanel.style.display = 'none';
+    publishResult.style.display = 'none';
+    blogBody.contentEditable = 'false';
+    blogBody.innerHTML = '';
+
+    // Deselect all blog history items
+    document.querySelectorAll('.blog-history-item').forEach(i => i.classList.remove('active'));
+});
+
+// ─── Load Blog History ──────────────────────────────────────────
+async function loadBlogHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/api/blogs`);
+        if (!res.ok) return;
+        const blogs = await res.json();
+
+        if (blogs.length === 0) {
+            blogHistoryEmpty.style.display = '';
+            blogHistoryList.style.display = 'none';
+            return;
+        }
+
+        blogHistoryEmpty.style.display = 'none';
+        blogHistoryList.style.display = '';
+
+        blogHistoryList.innerHTML = blogs.map(blog => {
+            const date = new Date(blog.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const badge = blog.published
+                ? '<span class="blog-item-badge published">Published</span>'
+                : '<span class="blog-item-badge draft">Draft</span>';
+            const isActive = blog.id === currentBlogId ? ' active' : '';
+            return `
+              <div class="blog-history-item${isActive}" data-blog-id="${blog.id}">
+                <div class="blog-item-info">
+                  <div class="blog-item-title">${blog.title}</div>
+                  <div class="blog-item-meta">
+                    <span class="blog-item-date">${date}</span>
+                    ${badge}
+                  </div>
+                </div>
+                <div class="blog-item-actions">
+                  <button class="delete-call-btn delete-blog-btn" data-blog-id="${blog.id}" title="Delete">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                  </button>
+                </div>
+              </div>`;
+        }).join('');
+
+        // Bind click on items (view blog)
+        blogHistoryList.querySelectorAll('.blog-history-item').forEach(item => {
+            item.addEventListener('click', e => {
+                if (e.target.closest('.delete-blog-btn')) return;
+                viewBlog(item.dataset.blogId);
+            });
+        });
+
+        // Bind delete buttons
+        blogHistoryList.querySelectorAll('.delete-blog-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                deleteBlog(btn.dataset.blogId);
+            });
+        });
+    } catch (err) {
+        console.error('Failed to load blog history:', err);
+    }
+}
+
+// ─── View a Saved Blog ─────────────────────────────────────────
+async function viewBlog(blogId) {
+    try {
+        const res = await fetch(`${API_BASE}/api/blogs/${blogId}`);
+        if (!res.ok) return;
+        const blog = await res.json();
+
+        currentBlogId = blog.id;
+        generatedBlog = {
+            title: blog.title,
+            content: blog.markdown,
+            htmlContent: blog.html,
+            metaTitle: blog.seoTitle,
+            metaDescription: blog.seoDescription,
+            seoKeywords: blog.seoKeywords,
+        };
+
+        // Show SEO bar
+        if (blog.seoTitle || blog.seoDescription) {
+            seoTitle.textContent = blog.seoTitle || '';
+            seoMetaDesc.textContent = blog.seoDescription || '';
+            seoKeywords.innerHTML = (blog.seoKeywords || [])
+                .map(k => `<span class="seo-keyword">${k}</span>`)
+                .join('');
+            seoBar.style.display = 'flex';
+        }
+
+        // Show blog content (editable)
+        blogBody.innerHTML = blog.html || blog.markdown;
+        blogBody.contentEditable = 'true';
+
+        showState('content');
+        publishPanel.style.display = 'block';
+        publishResult.style.display = 'none';
+
+        // Highlight active history item
+        document.querySelectorAll('.blog-history-item').forEach(i => {
+            i.classList.toggle('active', i.dataset.blogId === blogId);
+        });
+
+        showToast(`Loaded: "${blog.title}"`);
+    } catch (err) {
+        showToast('Failed to load blog', 'error');
+    }
+}
+
+// ─── Delete a Blog ──────────────────────────────────────────────
+async function deleteBlog(blogId) {
+    const confirmed = await showDeleteModal('Are you sure you want to delete this blog? This action cannot be undone.');
+    if (!confirmed) return;
+    await fetch(`${API_BASE}/api/blogs/${blogId}`, { method: 'DELETE' });
+    if (currentBlogId === blogId) {
+        newBlogBtn.click();
+    }
+    loadBlogHistory();
+    showToast('Blog deleted');
+}
+
 // ─── AI SALES ────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 

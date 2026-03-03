@@ -520,6 +520,84 @@ app.post('/api/publish', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// ─── BLOG HISTORY — Storage & CRUD ───────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const BLOGS_FILE = join(__dirname, 'blogs.json');
+
+function loadBlogs() {
+    if (!existsSync(BLOGS_FILE)) return [];
+    try { return JSON.parse(readFileSync(BLOGS_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveBlogs(blogs) {
+    writeFileSync(BLOGS_FILE, JSON.stringify(blogs, null, 2), 'utf-8');
+}
+
+// ─── POST /api/blogs — Save a generated blog ───────────────────
+app.post('/api/blogs', (req, res) => {
+    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount } = req.body;
+    const blogs = loadBlogs();
+    const blog = {
+        id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+        title: title || seoTitle || 'Untitled Blog',
+        html: html || '',
+        markdown: markdown || '',
+        seoTitle: seoTitle || '',
+        seoDescription: seoDescription || '',
+        seoKeywords: seoKeywords || [],
+        keywords: keywords || '',
+        description: description || '',
+        wordCount: wordCount || 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        published: false,
+    };
+    blogs.unshift(blog);
+    saveBlogs(blogs);
+    console.log(`📝 Blog saved: "${blog.title}" (${blog.id})`);
+    res.json(blog);
+});
+
+// ─── GET /api/blogs — List all blogs ────────────────────────────
+app.get('/api/blogs', (req, res) => {
+    res.json(loadBlogs());
+});
+
+// ─── GET /api/blogs/:id — Get a single blog ────────────────────
+app.get('/api/blogs/:id', (req, res) => {
+    const blogs = loadBlogs();
+    const blog = blogs.find(b => b.id === req.params.id);
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    res.json(blog);
+});
+
+// ─── PUT /api/blogs/:id — Update a blog ────────────────────────
+app.put('/api/blogs/:id', (req, res) => {
+    const blogs = loadBlogs();
+    const idx = blogs.findIndex(b => b.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Blog not found' });
+    const { html, markdown, title, seoTitle, seoDescription, published } = req.body;
+    if (html !== undefined) blogs[idx].html = html;
+    if (markdown !== undefined) blogs[idx].markdown = markdown;
+    if (title !== undefined) blogs[idx].title = title;
+    if (seoTitle !== undefined) blogs[idx].seoTitle = seoTitle;
+    if (seoDescription !== undefined) blogs[idx].seoDescription = seoDescription;
+    if (published !== undefined) blogs[idx].published = published;
+    blogs[idx].updatedAt = new Date().toISOString();
+    saveBlogs(blogs);
+    res.json(blogs[idx]);
+});
+
+// ─── DELETE /api/blogs/:id — Delete a blog ─────────────────────
+app.delete('/api/blogs/:id', (req, res) => {
+    const blogs = loadBlogs();
+    const filtered = blogs.filter(b => b.id !== req.params.id);
+    saveBlogs(filtered);
+    res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // ─── AI SALES — Vapi Outbound Calling ────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 

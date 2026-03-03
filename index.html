@@ -59,7 +59,7 @@
             <h1>Create Blog Post</h1>
             <p class="subtitle">Plan, prioritize, and generate your blog articles with ease.</p>
           </div>
-          <button class="btn-outline">Clear Form</button>
+          <button class="btn-outline" id="newBlogBtn">+ New Blog</button>
         </div>
 
         <div class="bento-grid">
@@ -184,9 +184,21 @@
           </section>
 
         </div>
-      </div>
 
-      <!-- ═══ PAGE: AI SALES ════════════════════════════ -->
+        <!-- Blog History -->
+        <section class="card blog-history-card" id="blogHistoryCard">
+          <div class="call-log-header">
+            <h3>Blog History</h3>
+          </div>
+          <div class="blog-history-empty" id="blogHistoryEmpty">
+            <div class="empty-icon">📝</div>
+            <h4>No blogs saved yet</h4>
+            <p>Generated blogs will appear here</p>
+          </div>
+          <div class="blog-history-list" id="blogHistoryList" style="display:none;"></div>
+        </section>
+
+      </div>
       <div class="page" id="pageSales" style="display:none;">
 
         <div class="dashboard-header">
