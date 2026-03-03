@@ -337,19 +337,27 @@
                 </div>
               </div>
 
-              <div class="form-group">
-                <label for="adCtaGoal">CTA Goal</label>
-                <div class="input-wrapper">
-                  <select id="adCtaGoal">
-                    <option value="book_meeting">Book a Meeting</option>
-                    <option value="sign_up_free">Sign Up for Free</option>
-                    <option value="download">Download</option>
-                    <option value="learn_more">Learn More</option>
-                    <option value="get_quote">Get a Quote</option>
-                    <option value="buy_now">Buy Now</option>
-                    <option value="free_trial">Start Free Trial</option>
-                    <option value="contact_us">Contact Us</option>
-                  </select>
+              <div class="form-group" style="position: relative;">
+                <label>CTA Goal</label>
+                <div class="custom-select-wrapper" id="ctaGoalWrapper">
+                  <div class="custom-select-trigger" id="ctaGoalTrigger">
+                    <span id="ctaGoalText">Book a Meeting</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round" class="caret" style="color: var(--text-muted);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="custom-select-options" id="ctaGoalOptions">
+                    <div class="custom-option selected" data-value="book_meeting">Book a Meeting</div>
+                    <div class="custom-option" data-value="sign_up_free">Sign Up for Free</div>
+                    <div class="custom-option" data-value="download">Download</div>
+                    <div class="custom-option" data-value="learn_more">Learn More</div>
+                    <div class="custom-option" data-value="get_quote">Get a Quote</div>
+                    <div class="custom-option" data-value="buy_now">Buy Now</div>
+                    <div class="custom-option" data-value="free_trial">Start Free Trial</div>
+                    <div class="custom-option" data-value="contact_us">Contact Us</div>
+                  </div>
+                  <input type="hidden" id="adCtaGoal" value="book_meeting">
                 </div>
               </div>
               <label>Product Files <small>(optional)</small></label>

@@ -861,9 +861,44 @@ document.getElementById('stepperMinus').addEventListener('click', () => {
     stepperValue.textContent = v;
 });
 document.getElementById('stepperPlus').addEventListener('click', () => {
-    const v = Math.min(10, parseInt(stepperValue.textContent) + 1);
+    const v = Math.min(999, parseInt(stepperValue.textContent) + 1);
     stepperValue.textContent = v;
 });
+
+// ─── Custom CTA Dropdown Logic ──────────────────────────────────
+const ctaGoalWrapper = document.getElementById('ctaGoalWrapper');
+const ctaGoalTrigger = document.getElementById('ctaGoalTrigger');
+const ctaGoalText = document.getElementById('ctaGoalText');
+const ctaGoalOptions = document.getElementById('ctaGoalOptions');
+const ctaGoalInput = document.getElementById('adCtaGoal');
+
+if (ctaGoalTrigger && ctaGoalOptions) {
+    ctaGoalTrigger.addEventListener('click', () => {
+        ctaGoalWrapper.classList.toggle('open');
+    });
+
+    ctaGoalOptions.querySelectorAll('.custom-option').forEach(option => {
+        option.addEventListener('click', function () {
+            // Update value and text
+            ctaGoalInput.value = this.getAttribute('data-value');
+            ctaGoalText.textContent = this.textContent;
+
+            // Update selected class
+            ctaGoalOptions.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+
+            // Close dropdown
+            ctaGoalWrapper.classList.remove('open');
+        });
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!ctaGoalWrapper.contains(e.target)) {
+            ctaGoalWrapper.classList.remove('open');
+        }
+    });
+}
 let uploadedFiles = [];
 
 // ─── File Upload (drag & drop + click) ──────────────────────────
