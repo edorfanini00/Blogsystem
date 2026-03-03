@@ -165,7 +165,7 @@ body {
 /* ─── Main Content ────────────────────────── */
 .main-content {
   flex: 1;
-  padding: 32px;
+  padding: 56px 32px 32px;
   max-width: 1200px;
   min-width: 0;
 }
