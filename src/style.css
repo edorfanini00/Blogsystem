@@ -1556,12 +1556,12 @@ body {
   outline: none;
   transition: border-color var(--transition), box-shadow var(--transition);
   box-sizing: border-box;
-  appearance: auto;
   cursor: pointer;
+  appearance: auto;
 }
 
 #adForm select:focus {
-  border-color: #ea580c;
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
 }
 
@@ -1571,8 +1571,10 @@ body {
   align-items: center;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--bg-input);
   overflow: hidden;
   height: 44px;
+  width: 100%;
 }
 
 .stepper-btn {
@@ -1631,9 +1633,11 @@ body {
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--text-primary);
-  padding: 8px 0;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   transition: all var(--transition);
   user-select: none;
+  width: 100%;
 }
 
 .toggle-row:hover {
