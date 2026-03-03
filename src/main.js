@@ -40,7 +40,7 @@ async function checkHealth() {
     const dot = connectionStatus.querySelector('.status-dot');
     const text = connectionStatus.querySelector('.status-text');
     try {
-        const res = await fetch('/api/health');
+        const res = await fetch(`${API_BASE}/api/health`);
         const data = await res.json();
         dot.className = 'status-dot online';
         const services = [];
@@ -162,7 +162,7 @@ blogForm.addEventListener('submit', async (e) => {
     }, 200);
 
     try {
-        const res = await fetch('/api/generate', {
+        const res = await fetch(`${API_BASE}/api/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keywords, description, wordCount }),
@@ -271,7 +271,7 @@ publishBtn.addEventListener('click', async () => {
     publishResult.style.display = 'none';
 
     try {
-        const res = await fetch('/api/publish', {
+        const res = await fetch(`${API_BASE}/api/publish`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

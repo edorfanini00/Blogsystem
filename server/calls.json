@@ -1,0 +1,139 @@
+[
+  {
+    "id": "019cb46d-fddf-7ffb-bdc3-da3b0f21dd41",
+    "phoneNumber": "7865160884",
+    "contactName": "",
+    "company": "",
+    "status": "completed",
+    "startedAt": "2026-03-03T16:00:34.003Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-03T16:00:39.158Z"
+  },
+  {
+    "id": "019cb46d-cf40-7ffb-8959-c60f4f8b3243",
+    "phoneNumber": "7865160884",
+    "contactName": "",
+    "company": "",
+    "status": "completed",
+    "startedAt": "2026-03-03T16:00:22.096Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-03T16:00:27.333Z"
+  },
+  {
+    "id": "019cb46d-98cb-722f-a6f8-b3bb018b97bf",
+    "phoneNumber": "7865160884",
+    "contactName": "Massi",
+    "company": "Mckinstry",
+    "status": "completed",
+    "startedAt": "2026-03-03T16:00:08.390Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-03T16:00:13.553Z"
+  },
+  {
+    "id": "019cb46c-ee16-7aae-a4c3-3c63d2080050",
+    "phoneNumber": "7866027641",
+    "contactName": "riccardo",
+    "company": "netapp",
+    "status": "in_progress",
+    "startedAt": "2026-03-03T15:59:24.562Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null
+  },
+  {
+    "id": "019cb46a-f065-744c-97ac-c2f96cf18407",
+    "phoneNumber": "7868247739",
+    "contactName": "Edoardo Orfanini",
+    "company": "04/16/2024",
+    "status": "no_answer",
+    "startedAt": "2026-03-03T15:57:14.199Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cb46a-f065-744c-97ac-c2f96cf18407-1772553486047-243d06c2-05a8-4e16-b326-c4ebe1c811d2-mono.wav",
+    "transcript": "AI: Hi. Is this Eduardo Orfinini? This is Alex from Cellaritech. Do you have a quick moment to chat?\n",
+    "analysis": {
+      "status": "no_answer",
+      "summary": "Initial outreach call to Eduardo Orfinini from Cellaritech. The salesperson introduced themselves and asked if the prospect had time to chat, but there was no response recorded in the transcript.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "none",
+      "followUpRecommendation": "Attempt callback at different time or leave voicemail with value proposition",
+      "keyQuotes": []
+    },
+    "endedAt": "2026-03-03T15:58:03.460Z"
+  },
+  {
+    "id": "019cb46a-7dc8-7aae-a4be-776577760ef5",
+    "phoneNumber": "7866027641",
+    "contactName": "riccardo",
+    "company": "netapp",
+    "status": "no_answer",
+    "startedAt": "2026-03-03T15:56:44.869Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cb46a-7dc8-7aae-a4be-776577760ef5-1772553455344-ff1df095-9677-4ca2-b8a1-e4b9ab66a798-mono.wav",
+    "transcript": "AI: Hi. Is this Ricardo? This is Alex from Cellaritech. Do you have a quick moment to chat?\n",
+    "analysis": {
+      "status": "no_answer",
+      "summary": "Initial outreach call to Ricardo at NetApp where only the opening introduction was delivered. The prospect did not respond to the greeting or availability question.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "none",
+      "followUpRecommendation": "Follow up with another call attempt or send an email introduction since there was no response to the initial greeting",
+      "keyQuotes": []
+    },
+    "endedAt": "2026-03-03T15:57:32.797Z"
+  },
+  {
+    "id": "019cb469-d2c7-7bbc-b46b-5f7767b76356",
+    "phoneNumber": "7866027641",
+    "contactName": "riccardo",
+    "company": "netapp",
+    "status": "completed",
+    "startedAt": "2026-03-03T15:56:01.192Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-03T15:56:06.386Z"
+  },
+  {
+    "id": "019cb463-c32b-7000-8183-f7ab2eff002b",
+    "phoneNumber": "7868247739",
+    "contactName": "Edoardo Orfanini",
+    "company": "04/16/2024",
+    "status": "callback",
+    "startedAt": "2026-03-03T15:49:23.949Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cb463-c32b-7000-8183-f7ab2eff002b-1772553085471-2817d325-e7b8-44f9-9a4e-4e091973eae4-mono.wav",
+    "transcript": "AI: Hi. Is this Eduardo Orfinini? This is Alex from Cellaritech. Do you have a quick moment to chat?\nUser: Yeah. What's this about?\nAI: Great. Thanks for your time, Eduardo. I'm Alex from Celeratec. And we specialize in providing ERP and business technology solutions specifically tailored for food and beverage manufacturers like a lot of our clients. I was just curious to learn what ERP or business software you're currently using at your company.\nUser: We currently using Voodoo.\nAI: Got it. You're currently using Vudu? How's that been working out for you so far? Are there any challenges or limitations you've been experiencing with the system?\nUser: No. Everything been great, to be honest. Pricing is good. Works well. It's perfect for my operations.\nAI: That's great to hear, Eduardo. It's sounds like you've got a solution that fits your needs really well right now, which is always fantastic to hear. Since things are running smoothly for you, I won't take up much more of your time. If things ever change, or you're looking to explore other options in the future, would you mind if I followed up down the line just to check-in?\nUser: Yeah. That's good.\nAI: Perfect, Eduardo. I really appreciate your time today. I'll check-in with you down the road and if anything changes, don't hesitate to reach out Have a great day. And continued success with your operations. Take care.\nUser: Thank you. Bye.\nAI: Thank you, Eduardo. Goodbye.\n",
+    "analysis": {
+      "status": "callback",
+      "summary": "Eduardo is satisfied with his current ERP solution (Voodoo) and has no immediate needs or pain points. He agreed to future follow-up contact when circumstances may change.",
+      "painPoints": [],
+      "currentSoftware": [
+        "Voodoo"
+      ],
+      "objections": [
+        "Everything been great, to be honest. Pricing is good. Works well. It's perfect for my operations."
+      ],
+      "interestLevel": "none",
+      "followUpRecommendation": "Schedule follow-up in 6-12 months to check if circumstances have changed or new needs have emerged",
+      "keyQuotes": [
+        "Everything been great, to be honest. Pricing is good. Works well. It's perfect for my operations.",
+        "Yeah. That's good."
+      ]
+    },
+    "endedAt": "2026-03-03T15:51:22.895Z"
+  }
+]
