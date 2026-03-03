@@ -1530,32 +1530,6 @@ body {
   margin-top: 0;
 }
 
-#adForm input[type="text"],
-#adForm textarea {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  font-family: inherit;
-  outline: none;
-  transition: border-color var(--transition), box-shadow var(--transition);
-  box-sizing: border-box;
-}
-
-#adForm input[type="text"]:focus,
-#adForm textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
-}
-
-#adForm textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
 .ad-row-group {
   display: flex;
   gap: 12px;
@@ -1651,21 +1625,19 @@ body {
 .toggle-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  flex-direction: row-reverse;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: var(--text-primary);
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  padding: 8px 0;
   transition: all var(--transition);
   user-select: none;
 }
 
 .toggle-row:hover {
-  background: var(--bg-input);
-  border-color: rgba(234, 88, 12, 0.3);
+  opacity: 0.8;
 }
 
 .toggle-row input[type="checkbox"] {
