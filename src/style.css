@@ -933,6 +933,10 @@ body {
     padding: 16px;
   }
 
+  .sidebar {
+    display: none;
+  }
+
   .bento-grid {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
@@ -953,4 +957,266 @@ body {
     grid-column: 1;
     grid-row: 3;
   }
+
+  .sales-form-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ═══ AI Sales Page ═══════════════════════════ */
+.sales-input-card {
+  margin-bottom: 24px;
+}
+
+.sales-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.script-details {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+}
+
+.script-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.script-details[open] summary {
+  margin-bottom: 12px;
+}
+
+.sales-log-card h3 {
+  margin-bottom: 16px;
+}
+
+.call-log-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.call-log-empty .empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.call-log-empty h4 {
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+/* Call Table */
+.call-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.call-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.call-table tbody tr {
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.call-table tbody tr:hover {
+  background: var(--bg-input);
+}
+
+.call-table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.call-contact-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.call-contact-company {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-badge.meeting_booked,
+.status-badge.meeting-booked {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-badge.callback,
+.status-badge.call-back {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.status-badge.not_interested,
+.status-badge.not-interested {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-badge.no_answer,
+.status-badge.no-answer,
+.status-badge.voicemail {
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.status-badge.in_progress,
+.status-badge.in-progress,
+.status-badge.ringing {
+  background: #eff6ff;
+  color: #2563eb;
+  animation: pulse-badge 1.5s ease-in-out infinite;
+}
+
+.status-badge.completed {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+@keyframes pulse-badge {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Expanded Call Row */
+.call-expand-row td {
+  padding: 0 !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.call-expand-content {
+  padding: 20px 24px;
+  background: var(--bg-main);
+  border-top: 1px solid var(--border);
+}
+
+.call-expand-content h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.call-analysis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.analysis-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+}
+
+.analysis-card h5 {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.analysis-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.analysis-card li {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  padding: 2px 0;
+}
+
+.analysis-card li::before {
+  content: '•';
+  color: var(--accent);
+  font-weight: bold;
+  margin-right: 6px;
+}
+
+.analysis-summary {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.call-recording {
+  margin-bottom: 12px;
+}
+
+.call-recording audio {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--radius-sm);
+}
+
+.expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text-muted);
+  padding: 4px;
+  transition: transform 0.2s;
+}
+
+.expand-btn.open {
+  transform: rotate(180deg);
+}
+
+.call-duration {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.call-date {
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }

@@ -307,3 +307,231 @@ publishBtn.addEventListener('click', async () => {
         publishBtn.querySelector('.btn-loader').style.display = 'none';
     }
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── SIDEBAR NAVIGATION ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const navItems = document.querySelectorAll('.nav-item');
+const pageBlog = document.getElementById('pageBlog');
+const pageSales = document.getElementById('pageSales');
+
+navItems.forEach(item => {
+    item.addEventListener('click', e => {
+        e.preventDefault();
+        const page = item.dataset.page;
+
+        // Update active nav
+        navItems.forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+
+        // Switch pages
+        if (page === 'blogs') {
+            pageBlog.style.display = '';
+            pageSales.style.display = 'none';
+        } else if (page === 'ai-sales') {
+            pageBlog.style.display = 'none';
+            pageSales.style.display = '';
+            loadCallLog();
+        }
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── AI SALES ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const salesCallForm = document.getElementById('salesCallForm');
+const callBtn = document.getElementById('callBtn');
+const callLogEmpty = document.getElementById('callLogEmpty');
+const callLog = document.getElementById('callLog');
+const callLogBody = document.getElementById('callLogBody');
+
+// ─── Initiate a Call ─────────────────────────────────────────────
+salesCallForm.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const phoneNumber = document.getElementById('salesPhone').value.trim();
+    const contactName = document.getElementById('salesName').value.trim();
+    const company = document.getElementById('salesCompany').value.trim();
+    const salesScript = document.getElementById('salesScript').value.trim();
+
+    if (!phoneNumber) return;
+
+    callBtn.disabled = true;
+    callBtn.querySelector('.btn-text').style.display = 'none';
+    callBtn.querySelector('.btn-loader').style.display = 'inline-flex';
+
+    try {
+        const res = await fetch(`${API_BASE}/api/sales/call`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumber, contactName, company, salesScript: salesScript || undefined }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Call failed');
+        }
+
+        const data = await res.json();
+        showToast(`📞 Calling ${contactName || phoneNumber}…`);
+
+        // Start polling this call
+        pollCallStatus(data.callId);
+
+        // Reload call log
+        await loadCallLog();
+
+        // Reset form
+        salesCallForm.reset();
+    } catch (err) {
+        showToast(err.message || 'Call initiation failed', 'error');
+    } finally {
+        callBtn.disabled = false;
+        callBtn.querySelector('.btn-text').style.display = 'inline-flex';
+        callBtn.querySelector('.btn-loader').style.display = 'none';
+    }
+});
+
+// ─── Poll Call Status ───────────────────────────────────────────
+function pollCallStatus(callId) {
+    let attempts = 0;
+    const maxAttempts = 60; // 5 minutes at 5s intervals
+
+    const interval = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+            clearInterval(interval);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/api/sales/call/${callId}`);
+            if (!res.ok) return;
+
+            const call = await res.json();
+
+            // Update the row in the table
+            updateCallRow(call);
+
+            // Stop polling when call is done
+            if (!['in_progress', 'ringing', 'queued'].includes(call.status)) {
+                clearInterval(interval);
+                showToast(`Call to ${call.contactName || call.phoneNumber} completed`);
+                await loadCallLog(); // Reload to get analysis
+            }
+        } catch (err) {
+            // Silently retry
+        }
+    }, 5000);
+}
+
+// ─── Load Call Log ──────────────────────────────────────────────
+async function loadCallLog() {
+    try {
+        const res = await fetch(`${API_BASE}/api/sales/calls`);
+        if (!res.ok) return;
+
+        const calls = await res.json();
+
+        if (calls.length === 0) {
+            callLogEmpty.style.display = '';
+            callLog.style.display = 'none';
+            return;
+        }
+
+        callLogEmpty.style.display = 'none';
+        callLog.style.display = '';
+
+        callLogBody.innerHTML = calls.map(call => renderCallRow(call)).join('');
+
+        // Bind expand buttons
+        callLogBody.querySelectorAll('.expand-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                const callId = btn.dataset.callId;
+                const expandRow = document.getElementById(`expand-${callId}`);
+                if (expandRow) {
+                    expandRow.style.display = expandRow.style.display === 'none' ? '' : 'none';
+                    btn.classList.toggle('open');
+                }
+            });
+        });
+    } catch (err) {
+        console.error('Failed to load calls:', err);
+    }
+}
+
+// ─── Render Call Row ────────────────────────────────────────────
+function renderCallRow(call) {
+    const statusLabel = formatStatus(call.status);
+    const duration = call.duration ? formatDuration(call.duration) : '—';
+    const date = call.startedAt ? new Date(call.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+    const hasAnalysis = call.analysis && call.analysis.summary;
+
+    let expandContent = '';
+    if (hasAnalysis) {
+        const a = call.analysis;
+        expandContent = `
+      <tr class="call-expand-row" id="expand-${call.id}" style="display:none;">
+        <td colspan="6">
+          <div class="call-expand-content">
+            ${call.recordingUrl ? `<div class="call-recording"><h4>Recording</h4><audio controls src="${call.recordingUrl}"></audio></div>` : ''}
+            <div class="analysis-summary"><strong>Summary:</strong> ${a.summary}</div>
+            ${a.followUpRecommendation ? `<div class="analysis-summary"><strong>Follow-up:</strong> ${a.followUpRecommendation}</div>` : ''}
+            <div class="call-analysis-grid">
+              ${a.painPoints?.length ? `<div class="analysis-card"><h5>Pain Points</h5><ul>${a.painPoints.map(p => `<li>${p}</li>`).join('')}</ul></div>` : ''}
+              ${a.currentSoftware?.length ? `<div class="analysis-card"><h5>Current Software</h5><ul>${a.currentSoftware.map(s => `<li>${s}</li>`).join('')}</ul></div>` : ''}
+              ${a.objections?.length ? `<div class="analysis-card"><h5>Objections</h5><ul>${a.objections.map(o => `<li>${o}</li>`).join('')}</ul></div>` : ''}
+              ${a.keyQuotes?.length ? `<div class="analysis-card"><h5>Key Quotes</h5><ul>${a.keyQuotes.map(q => `<li>"${q}"</li>`).join('')}</ul></div>` : ''}
+            </div>
+          </div>
+        </td>
+      </tr>`;
+    }
+
+    return `
+    <tr id="row-${call.id}">
+      <td>
+        <div class="call-contact-name">${call.contactName || 'Unknown'}</div>
+        ${call.company ? `<div class="call-contact-company">${call.company}</div>` : ''}
+      </td>
+      <td>${call.phoneNumber}</td>
+      <td><span class="status-badge ${call.status}">${statusLabel}</span></td>
+      <td class="call-duration">${duration}</td>
+      <td class="call-date">${date}</td>
+      <td>${hasAnalysis ? `<button class="expand-btn" data-call-id="${call.id}">▼</button>` : ''}</td>
+    </tr>
+    ${expandContent}`;
+}
+
+function updateCallRow(call) {
+    const row = document.getElementById(`row-${call.id}`);
+    if (!row) return;
+    const badge = row.querySelector('.status-badge');
+    if (badge) {
+        badge.className = `status-badge ${call.status}`;
+        badge.textContent = formatStatus(call.status);
+    }
+}
+
+function formatStatus(status) {
+    const map = {
+        meeting_booked: 'Meeting Booked',
+        callback: 'Call Back',
+        not_interested: 'Not Interested',
+        no_answer: 'No Answer',
+        voicemail: 'Voicemail',
+        in_progress: 'In Progress',
+        ringing: 'Ringing',
+        completed: 'Completed',
+    };
+    return map[status] || status;
+}
+
+function formatDuration(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}

@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -518,6 +519,224 @@ app.post('/api/publish', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// ─── AI SALES — Vapi Outbound Calling ────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const CALLS_FILE = join(__dirname, 'calls.json');
+const VAPI_BASE = 'https://api.vapi.ai';
+
+function loadCalls() {
+    if (!existsSync(CALLS_FILE)) return [];
+    try { return JSON.parse(readFileSync(CALLS_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveCalls(calls) {
+    writeFileSync(CALLS_FILE, JSON.stringify(calls, null, 2), 'utf-8');
+}
+
+function vapiHeaders() {
+    return {
+        Authorization: `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json',
+    };
+}
+
+// ─── POST /api/sales/call — Initiate outbound call ──────────────
+app.post('/api/sales/call', async (req, res) => {
+    try {
+        const { phoneNumber, contactName, company, salesScript } = req.body;
+
+        if (!phoneNumber) {
+            return res.status(400).json({ error: 'Phone number is required' });
+        }
+
+        if (!process.env.VAPI_API_KEY) {
+            return res.status(500).json({ error: 'Vapi API key not configured' });
+        }
+
+        const defaultScript = `You are a friendly, professional sales representative for Celeritech, a company that provides ERP and business technology solutions for food & beverage manufacturers. 
+
+Your goal is to:
+1. Introduce yourself and Celeritech briefly
+2. Ask what ERP or business software they currently use
+3. Understand their biggest pain points with their current system
+4. Gauge their interest level in exploring better solutions
+5. If interested, propose scheduling a demo meeting
+
+Be conversational, not pushy. Ask follow-up questions based on their answers. If they're not interested, be polite and ask if you can follow up in the future. Keep the call under 5 minutes.`;
+
+        const prompt = salesScript || defaultScript;
+
+        console.log(`\n📞 Initiating call to ${phoneNumber} (${contactName || 'Unknown'})`);
+
+        const response = await fetch(`${VAPI_BASE}/call`, {
+            method: 'POST',
+            headers: vapiHeaders(),
+            body: JSON.stringify({
+                phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
+                customer: {
+                    number: phoneNumber,
+                    name: contactName || undefined,
+                },
+                assistant: {
+                    model: {
+                        provider: 'openai',
+                        model: 'gpt-4o',
+                        messages: [{ role: 'system', content: prompt }],
+                    },
+                    voice: {
+                        provider: 'vapi',
+                        voiceId: 'cole',
+                    },
+                    firstMessage: `Hi${contactName ? `, is this ${contactName}` : ''}? This is Alex from Celeritech. Do you have a quick moment to chat?`,
+                    transcriber: {
+                        provider: 'deepgram',
+                        model: 'nova-3',
+                        language: 'en',
+                    },
+                    endCallMessage: 'Thanks for your time today! Have a great day.',
+                    maxDurationSeconds: 300,
+                },
+            }),
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            console.error('Vapi call error:', errBody);
+            throw new Error(`Vapi API error: ${response.status}`);
+        }
+
+        const callData = await response.json();
+        console.log(`✅ Call initiated: ${callData.id}`);
+
+        // Save to local storage
+        const calls = loadCalls();
+        calls.unshift({
+            id: callData.id,
+            phoneNumber,
+            contactName: contactName || '',
+            company: company || '',
+            status: 'in_progress',
+            startedAt: new Date().toISOString(),
+            duration: null,
+            recordingUrl: null,
+            transcript: null,
+            analysis: null,
+        });
+        saveCalls(calls);
+
+        res.json({ callId: callData.id, status: 'in_progress' });
+    } catch (err) {
+        console.error('❌ Call initiation error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/sales/calls — List all calls ──────────────────────
+app.get('/api/sales/calls', (req, res) => {
+    res.json(loadCalls());
+});
+
+// ─── GET /api/sales/call/:id — Poll call status + auto-analyze ──
+app.get('/api/sales/call/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Fetch from Vapi
+        const response = await fetch(`${VAPI_BASE}/call/${id}`, {
+            headers: vapiHeaders(),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Vapi error: ${response.status}`);
+        }
+
+        const vapiCall = await response.json();
+
+        // Update local storage
+        const calls = loadCalls();
+        const localCall = calls.find(c => c.id === id);
+
+        if (localCall) {
+            const vapiStatus = vapiCall.status;
+            if (vapiStatus === 'ended') {
+                localCall.status = localCall.analysis ? localCall.status : 'completed';
+                localCall.duration = vapiCall.costBreakdown?.duration || vapiCall.duration || null;
+                localCall.recordingUrl = vapiCall.recordingUrl || vapiCall.artifact?.recordingUrl || null;
+                localCall.transcript = vapiCall.transcript || vapiCall.artifact?.transcript || null;
+                localCall.endedAt = vapiCall.endedAt || new Date().toISOString();
+
+                // Auto-analyze if we have a transcript and haven't yet analyzed
+                if (localCall.transcript && !localCall.analysis) {
+                    console.log(`🧠 Auto-analyzing call ${id}…`);
+                    localCall.analysis = await analyzeTranscript(localCall.transcript, localCall.contactName, localCall.company);
+                    localCall.status = localCall.analysis.status || 'completed';
+                }
+            } else if (vapiStatus === 'ringing' || vapiStatus === 'queued') {
+                localCall.status = 'ringing';
+            } else if (vapiStatus === 'in-progress') {
+                localCall.status = 'in_progress';
+            }
+            saveCalls(calls);
+        }
+
+        res.json(localCall || { id, status: vapiCall.status });
+    } catch (err) {
+        console.error('Call status error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Claude Transcript Analysis ─────────────────────────────────
+async function analyzeTranscript(transcript, contactName, company) {
+    try {
+        const message = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 2048,
+            messages: [
+                {
+                    role: 'user',
+                    content: `Analyze this sales call transcript and return a JSON object with the following fields. Return ONLY the JSON, no markdown fences.
+
+Transcript:
+${transcript}
+
+Contact: ${contactName || 'Unknown'} at ${company || 'Unknown Company'}
+
+Return this exact JSON structure:
+{
+  "status": "meeting_booked" | "callback" | "not_interested" | "no_answer" | "voicemail",
+  "summary": "2-3 sentence summary of the call outcome",
+  "painPoints": ["list of pain points mentioned"],
+  "currentSoftware": ["software/tools they currently use"],
+  "objections": ["reasons they gave for hesitation or rejection"],
+  "interestLevel": "high" | "medium" | "low" | "none",
+  "followUpRecommendation": "what to do next",
+  "keyQuotes": ["1-2 important direct quotes from the prospect"]
+}`,
+                },
+            ],
+        });
+
+        let text = message.content[0].text.trim();
+        text = text.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim();
+        return JSON.parse(text);
+    } catch (err) {
+        console.error('Analysis error:', err.message);
+        return {
+            status: 'completed',
+            summary: 'Unable to analyze transcript automatically.',
+            painPoints: [],
+            currentSoftware: [],
+            objections: [],
+            interestLevel: 'unknown',
+            followUpRecommendation: 'Review call recording manually.',
+            keyQuotes: [],
+        };
+    }
+}
+
 // ─── GET /api/health ─────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
     res.json({
@@ -527,6 +746,7 @@ app.get('/api/health', (req, res) => {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
             openrouter: !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'your_openrouter_api_key',
             perplexity: !!process.env.PERPLEXITY_API_KEY && process.env.PERPLEXITY_API_KEY !== 'your_perplexity_api_key',
+            vapi: !!process.env.VAPI_API_KEY,
             wordpress: !!process.env.WORDPRESS_URL && process.env.WORDPRESS_URL !== 'https://yoursite.com',
         },
     });
