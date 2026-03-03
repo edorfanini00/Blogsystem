@@ -347,6 +347,31 @@ const callBtn = document.getElementById('callBtn');
 const callLogEmpty = document.getElementById('callLogEmpty');
 const callLog = document.getElementById('callLog');
 const callLogBody = document.getElementById('callLogBody');
+const clearAllCallsBtn = document.getElementById('clearAllCallsBtn');
+
+let allCalls = [];
+let activeFilter = 'all';
+
+// ─── Filter Tabs ────────────────────────────────────────────────
+document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeFilter = tab.dataset.filter;
+        renderFilteredCalls();
+    });
+});
+
+// ─── Clear All ──────────────────────────────────────────────────
+clearAllCallsBtn.addEventListener('click', async () => {
+    if (!confirm('Delete all call logs? This cannot be undone.')) return;
+    for (const call of allCalls) {
+        await fetch(`${API_BASE}/api/sales/call/${call.id}`, { method: 'DELETE' });
+    }
+    allCalls = [];
+    renderFilteredCalls();
+    showToast('All call logs cleared');
+});
 
 // ─── Initiate a Call ─────────────────────────────────────────────
 salesCallForm.addEventListener('submit', async e => {
@@ -377,14 +402,8 @@ salesCallForm.addEventListener('submit', async e => {
 
         const data = await res.json();
         showToast(`📞 Calling ${contactName || phoneNumber}…`);
-
-        // Start polling this call
         pollCallStatus(data.callId);
-
-        // Reload call log
         await loadCallLog();
-
-        // Reset form
         salesCallForm.reset();
     } catch (err) {
         showToast(err.message || 'Call initiation failed', 'error');
@@ -398,34 +417,28 @@ salesCallForm.addEventListener('submit', async e => {
 // ─── Poll Call Status ───────────────────────────────────────────
 function pollCallStatus(callId) {
     let attempts = 0;
-    const maxAttempts = 60; // 5 minutes at 5s intervals
-
     const interval = setInterval(async () => {
-        attempts++;
-        if (attempts > maxAttempts) {
-            clearInterval(interval);
-            return;
-        }
-
+        if (++attempts > 60) { clearInterval(interval); return; }
         try {
             const res = await fetch(`${API_BASE}/api/sales/call/${callId}`);
             if (!res.ok) return;
-
             const call = await res.json();
-
-            // Update the row in the table
             updateCallRow(call);
-
-            // Stop polling when call is done
             if (!['in_progress', 'ringing', 'queued'].includes(call.status)) {
                 clearInterval(interval);
                 showToast(`Call to ${call.contactName || call.phoneNumber} completed`);
-                await loadCallLog(); // Reload to get analysis
+                await loadCallLog();
             }
-        } catch (err) {
-            // Silently retry
-        }
+        } catch { /* retry */ }
     }, 5000);
+}
+
+// ─── Delete a Call ──────────────────────────────────────────────
+async function deleteCall(callId) {
+    await fetch(`${API_BASE}/api/sales/call/${callId}`, { method: 'DELETE' });
+    allCalls = allCalls.filter(c => c.id !== callId);
+    renderFilteredCalls();
+    showToast('Call deleted');
 }
 
 // ─── Load Call Log ──────────────────────────────────────────────
@@ -433,35 +446,55 @@ async function loadCallLog() {
     try {
         const res = await fetch(`${API_BASE}/api/sales/calls`);
         if (!res.ok) return;
-
-        const calls = await res.json();
-
-        if (calls.length === 0) {
-            callLogEmpty.style.display = '';
-            callLog.style.display = 'none';
-            return;
-        }
-
-        callLogEmpty.style.display = 'none';
-        callLog.style.display = '';
-
-        callLogBody.innerHTML = calls.map(call => renderCallRow(call)).join('');
-
-        // Bind expand buttons
-        callLogBody.querySelectorAll('.expand-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                e.stopPropagation();
-                const callId = btn.dataset.callId;
-                const expandRow = document.getElementById(`expand-${callId}`);
-                if (expandRow) {
-                    expandRow.style.display = expandRow.style.display === 'none' ? '' : 'none';
-                    btn.classList.toggle('open');
-                }
-            });
-        });
+        allCalls = await res.json();
+        renderFilteredCalls();
     } catch (err) {
         console.error('Failed to load calls:', err);
     }
+}
+
+// ─── Render Filtered Calls ──────────────────────────────────────
+function renderFilteredCalls() {
+    const filtered = activeFilter === 'all'
+        ? allCalls
+        : allCalls.filter(c => c.status === activeFilter);
+
+    if (allCalls.length === 0) {
+        callLogEmpty.style.display = '';
+        callLog.style.display = 'none';
+        clearAllCallsBtn.style.display = 'none';
+        return;
+    }
+
+    callLogEmpty.style.display = filtered.length === 0 ? '' : 'none';
+    callLog.style.display = filtered.length === 0 ? 'none' : '';
+    clearAllCallsBtn.style.display = '';
+
+    if (filtered.length === 0) {
+        callLogEmpty.querySelector('h4').textContent = 'No calls in this category';
+        callLogEmpty.querySelector('p').textContent = 'Try a different filter';
+        return;
+    }
+
+    callLogBody.innerHTML = filtered.map(call => renderCallRow(call)).join('');
+
+    // Bind expand + delete buttons
+    callLogBody.querySelectorAll('.expand-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const expandRow = document.getElementById(`expand-${btn.dataset.callId}`);
+            if (expandRow) {
+                expandRow.style.display = expandRow.style.display === 'none' ? '' : 'none';
+                btn.classList.toggle('open');
+            }
+        });
+    });
+    callLogBody.querySelectorAll('.delete-call-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            deleteCall(btn.dataset.callId);
+        });
+    });
 }
 
 // ─── Render Call Row ────────────────────────────────────────────
@@ -502,7 +535,10 @@ function renderCallRow(call) {
       <td><span class="status-badge ${call.status}">${statusLabel}</span></td>
       <td class="call-duration">${duration}</td>
       <td class="call-date">${date}</td>
-      <td>${hasAnalysis ? `<button class="expand-btn" data-call-id="${call.id}">▼</button>` : ''}</td>
+      <td>
+        ${hasAnalysis ? `<button class="expand-btn" data-call-id="${call.id}">▼</button>` : ''}
+        <button class="delete-call-btn" data-call-id="${call.id}" title="Delete">✕</button>
+      </td>
     </tr>
     ${expandContent}`;
 }

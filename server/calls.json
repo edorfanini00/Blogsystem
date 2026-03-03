@@ -43,12 +43,25 @@
     "phoneNumber": "7866027641",
     "contactName": "riccardo",
     "company": "netapp",
-    "status": "in_progress",
+    "status": "no_answer",
     "startedAt": "2026-03-03T15:59:24.562Z",
     "duration": null,
-    "recordingUrl": null,
-    "transcript": null,
-    "analysis": null
+    "recordingUrl": "https://storage.vapi.ai/019cb46c-ee16-7aae-a4c3-3c63d2080050-1772553756070-a6047862-239e-42f5-8ea0-dc9933c88e7b-mono.wav",
+    "transcript": "AI: Hi. Is this Ricardo? This is Alex from Celery Tech. Do you have a quick moment to chat?\nUser: Locked in order to protect the end user according to current regulations. If you believe you have reached this recording in error, contact us at support underscore 16. At consumer network protection dot org. Please include call details in the email. Alternatively, you can reach out to your service provider to obtain more details as to why your call did not reach its intended destination.\nAI: It seems like I've reached a recording.\nUser: Contact and support consumer network protection\nAI: It sounds like there might\nUser: Our network analytics provider indicates that your call may be a robocall, spam, or scam, and has been blocked in order to protect the end user according to current regulations. If you believe you have reached this recording in error, contact us at support underscore 16 at consumer network protection dot org. Please include call details in the email. Alternatively, you can reach out to your service provider to obtain more details as to why your call did not reach its intended destination.\nAI: I understand. It seems\nUser: Contact support consumer network protection where they contact\nAI: It appears there was an issue with the call being blocked. If you believe this was a mistake, it would be best to reach out directly to the provided email address. Support 1\n",
+    "analysis": {
+      "status": "no_answer",
+      "summary": "Call was blocked by an automated spam protection service. Never reached the actual prospect Ricardo. The call was immediately diverted to a recording system that blocked the call as potential robocall/spam.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "none",
+      "followUpRecommendation": "Try alternative contact methods such as email or LinkedIn. Contact the spam protection service if needed to whitelist the number for future calls.",
+      "keyQuotes": [
+        "Locked in order to protect the end user according to current regulations",
+        "Our network analytics provider indicates that your call may be a robocall, spam, or scam"
+      ]
+    },
+    "endedAt": "2026-03-03T16:02:33.530Z"
   },
   {
     "id": "019cb46a-f065-744c-97ac-c2f96cf18407",

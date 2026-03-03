@@ -644,6 +644,14 @@ app.get('/api/sales/calls', (req, res) => {
     res.json(loadCalls());
 });
 
+// ─── DELETE /api/sales/call/:id — Delete a call ─────────────────
+app.delete('/api/sales/call/:id', (req, res) => {
+    const calls = loadCalls();
+    const filtered = calls.filter(c => c.id !== req.params.id);
+    saveCalls(filtered);
+    res.json({ success: true });
+});
+
 // ─── GET /api/sales/call/:id — Poll call status + auto-analyze ──
 app.get('/api/sales/call/:id', async (req, res) => {
     try {

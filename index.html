@@ -239,7 +239,18 @@
 
         <!-- Call Log -->
         <section class="card sales-log-card">
-          <h3>Call Log</h3>
+          <div class="call-log-header">
+            <h3>Call Log</h3>
+            <button class="btn-small-outline btn-danger-text" id="clearAllCallsBtn" style="display:none;">Clear
+              All</button>
+          </div>
+          <div class="call-filter-tabs" id="callFilterTabs">
+            <button class="filter-tab active" data-filter="all">All</button>
+            <button class="filter-tab" data-filter="callback">🟠 Callback</button>
+            <button class="filter-tab" data-filter="no_answer">⚪ No Answer</button>
+            <button class="filter-tab" data-filter="meeting_booked">🟢 Meeting Booked</button>
+            <button class="filter-tab" data-filter="not_interested">🔴 Not Interested</button>
+          </div>
           <div class="call-log-empty" id="callLogEmpty">
             <div class="empty-icon">📞</div>
             <h4>No calls yet</h4>
