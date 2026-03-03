@@ -362,10 +362,49 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
     });
 });
 
+// ─── Delete Confirmation Modal ──────────────────────────────────
+const deleteModal = document.getElementById('deleteModal');
+const deleteModalDesc = document.getElementById('deleteModalDesc');
+const deleteConfirmInput = document.getElementById('deleteConfirmInput');
+const deleteModalConfirm = document.getElementById('deleteModalConfirm');
+const deleteModalCancel = document.getElementById('deleteModalCancel');
+
+function showDeleteModal(description) {
+    return new Promise(resolve => {
+        deleteModalDesc.textContent = description;
+        deleteConfirmInput.value = '';
+        deleteModalConfirm.disabled = true;
+        deleteModal.style.display = '';
+
+        deleteConfirmInput.focus();
+
+        function onInput() {
+            deleteModalConfirm.disabled = deleteConfirmInput.value.toLowerCase() !== 'delete';
+        }
+
+        function cleanup() {
+            deleteConfirmInput.removeEventListener('input', onInput);
+            deleteModalConfirm.removeEventListener('click', onConfirm);
+            deleteModalCancel.removeEventListener('click', onCancel);
+            deleteModal.removeEventListener('click', onOverlay);
+            deleteModal.style.display = 'none';
+        }
+
+        function onConfirm() { cleanup(); resolve(true); }
+        function onCancel() { cleanup(); resolve(false); }
+        function onOverlay(e) { if (e.target === deleteModal) { cleanup(); resolve(false); } }
+
+        deleteConfirmInput.addEventListener('input', onInput);
+        deleteModalConfirm.addEventListener('click', onConfirm);
+        deleteModalCancel.addEventListener('click', onCancel);
+        deleteModal.addEventListener('click', onOverlay);
+    });
+}
+
 // ─── Clear All ──────────────────────────────────────────────────
 clearAllCallsBtn.addEventListener('click', async () => {
-    const answer = prompt('Type "delete" to confirm clearing all call logs:');
-    if (!answer || answer.toLowerCase() !== 'delete') return;
+    const confirmed = await showDeleteModal('Are you sure you want to delete all call logs? This action cannot be undone.');
+    if (!confirmed) return;
     for (const call of allCalls) {
         await fetch(`${API_BASE}/api/sales/call/${call.id}`, { method: 'DELETE' });
     }
@@ -373,6 +412,16 @@ clearAllCallsBtn.addEventListener('click', async () => {
     renderFilteredCalls();
     showToast('All call logs cleared');
 });
+
+// ─── Delete a Call ──────────────────────────────────────────────
+async function deleteCall(callId) {
+    const confirmed = await showDeleteModal('Are you sure you want to delete this call? This action cannot be undone.');
+    if (!confirmed) return;
+    await fetch(`${API_BASE}/api/sales/call/${callId}`, { method: 'DELETE' });
+    allCalls = allCalls.filter(c => c.id !== callId);
+    renderFilteredCalls();
+    showToast('Call deleted');
+}
 
 // ─── Initiate a Call ─────────────────────────────────────────────
 salesCallForm.addEventListener('submit', async e => {
@@ -432,16 +481,6 @@ function pollCallStatus(callId) {
             }
         } catch { /* retry */ }
     }, 5000);
-}
-
-// ─── Delete a Call ──────────────────────────────────────────────
-async function deleteCall(callId) {
-    const answer = prompt('Are you sure you want to delete this call? Type "delete" to confirm:');
-    if (!answer || answer.toLowerCase() !== 'delete') return;
-    await fetch(`${API_BASE}/api/sales/call/${callId}`, { method: 'DELETE' });
-    allCalls = allCalls.filter(c => c.id !== callId);
-    renderFilteredCalls();
-    showToast('Call deleted');
 }
 
 // ─── Load Call Log ──────────────────────────────────────────────

@@ -278,6 +278,22 @@
     </main>
   </div>
 
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="deleteModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-icon">🗑️</div>
+      <h3>Delete Call Log</h3>
+      <p class="modal-desc" id="deleteModalDesc">Are you sure you want to delete this call? This action cannot be
+        undone.</p>
+      <label class="modal-label" for="deleteConfirmInput">Type <strong>delete</strong> to confirm</label>
+      <input type="text" id="deleteConfirmInput" class="modal-input" placeholder="delete" autocomplete="off" />
+      <div class="modal-actions">
+        <button class="btn-outline modal-cancel" id="deleteModalCancel">Cancel</button>
+        <button class="btn-primary modal-confirm-delete" id="deleteModalConfirm" disabled>Delete</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
