@@ -568,7 +568,13 @@ Be conversational, not pushy. Ask follow-up questions based on their answers. If
 
         const prompt = salesScript || defaultScript;
 
-        console.log(`\n📞 Initiating call to ${phoneNumber} (${contactName || 'Unknown'})`);
+        // Normalize to E.164 format
+        let normalizedPhone = phoneNumber.replace(/[^\d+]/g, '');
+        if (!normalizedPhone.startsWith('+')) {
+            normalizedPhone = '+1' + normalizedPhone;
+        }
+
+        console.log(`\n📞 Initiating call to ${normalizedPhone} (${contactName || 'Unknown'})`);
 
         const response = await fetch(`${VAPI_BASE}/call`, {
             method: 'POST',
@@ -576,7 +582,7 @@ Be conversational, not pushy. Ask follow-up questions based on their answers. If
             body: JSON.stringify({
                 phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
                 customer: {
-                    number: phoneNumber,
+                    number: normalizedPhone,
                     name: contactName || undefined,
                 },
                 assistant: {
@@ -587,7 +593,7 @@ Be conversational, not pushy. Ask follow-up questions based on their answers. If
                     },
                     voice: {
                         provider: 'vapi',
-                        voiceId: 'cole',
+                        voiceId: 'Cole',
                     },
                     firstMessage: `Hi${contactName ? `, is this ${contactName}` : ''}? This is Alex from Celeritech. Do you have a quick moment to chat?`,
                     transcriber: {
