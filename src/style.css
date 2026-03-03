@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   Celeritech Central — Soft UI Design System (Orange)
+   Celeritech Orbit — Soft UI Design System (Orange)
    ═══════════════════════════════════════════ */
 
 /* ─── Reset & Base ────────────────────────── */
@@ -54,16 +54,99 @@ body {
 
 /* ─── Layout ──────────────────────────────── */
 .app-layout {
+  display: flex;
   min-height: 100vh;
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
-.logo {
+/* ─── Sidebar ─────────────────────────────── */
+.sidebar {
+  width: 240px;
+  background: #fff;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 24px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.sidebar-logo .logo-text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.nav-item:hover:not(.disabled) {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: #fff7ed;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-item.active svg {
+  stroke: var(--accent);
+}
+
+.nav-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+.sidebar-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-footer .status-indicator {
+  padding: 0 8px;
 }
 
 .logo-icon {
@@ -72,26 +155,12 @@ body {
   justify-content: center;
 }
 
-.logo-text {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #1e293b;
-  letter-spacing: -0.03em;
-}
-
 /* ─── Main Content ────────────────────────── */
 .main-content {
-  background: var(--bg-main);
-  border-radius: var(--radius-lg);
-}
-
-/* ─── Topbar ──────────────────────────────── */
-.topheader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0 32px 0;
-  margin-bottom: 8px;
+  flex: 1;
+  padding: 32px;
+  max-width: 1200px;
+  min-width: 0;
 }
 
 .status-indicator {

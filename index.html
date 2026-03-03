@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Celeritech Central — AI Blog Generator</title>
+  <title>Celeritech Orbit</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -14,27 +14,47 @@
 <body>
   <div class="app-layout">
 
-
-
-    <!-- ─── Main Content ──────────────────────────────── -->
-    <main class="main-content">
-
-      <!-- Topbar -->
-      <header class="topheader">
-        <div class="logo">
-          <div class="logo-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="2" width="20" height="20" rx="5" fill="#f97316" />
-              <path d="M7 8h10M7 12h8M7 16h10" stroke="#fff" stroke-width="2" stroke-linecap="round" />
-            </svg>
-          </div>
-          <span class="logo-text">Celeritech Central</span>
+    <!-- ─── Left Sidebar ──────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="2" width="20" height="20" rx="5" fill="#f97316" />
+            <path d="M7 8h10M7 12h8M7 16h10" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+          </svg>
         </div>
+        <span class="logo-text">Celeritech Orbit</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="blogs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+          <span>Blogs</span>
+        </a>
+        <a href="#" class="nav-item disabled" data-page="ai-sales">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+          </svg>
+          <span>AI Sales</span>
+          <span class="nav-badge">Soon</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
         <div class="status-indicator online" id="connectionStatus">
           <span class="status-dot"></span>
           <span class="status-text">Online</span>
         </div>
-      </header>
+      </div>
+    </aside>
+
+    <!-- ─── Main Content ──────────────────────────────── -->
+    <main class="main-content">
 
       <!-- Dashboard Grid -->
       <div class="dashboard-header">

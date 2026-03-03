@@ -534,6 +534,6 @@ app.get('/api/health', (req, res) => {
 
 // ─── Start Server ────────────────────────────────────────────────
 app.listen(PORT, () => {
-    console.log(`\n✨ Celeritech Central Server running on http://localhost:${PORT}`);
+    console.log(`\n✨ Celeritech Orbit Server running on http://localhost:${PORT}`);
     console.log(`   Health: http://localhost:${PORT}/api/health\n`);
 });
