@@ -27,6 +27,7 @@ const toastContainer = document.getElementById('toastContainer');
 
 // ─── State ───────────────────────────────────────────────────────
 let generatedBlog = null;
+const API_BASE = 'http://localhost:3001';
 
 // ─── Configure marked ────────────────────────────────────────────
 marked.setOptions({
