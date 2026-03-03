@@ -364,7 +364,8 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
 
 // ─── Clear All ──────────────────────────────────────────────────
 clearAllCallsBtn.addEventListener('click', async () => {
-    if (!confirm('Delete all call logs? This cannot be undone.')) return;
+    const answer = prompt('Type "delete" to confirm clearing all call logs:');
+    if (!answer || answer.toLowerCase() !== 'delete') return;
     for (const call of allCalls) {
         await fetch(`${API_BASE}/api/sales/call/${call.id}`, { method: 'DELETE' });
     }
@@ -435,6 +436,8 @@ function pollCallStatus(callId) {
 
 // ─── Delete a Call ──────────────────────────────────────────────
 async function deleteCall(callId) {
+    const answer = prompt('Are you sure you want to delete this call? Type "delete" to confirm:');
+    if (!answer || answer.toLowerCase() !== 'delete') return;
     await fetch(`${API_BASE}/api/sales/call/${callId}`, { method: 'DELETE' });
     allCalls = allCalls.filter(c => c.id !== callId);
     renderFilteredCalls();
@@ -537,7 +540,7 @@ function renderCallRow(call) {
       <td class="call-date">${date}</td>
       <td>
         ${hasAnalysis ? `<button class="expand-btn" data-call-id="${call.id}">▼</button>` : ''}
-        <button class="delete-call-btn" data-call-id="${call.id}" title="Delete">✕</button>
+        <button class="delete-call-btn" data-call-id="${call.id}" title="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
       </td>
     </tr>
     ${expandContent}`;

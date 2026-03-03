@@ -1015,13 +1015,13 @@ body {
 
 .call-filter-tabs {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
 .filter-tab {
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 100px;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -1037,9 +1037,10 @@ body {
 }
 
 .filter-tab.active {
-  background: var(--accent);
-  color: #fff;
+  background: rgba(234, 88, 12, 0.12);
+  color: var(--accent);
   border-color: var(--accent);
+  font-weight: 700;
 }
 
 .delete-call-btn {
@@ -1047,10 +1048,11 @@ body {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.85rem;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-size: 0.95rem;
+  padding: 6px 8px;
+  border-radius: 6px;
   transition: all var(--transition);
+  line-height: 1;
 }
 
 .delete-call-btn:hover {
