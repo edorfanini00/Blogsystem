@@ -1517,11 +1517,50 @@ body {
 
 /* ═══ Posts Generator ═════════════════════════════ */
 
+#adForm label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+
+#adForm label:first-of-type {
+  margin-top: 0;
+}
+
+#adForm input[type="text"],
+#adForm textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  box-sizing: border-box;
+}
+
+#adForm input[type="text"]:focus,
+#adForm textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
+}
+
+#adForm textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
 .toggle-section-title {
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 20px 0 10px;
+  margin: 24px 0 12px;
 }
 
 .toggle-grid {
@@ -1534,45 +1573,54 @@ body {
 .toggle-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
   font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   transition: all var(--transition);
+  user-select: none;
 }
 
 .toggle-row:hover {
   background: var(--bg-input);
-  border-color: var(--accent);
+  border-color: rgba(234, 88, 12, 0.3);
 }
 
 .toggle-row input[type="checkbox"] {
-  display: none;
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
 .toggle-switch {
   position: relative;
-  width: 36px;
-  height: 20px;
-  background: var(--border);
-  border-radius: 20px;
+  display: inline-block;
+  width: 42px;
+  min-width: 42px;
+  height: 24px;
+  background: #d1d5db;
+  border-radius: 24px;
   flex-shrink: 0;
-  transition: background var(--transition);
+  transition: background 0.25s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .toggle-switch::after {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
   background: white;
   border-radius: 50%;
-  transition: transform var(--transition);
+  transition: transform 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .toggle-row input:checked+.toggle-switch {
@@ -1580,15 +1628,16 @@ body {
 }
 
 .toggle-row input:checked+.toggle-switch::after {
-  transform: translateX(16px);
+  transform: translateX(18px);
 }
 
 .duration-row {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .duration-row label {
   font-size: 0.8rem;
+  font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 6px;
   display: block;
@@ -1596,12 +1645,20 @@ body {
 
 .duration-row input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.85rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.duration-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
 }
 
 .ad-output-card {
