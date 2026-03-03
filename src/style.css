@@ -74,8 +74,9 @@ body {
 
 .sidebar-logo {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 0 8px 24px 8px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 24px;
@@ -88,8 +89,8 @@ body {
 }
 
 .logo-img {
-  width: 32px;
-  height: 32px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
 }
 
