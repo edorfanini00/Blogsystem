@@ -909,7 +909,7 @@ body {
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #f97316);
+  background: var(--accent-gradient);
   border-radius: 100px;
 }
 
@@ -1717,24 +1717,19 @@ body {
 }
 
 .platform-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 16px;
-  align-items: start;
-}
-
-#adForm .form-group {
-  margin-bottom: 20px;
 }
 
 .platform-btn {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 14px;
-  height: 44px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  height: 44px !important;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: var(--radius-sm);
@@ -1746,13 +1741,18 @@ body {
   user-select: none;
   text-align: center;
   white-space: nowrap;
-  box-sizing: border-box;
+  box-sizing: border-box !important;
+  padding: 0 10px !important;
 }
 
 .platform-btn span {
   position: relative;
   z-index: 1;
   pointer-events: none;
+  margin: 0 !important;
+  display: block;
+  line-height: 1;
+  transform: translateY(1px);
 }
 
 .platform-btn:hover {
@@ -1761,14 +1761,17 @@ body {
 }
 
 .platform-btn input[type="checkbox"] {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  margin: 0;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Modern way: style the whole label if it contains a checked input */

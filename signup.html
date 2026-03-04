@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Celeritech Orbit</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/style.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            padding: 40px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+
+        .auth-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .auth-logo img {
+            height: 32px;
+        }
+
+        .auth-logo span {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .auth-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .auth-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
+
+        .auth-form {
+            text-align: left;
+        }
+
+        .auth-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        .auth-form .row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .auth-form .row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .auth-form label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .auth-form input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--radius-sm);
+            background: #f8fafc;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: inherit;
+            outline: none;
+            transition: all var(--transition);
+            box-sizing: border-box;
+        }
+
+        .auth-form input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
+            background: #ffffff;
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+            margin-top: 12px;
+        }
+
+        .auth-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .auth-btn:active {
+            transform: scale(0.98);
+        }
+
+        .auth-footer {
+            margin-top: 24px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .auth-footer a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .auth-footer a:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-top: -12px;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .success-message {
+            color: #10b981;
+            font-size: 0.85rem;
+            margin-top: -12px;
+            margin-bottom: 12px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="auth-card">
+        <div class="auth-logo">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary);">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                <path d="M2 12h20"></path>
+            </svg>
+            <span>Orbit</span>
+        </div>
+
+        <h1 class="auth-title">Create an Account</h1>
+        <p class="auth-subtitle">Join Celeritech Orbit to generate AI sales & blogs</p>
+
+        <form class="auth-form" id="signupForm">
+            <div class="form-group">
+                <label for="fullName">Full Name</label>
+                <input type="text" id="fullName" placeholder="John Doe" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="john@example.com" required>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" placeholder="••••••••" required minlength="6">
+                </div>
+            </div>
+
+            <div class="error-message" id="errorMessage">Passwords do not match.</div>
+            <div class="success-message" id="successMessage">Account created! Redirecting...</div>
+
+            <button type="submit" class="auth-btn" id="signupBtn">Sign Up</button>
+        </form>
+
+        <div class="auth-footer">
+            Already have an account? <a href="/login.html">Log in</a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { register } from '/src/auth.js';
+
+        const signupForm = document.getElementById('signupForm');
+        const nameInput = document.getElementById('fullName');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirmPassword');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const signupBtn = document.getElementById('signupBtn');
+
+        // Check if already logged in
+        if (localStorage.getItem('orbit_session')) {
+            window.location.href = '/';
+        }
+
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+
+            if (passwordInput.value !== confirmPasswordInput.value) {
+                errorMessage.textContent = 'Passwords do not match.';
+                errorMessage.style.display = 'block';
+                return;
+            }
+
+            const originalText = signupBtn.textContent;
+            signupBtn.textContent = 'Creating account...';
+            signupBtn.disabled = true;
+
+            try {
+                const response = await register(nameInput.value, emailInput.value, passwordInput.value);
+
+                if (response.success) {
+                    successMessage.style.display = 'block';
+                    setTimeout(() => {
+                        window.location.href = '/login.html';
+                    }, 1500);
+                } else {
+                    errorMessage.textContent = response.error || 'Registration failed.';
+                    errorMessage.style.display = 'block';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'An error occurred. Please try again later.';
+                errorMessage.style.display = 'block';
+            } finally {
+                if (!successMessage.style.display.includes('block')) {
+                    signupBtn.textContent = originalText;
+                    signupBtn.disabled = false;
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

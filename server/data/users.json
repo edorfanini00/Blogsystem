@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1772569619771",
+    "name": "Test User",
+    "email": "admin@example.com",
+    "password": "$2b$10$Z4ab4Ul/5BxXJZbrdncns.2f47DNRBKNuwYuTdY5oGdenHluWHHkm",
+    "createdAt": "2026-03-03T20:26:59.771Z"
+  },
+  {
+    "id": "1772569993244",
+    "name": "Edoardo Orfanini",
+    "email": "edoardo.orfanini@celeritech.biz",
+    "password": "$2b$10$r6yEB31f9N/4cqx3nJom6.3dOMXl0l7k3d1StKs0HLGDNztVg.pW.",
+    "createdAt": "2026-03-03T20:33:13.244Z"
+  }
+]

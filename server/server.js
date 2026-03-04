@@ -8,6 +8,7 @@ import { dirname, join } from 'path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
@@ -52,39 +53,168 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
     }
 });
 
-// ─── Send Email Endpoint (Outlook SMTP) ─────────────────────────
+// ─── Email Configuration (Gmail SMTP) ───────────────────────────
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+
+if (!EMAIL_USER || !EMAIL_PASSWORD) {
+    console.warn('⚠️  EMAIL_USER or EMAIL_PASSWORD not set in .env — email sending will be disabled.');
+    console.warn('   To enable: add EMAIL_USER=your@gmail.com and EMAIL_PASSWORD=your_app_password to server/.env');
+    console.warn('   Generate an App Password at: https://myaccount.google.com/apppasswords');
+}
+
+// Create a reusable transporter (only if credentials exist)
+let emailTransporter = null;
+let transporterVerified = false;
+
+if (EMAIL_USER && EMAIL_PASSWORD) {
+    emailTransporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+            user: EMAIL_USER,
+            pass: EMAIL_PASSWORD,
+        },
+    });
+
+    // Verify on startup (non-blocking)
+    emailTransporter.verify()
+        .then(() => {
+            transporterVerified = true;
+            console.log('✅ Email transporter verified — Gmail SMTP ready');
+        })
+        .catch(err => {
+            console.error('❌ Email transporter verification failed:', err.message);
+            console.error('   Check your EMAIL_USER and EMAIL_PASSWORD in .env');
+            console.error('   Make sure you are using a Gmail App Password, NOT your regular password.');
+        });
+}
+
 app.post('/api/send-email', async (req, res) => {
     const { subject, htmlContent, textContent, recipientEmail } = req.body;
     const to = recipientEmail || 'Karla@kromaticos.com';
 
-    try {
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.office365.com',
-            port: 587,
-            secure: false,
-            auth: {
-                user: process.env.OUTLOOK_EMAIL,
-                pass: process.env.OUTLOOK_PASSWORD,
-            },
+    // --- Guard: no credentials configured ---
+    if (!emailTransporter) {
+        console.error('📧 Email send attempted but no credentials configured');
+        return res.status(503).json({
+            error: 'Email not configured. Add EMAIL_USER and EMAIL_PASSWORD to server/.env',
         });
+    }
 
-        await transporter.sendMail({
-            from: process.env.OUTLOOK_EMAIL,
+    try {
+        const info = await emailTransporter.sendMail({
+            from: `"Celeritech Orbit" <${EMAIL_USER}>`,
             to,
             subject: subject || 'New Ad Creative from Celeritech Orbit',
             text: textContent,
             html: htmlContent || `<pre style="font-family:sans-serif;white-space:pre-wrap;">${textContent}</pre>`,
         });
 
-        console.log(`📧 Email sent to ${to}`);
-        res.json({ success: true, to });
+        console.log(`📧 Email sent to ${to} (messageId: ${info.messageId})`);
+        res.json({ success: true, to, messageId: info.messageId });
     } catch (err) {
-        console.error('Email error:', err);
-        res.status(500).json({ error: err.message });
+        console.error('❌ Email send error:', err);
+
+        // Provide a user-friendly error message
+        let userMessage = err.message;
+        if (err.code === 'EAUTH') {
+            userMessage = 'Authentication failed. Make sure EMAIL_PASSWORD is a Gmail App Password (not your regular password). Generate one at https://myaccount.google.com/apppasswords';
+        } else if (err.code === 'ESOCKET' || err.code === 'ECONNECTION') {
+            userMessage = 'Could not connect to Gmail SMTP server. Check your internet connection.';
+        }
+
+        res.status(500).json({ error: userMessage });
     }
 });
 
 const PORT = process.env.PORT || 3001;
+
+// ─── Data Persistence ────────────────────────────────────────────
+const dataDir = join(__dirname, 'data');
+if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+}
+
+// Ensure users.json exists
+const usersFile = join(dataDir, 'users.json');
+if (!existsSync(usersFile)) {
+    writeFileSync(usersFile, JSON.stringify([]));
+    console.log('Created users.json file.');
+}
+
+// ─── Authentication Endpoints ────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: 'Name, email, and password are required' });
+        }
+
+        const usersBuf = readFileSync(usersFile, 'utf8');
+        const users = JSON.parse(usersBuf || '[]');
+
+        if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+            return res.status(400).json({ error: 'User with this email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = {
+            id: Date.now().toString(),
+            name,
+            email: email.toLowerCase(),
+            password: hashedPassword,
+            createdAt: new Date().toISOString()
+        };
+
+        users.push(newUser);
+        writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+        // Delete password from response
+        const { password: _, ...userWithoutPassword } = newUser;
+        res.json({ success: true, user: userWithoutPassword });
+
+    } catch (err) {
+        console.error('Registration error:', err);
+        res.status(500).json({ error: 'Server error during registration' });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
+
+        const usersBuf = readFileSync(usersFile, 'utf8');
+        const users = JSON.parse(usersBuf || '[]');
+
+        const user = users.find(u => u.email === email.toLowerCase());
+
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        const validPassword = await bcrypt.compare(password, user.password);
+
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ success: true, user: userWithoutPassword });
+
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Server error during login' });
+    }
+});
 
 // ─── Clients ─────────────────────────────────────────────────────
 const anthropic = new Anthropic({
@@ -604,10 +734,11 @@ function saveBlogs(blogs) {
 
 // ─── POST /api/blogs — Save a generated blog ───────────────────
 app.post('/api/blogs', (req, res) => {
-    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount } = req.body;
+    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount, userName } = req.body;
     const blogs = loadBlogs();
     const blog = {
         id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+        userName: userName || 'Unknown',
         title: title || seoTitle || 'Untitled Blog',
         html: html || '',
         markdown: markdown || '',
@@ -712,6 +843,7 @@ app.post('/api/ads/generate', async (req, res) => {
         videoDuration,
         postCount = 3,
         ctaGoal = 'book_meeting',
+        userName = 'Unknown',
     } = req.body;
 
     try {
@@ -766,11 +898,13 @@ Return comprehensive research with specific examples and quotes.`;
 
         if (platforms.instagram) {
             platformInstructions += `
-## 📸 INSTAGRAM POST
-- 3 caption options (engaging, short, with emojis)
-- 10 relevant hashtags
-- Image description: exact scene, text overlay, colors, mood
-- Square format (1:1) recommendations
+## 📸 INSTAGRAM POST (STATIC/CAROUSEL CARDS)
+You MUST provide 3 distinct, high-converting ad variations (e.g. A/B/C testing styles: direct response, educational, emotional). 
+For EACH variation, you MUST clearly define:
+1. **VISUAL GRAPHIC TEXT (What goes ON the image itself)**: Write the EXACT headline, subheadline, and callout text to be overlaid on the graphic. Keep it punchy and use exact phrases from the research.
+2. **VISUAL DESIGN DIRECTIVES**: Describe the scene, background color mood, focal point, and text placement.
+3. **POST CAPTION**: Write the accompanying caption (with emojis, spacing) and 10 relevant hashtags.
+Make these 3 variations drastically different to give the user excellent options.
 `;
         }
 
@@ -940,6 +1074,7 @@ RULES:
         // Save to ads.json
         const ad = {
             id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+            userName,
             product,
             description: description || '',
             platforms,
@@ -1058,10 +1193,32 @@ Be conversational, not pushy. Ask follow-up questions based on their answers. If
         if (!response.ok) {
             const errBody = await response.text();
             console.error('Vapi call error:', errBody);
-            throw new Error(`Vapi API error: ${response.status}`);
+            // Parse Vapi error for a user-friendly message
+            let userMsg = `Vapi API error: ${response.status}`;
+            try {
+                const parsed = JSON.parse(errBody);
+                if (parsed.message) {
+                    userMsg = Array.isArray(parsed.message) ? parsed.message.join('. ') : parsed.message;
+                }
+            } catch { }
+            throw new Error(userMsg);
         }
 
         const callData = await response.json();
+
+        // Vapi may return 200 but the call already failed (e.g. daily limit)
+        if (callData.endedReason) {
+            const reason = callData.endedReason;
+            console.error(`❌ Vapi call failed immediately: ${reason}`);
+            const friendlyErrors = {
+                'call.start.error-vapi-number-outbound-daily-limit': 'Daily outbound call limit reached for this phone number. Try again tomorrow or upgrade your Vapi plan.',
+                'call.start.error-get-transport': 'Failed to connect phone transport. The phone number may be misconfigured in Vapi.',
+                'call.start.error-phone-number-not-found': 'Phone number not found in Vapi. Check VAPI_PHONE_NUMBER_ID in .env.',
+            };
+            const msg = friendlyErrors[reason] || `Call failed: ${reason}`;
+            return res.status(429).json({ error: msg, endedReason: reason });
+        }
+
         console.log(`✅ Call initiated: ${callData.id}`);
 
         // Save to local storage
@@ -1122,18 +1279,27 @@ app.get('/api/sales/call/:id', async (req, res) => {
 
         if (localCall) {
             const vapiStatus = vapiCall.status;
-            if (vapiStatus === 'ended') {
-                localCall.status = localCall.analysis ? localCall.status : 'completed';
-                localCall.duration = vapiCall.costBreakdown?.duration || vapiCall.duration || null;
-                localCall.recordingUrl = vapiCall.recordingUrl || vapiCall.artifact?.recordingUrl || null;
-                localCall.transcript = vapiCall.transcript || vapiCall.artifact?.transcript || null;
-                localCall.endedAt = vapiCall.endedAt || new Date().toISOString();
+            const endedReason = vapiCall.endedReason || '';
 
-                // Auto-analyze if we have a transcript and haven't yet analyzed
-                if (localCall.transcript && !localCall.analysis) {
-                    console.log(`🧠 Auto-analyzing call ${id}…`);
-                    localCall.analysis = await analyzeTranscript(localCall.transcript, localCall.contactName, localCall.company);
-                    localCall.status = localCall.analysis.status || 'completed';
+            if (vapiStatus === 'ended') {
+                // Check if the call failed before connecting (error reasons)
+                if (endedReason.startsWith('call.start.error')) {
+                    localCall.status = 'no_answer';
+                    localCall.endedAt = vapiCall.endedAt || new Date().toISOString();
+                    localCall.errorReason = endedReason;
+                } else {
+                    localCall.status = localCall.analysis ? localCall.status : 'completed';
+                    localCall.duration = vapiCall.costBreakdown?.duration || vapiCall.duration || null;
+                    localCall.recordingUrl = vapiCall.recordingUrl || vapiCall.artifact?.recordingUrl || null;
+                    localCall.transcript = vapiCall.transcript || vapiCall.artifact?.transcript || null;
+                    localCall.endedAt = vapiCall.endedAt || new Date().toISOString();
+
+                    // Auto-analyze if we have a transcript and haven't yet analyzed
+                    if (localCall.transcript && !localCall.analysis) {
+                        console.log(`🧠 Auto-analyzing call ${id}…`);
+                        localCall.analysis = await analyzeTranscript(localCall.transcript, localCall.contactName, localCall.company);
+                        localCall.status = localCall.analysis.status || 'completed';
+                    }
                 }
             } else if (vapiStatus === 'ringing' || vapiStatus === 'queued') {
                 localCall.status = 'ringing';

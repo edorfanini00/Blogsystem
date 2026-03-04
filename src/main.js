@@ -242,6 +242,7 @@ blogForm.addEventListener('submit', async (e) => {
                                     seoDescription: data.metaDescription,
                                     seoKeywords: data.seoKeywords,
                                     keywords, description, wordCount,
+                                    userName: window.currentUser?.name || 'Unknown',
                                 }),
                             });
                             const saved = await saveRes.json();
@@ -420,7 +421,14 @@ async function loadBlogHistory() {
     try {
         const res = await fetch(`${API_BASE}/api/blogs`);
         if (!res.ok) return;
-        const blogs = await res.json();
+        let blogs = await res.json();
+
+        const filterVal = document.getElementById('blogHistoryFilter')?.value || 'all';
+        const currentUser = window.currentUser?.name || 'Unknown';
+
+        if (filterVal === 'me') {
+            blogs = blogs.filter(b => b.userName === currentUser);
+        }
 
         if (blogs.length === 0) {
             blogHistoryEmpty.style.display = '';
@@ -443,6 +451,7 @@ async function loadBlogHistory() {
                   <div class="blog-item-title">${blog.title}</div>
                   <div class="blog-item-meta">
                     <span class="blog-item-date">${date}</span>
+                    <span class="blog-item-date" style="color: var(--accent-primary)">By ${blog.userName || 'Unknown'}</span>
                     ${badge}
                   </div>
                 </div>
@@ -972,6 +981,12 @@ const adEmailBtn = document.getElementById('adEmailBtn');
 adEmailBtn.addEventListener('click', async () => {
     if (!adFullContent) return;
 
+    const authEmail = prompt('Authentication Required: Please enter your email address to connect your account and send this campaign to the agency:');
+    if (!authEmail || !authEmail.includes('@')) {
+        showToast('Invalid or no email provided. Email authorization cancelled.', 'error');
+        return;
+    }
+
     adEmailBtn.disabled = true;
     adEmailBtn.textContent = '📧 Sending…';
 
@@ -981,8 +996,8 @@ adEmailBtn.addEventListener('click', async () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                subject: `Ad Creative: ${product}`,
-                textContent: adFullContent,
+                subject: `Ad Creative: ${product} (Authorized by ${authEmail})`,
+                textContent: `Authorized Sender: ${authEmail}\n\n${adFullContent}`,
             }),
         });
         const data = await res.json();
@@ -1040,11 +1055,27 @@ adForm.addEventListener('submit', async e => {
     adProgressText.textContent = 'Starting…';
     adFullContent = '';
 
+    let currentPct = 0;
+    let targetPct = 0;
+    const smoothInterval = setInterval(() => {
+        if (currentPct < targetPct) {
+            const diff = targetPct - currentPct;
+            const step = Math.max(0.3, diff * 0.08);
+            currentPct = Math.min(currentPct + step, targetPct);
+        } else if (currentPct < 95 && targetPct > 0) {
+            currentPct += 0.15;
+        }
+        const rounded = Math.round(currentPct);
+        adProgressFill.style.width = `${rounded}%`;
+        adProgressPct.textContent = `${rounded}%`;
+    }, 200);
+
     try {
+        const userName = window.currentUser?.name || 'Unknown';
         const res = await fetch(`${API_BASE}/api/ads/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ product, description, platforms, videoDuration, postCount, ctaGoal }),
+            body: JSON.stringify({ product, description, platforms, videoDuration, postCount, ctaGoal, userName }),
         });
 
         const reader = res.body.getReader();
@@ -1064,8 +1095,7 @@ adForm.addEventListener('submit', async e => {
                     const data = JSON.parse(line.slice(6));
 
                     if (data.type === 'progress') {
-                        adProgressFill.style.width = data.pct + '%';
-                        adProgressPct.textContent = data.pct + '%';
+                        targetPct = data.pct;
                         adProgressText.textContent = data.text;
                     }
 
@@ -1094,6 +1124,7 @@ adForm.addEventListener('submit', async e => {
         console.error('Ad generation error:', err);
         showToast(err.message || 'Ad generation failed', 'error');
     } finally {
+        clearInterval(smoothInterval);
         adGenerateBtn.disabled = false;
         adGenerateBtn.querySelector('.btn-text').style.display = 'inline';
         adGenerateBtn.querySelector('.btn-loader').style.display = 'none';
@@ -1116,7 +1147,14 @@ async function loadAdHistory() {
     try {
         const res = await fetch(`${API_BASE}/api/ads`);
         if (!res.ok) return;
-        const ads = await res.json();
+        let ads = await res.json();
+
+        const filterVal = document.getElementById('postHistoryFilter')?.value || 'all';
+        const currentUser = window.currentUser?.name || 'Unknown';
+
+        if (filterVal === 'me') {
+            ads = ads.filter(a => a.userName === currentUser);
+        }
 
         if (ads.length === 0) {
             adHistoryEmpty.style.display = '';
@@ -1139,6 +1177,7 @@ async function loadAdHistory() {
                   <div class="blog-item-title">${ad.product}</div>
                   <div class="blog-item-meta">
                     <span class="blog-item-date">${date}</span>
+                    <span class="blog-item-date" style="color: var(--accent-primary)">By ${ad.userName || 'Unknown'}</span>
                     ${toggles ? `<span class="blog-item-date">${toggles}</span>` : ''}
                   </div>
                 </div>
@@ -1200,3 +1239,7 @@ async function deleteAd(adId) {
     loadAdHistory();
     showToast('Post deleted');
 }
+
+// ─── Filter Events ──────────────────────────────────────────────
+document.getElementById('blogHistoryFilter')?.addEventListener('change', loadBlogHistory);
+document.getElementById('postHistoryFilter')?.addEventListener('change', loadAdHistory);

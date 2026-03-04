@@ -9,6 +9,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
+  <script type="module">
+    import { enforceAuth, logout } from '/src/auth.js';
+
+    // Check session instantly before page render
+    const user = enforceAuth();
+
+    if (user) {
+      window.currentUser = user;
+      document.addEventListener('DOMContentLoaded', () => {
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            logout();
+          });
+        }
+      });
+    }
+  </script>
 </head>
 
 <body>
@@ -45,6 +64,18 @@
             <path d="M15.54 8.46a5 5 0 010 7.07" />
           </svg>
           <span>Posts Generator</span>
+        </a>
+
+        <div style="flex-grow: 1;"></div>
+
+        <a href="#" class="nav-item" id="logoutBtn" style="margin-top: auto; filter: grayscale(1);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Log Out</span>
         </a>
       </nav>
 
@@ -198,6 +229,11 @@
         <section class="card blog-history-card" id="blogHistoryCard">
           <div class="call-log-header">
             <h3>Blog History</h3>
+            <select class="history-filter" id="blogHistoryFilter"
+              style="margin-left: auto; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 0.8rem; background: var(--bg-card); color: var(--text-primary); outline: none;">
+              <option value="all">Company Wide</option>
+              <option value="me">My Blogs</option>
+            </select>
           </div>
           <div class="blog-history-empty" id="blogHistoryEmpty">
             <div class="empty-icon">📝</div>
@@ -410,6 +446,18 @@
                 <input id="adDuration" type="text" placeholder="e.g. 30 seconds, 1 minute" />
               </div>
 
+              <div class="progress-container" id="adProgressContainer" style="display:none; margin-top: 16px;">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="adLoadingText">Generating ad creatives…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="adProgressBarFill"
+                    style="width:0%; background: var(--accent-primary);"></div>
+                </div>
+                <div class="progress-percent" id="adProgressPercent">0%</div>
+              </div>
+
               <button type="submit" class="btn-primary" id="adGenerateBtn">
                 <span class="btn-text">🔍 Research & Generate</span>
                 <span class="btn-loader" style="display:none"><span class="spinner"></span>Generating…</span>
@@ -455,6 +503,11 @@
         <section class="card blog-history-card" id="adHistoryCard">
           <div class="call-log-header">
             <h3>Post History</h3>
+            <select class="history-filter" id="postHistoryFilter"
+              style="margin-left: auto; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 0.8rem; background: var(--bg-card); color: var(--text-primary); outline: none;">
+              <option value="all">Company Wide</option>
+              <option value="me">My Posts</option>
+            </select>
           </div>
           <div class="blog-history-empty" id="adHistoryEmpty">
             <div class="empty-icon">📣</div>
