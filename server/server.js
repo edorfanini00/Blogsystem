@@ -238,7 +238,7 @@ const perplexity = new OpenAI({
 });
 
 // ─── Perplexity Research ─────────────────────────────────────────
-async function runPerplexityResearch(keywords, description) {
+async function runPerplexityResearch(keywords, description, customization = {}) {
     const apiKey = process.env.PERPLEXITY_API_KEY;
     if (!apiKey || apiKey === 'your_perplexity_api_key') {
         console.warn('⚠ Perplexity API key not set, skipping research');
@@ -299,12 +299,17 @@ Format as a structured research brief with clear sections and bullet points. Inc
                     role: 'user',
                     content: `Do comprehensive SEO and audience research for this blog topic: "${keywords}"
 Additional context: ${description}
+Target audience: ${customization.target || 'General'}
+Product/service type: ${customization.product || 'General'}
+Trend focus: ${customization.trends || 'None'}
+Desired tone: ${customization.tone || 'Professional'}
 
 Scan Reddit posts, X/Twitter discussions, Quora, industry forums, and top-ranking Google results.
 Identify the exact search terms people use, the questions they ask, the pain points they express.
 Analyze what the top 5 competing articles do well and what content gaps exist.
 Provide specific LSI keywords, long-tail variations, and question-based keywords.
 Include GEO optimization recommendations — what makes content get cited by AI engines.
+Focus specifically on the ${customization.target || 'general'} audience and ${customization.product || 'general'} industry.
 Be extremely specific and actionable.`
                 }
             ],
@@ -324,7 +329,7 @@ Be extremely specific and actionable.`
 }
 
 // ─── Claude System Prompt ────────────────────────────────────────
-function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls) {
+function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls, customization = {}) {
     const researchBlock = researchInsights
         ? `\n\nAUDIENCE & SEO RESEARCH INSIGHTS (use these to shape EVERY aspect of the blog):\n${researchInsights}\n\nCRITICAL — USE THE RESEARCH ABOVE TO:\n- Use the EXACT primary keyword in H1, first paragraph, and throughout\n- Work ALL secondary/long-tail keywords naturally into H2s, H3s, and body text\n- Use LSI keywords throughout to build topical authority\n- Turn question-based keywords into H2/H3 headings\n- Mirror the exact language and phrases the target audience uses\n- Address their specific objections and pain points head-on\n- Fill the content gaps identified in competitor analysis\n- Include specific statistics, data points, and authoritative sources for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n- Reference named entities, brands, and tools the audience already knows\n`
         : '';
@@ -346,6 +351,16 @@ Use this format: <img src="FULL_URL_HERE" alt="descriptive alt text" style="widt
 TOPIC: ${keywords}
 CONTEXT: ${description}
 TARGET WORD COUNT: ${wordCount} words
+TARGET AUDIENCE: ${customization.target || 'General'}
+PRODUCT/SERVICE: ${customization.product || 'General'}
+TRENDS FOCUS: ${customization.trends || 'None'}
+TONE: ${customization.tone || 'Professional'}
+
+CONTENT CUSTOMIZATION RULES:
+- Write specifically for the ${customization.target || 'general'} audience — use their language, address their pain points, reference their world
+- Frame all examples and use cases around the ${customization.product || 'general'} industry
+- ${customization.trends && customization.trends !== 'None' ? `Weave in the "${customization.trends}" trend throughout — show how it impacts the topic and what readers should do about it` : 'Focus on evergreen, timeless advice'}
+- Maintain a ${customization.tone || 'professional'} tone throughout the entire article
 ${researchBlock}${imageBlock}
 STRICT OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
 
@@ -572,17 +587,30 @@ app.post('/api/generate', async (req, res) => {
     const TOTAL_STEPS = 8;
 
     try {
-        const { keywords, description, wordCount } = req.body;
+        const { keywords, description, wordCount, target, product, trends, tone } = req.body;
 
         if (!keywords || !description || !wordCount) {
             return sendError('Missing required fields: keywords, description, wordCount');
         }
 
-        console.log(`\n🚀 Generating blog: "${keywords}" (~${wordCount} words)`);
+        // Map dropdown values to readable labels
+        const targetLabels = { small_businesses: 'Small Businesses', enterprise: 'Enterprise / Corporate', startups: 'Startups & Founders', marketers: 'Marketers & Agencies', developers: 'Developers & Tech Teams', ecommerce: 'E-Commerce Owners', saas: 'SaaS Companies', general: 'General Audience' };
+        const productLabels = { software: 'Software / SaaS', consulting: 'Consulting / Services', ecommerce_product: 'Physical Product', digital_product: 'Digital Product / Course', agency: 'Agency / Freelance', food_bev: 'Food & Beverage', finance: 'Finance / Fintech', health: 'Health & Wellness', other: 'Other' };
+        const trendsLabels = { ai_automation: 'AI & Automation', sustainability: 'Sustainability & Green', remote_work: 'Remote Work & Hybrid', data_privacy: 'Data Privacy & Security', social_commerce: 'Social Commerce', personalization: 'Personalization & CX', industry_specific: 'Industry-Specific', none: 'No Specific Trend' };
+        const toneLabels = { professional: 'Professional', conversational: 'Conversational', authoritative: 'Authoritative & Expert', friendly: 'Friendly & Approachable', bold: 'Bold & Provocative', educational: 'Educational / Tutorial', storytelling: 'Storytelling / Narrative', data_driven: 'Data-Driven & Analytical' };
+
+        const customization = {
+            target: targetLabels[target] || target || 'General Audience',
+            product: productLabels[product] || product || 'General',
+            trends: trendsLabels[trends] || trends || 'None',
+            tone: toneLabels[tone] || tone || 'Professional',
+        };
+
+        console.log(`\n🚀 Generating blog: "${keywords}" (~${wordCount} words) [${customization.target} | ${customization.tone}]`);
 
         // Step 1: Perplexity research
         sendProgress(1, TOTAL_STEPS, 'Researching target audience & SEO keywords…');
-        const researchInsights = await runPerplexityResearch(keywords, description);
+        const researchInsights = await runPerplexityResearch(keywords, description, customization);
         if (researchInsights) {
             console.log(`📊 Research insights received (${researchInsights.length} chars)`);
         }
@@ -619,7 +647,7 @@ app.post('/api/generate', async (req, res) => {
 
         // Step 5: Writing blog
         sendProgress(5, TOTAL_STEPS, 'Writing SEO-optimized blog with Claude…');
-        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, uploadedImages);
+        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, uploadedImages, customization);
 
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',

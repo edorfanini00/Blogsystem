@@ -139,6 +139,107 @@
                 </div>
               </div>
 
+              <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group" style="position:relative;">
+                  <label>Target Audience</label>
+                  <div class="custom-select-wrapper" id="blogTargetWrapper">
+                    <div class="custom-select-trigger" id="blogTargetTrigger">
+                      <span id="blogTargetText">Small Businesses</span>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                    <div class="custom-select-options" id="blogTargetOptions">
+                      <div class="custom-option selected" data-value="small_businesses">Small Businesses</div>
+                      <div class="custom-option" data-value="enterprise">Enterprise / Corporate</div>
+                      <div class="custom-option" data-value="startups">Startups & Founders</div>
+                      <div class="custom-option" data-value="marketers">Marketers & Agencies</div>
+                      <div class="custom-option" data-value="developers">Developers & Tech Teams</div>
+                      <div class="custom-option" data-value="ecommerce">E-Commerce Owners</div>
+                      <div class="custom-option" data-value="saas">SaaS Companies</div>
+                      <div class="custom-option" data-value="general">General Audience</div>
+                    </div>
+                    <input type="hidden" id="blogTarget" value="small_businesses">
+                  </div>
+                </div>
+
+                <div class="form-group" style="position:relative;">
+                  <label>Product / Service</label>
+                  <div class="custom-select-wrapper" id="blogProductWrapper">
+                    <div class="custom-select-trigger" id="blogProductTrigger">
+                      <span id="blogProductText">Software / SaaS</span>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                    <div class="custom-select-options" id="blogProductOptions">
+                      <div class="custom-option selected" data-value="software">Software / SaaS</div>
+                      <div class="custom-option" data-value="consulting">Consulting / Services</div>
+                      <div class="custom-option" data-value="ecommerce_product">Physical Product</div>
+                      <div class="custom-option" data-value="digital_product">Digital Product / Course</div>
+                      <div class="custom-option" data-value="agency">Agency / Freelance</div>
+                      <div class="custom-option" data-value="food_bev">Food & Beverage</div>
+                      <div class="custom-option" data-value="finance">Finance / Fintech</div>
+                      <div class="custom-option" data-value="health">Health & Wellness</div>
+                      <div class="custom-option" data-value="other">Other</div>
+                    </div>
+                    <input type="hidden" id="blogProduct" value="software">
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group" style="position:relative;">
+                  <label>Trends Focus</label>
+                  <div class="custom-select-wrapper" id="blogTrendsWrapper">
+                    <div class="custom-select-trigger" id="blogTrendsTrigger">
+                      <span id="blogTrendsText">AI & Automation</span>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                    <div class="custom-select-options" id="blogTrendsOptions">
+                      <div class="custom-option selected" data-value="ai_automation">AI & Automation</div>
+                      <div class="custom-option" data-value="sustainability">Sustainability & Green</div>
+                      <div class="custom-option" data-value="remote_work">Remote Work & Hybrid</div>
+                      <div class="custom-option" data-value="data_privacy">Data Privacy & Security</div>
+                      <div class="custom-option" data-value="social_commerce">Social Commerce</div>
+                      <div class="custom-option" data-value="personalization">Personalization & CX</div>
+                      <div class="custom-option" data-value="industry_specific">Industry-Specific</div>
+                      <div class="custom-option" data-value="none">No Specific Trend</div>
+                    </div>
+                    <input type="hidden" id="blogTrends" value="ai_automation">
+                  </div>
+                </div>
+
+                <div class="form-group" style="position:relative;">
+                  <label>Tone</label>
+                  <div class="custom-select-wrapper" id="blogToneWrapper">
+                    <div class="custom-select-trigger" id="blogToneTrigger">
+                      <span id="blogToneText">Professional</span>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                    <div class="custom-select-options" id="blogToneOptions">
+                      <div class="custom-option selected" data-value="professional">Professional</div>
+                      <div class="custom-option" data-value="conversational">Conversational</div>
+                      <div class="custom-option" data-value="authoritative">Authoritative & Expert</div>
+                      <div class="custom-option" data-value="friendly">Friendly & Approachable</div>
+                      <div class="custom-option" data-value="bold">Bold & Provocative</div>
+                      <div class="custom-option" data-value="educational">Educational / Tutorial</div>
+                      <div class="custom-option" data-value="storytelling">Storytelling / Narrative</div>
+                      <div class="custom-option" data-value="data_driven">Data-Driven & Analytical</div>
+                    </div>
+                    <input type="hidden" id="blogTone" value="professional">
+                  </div>
+                </div>
+              </div>
+
               <button type="submit" class="btn-primary" id="generateBtn">
                 <span class="btn-text">Generate Blog</span>
                 <span class="btn-loader" style="display:none;">
