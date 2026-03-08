@@ -124,10 +124,10 @@ blogForm.addEventListener('submit', async (e) => {
     const keywords = keywordsInput.value.trim();
     const description = descriptionInput.value.trim();
     const wordCount = parseInt(wordCountInput.value);
-    const target = document.getElementById('blogTarget').value;
-    const product = document.getElementById('blogProduct').value;
-    const trends = document.getElementById('blogTrends').value;
-    const tone = document.getElementById('blogTone').value;
+    const target = document.getElementById('blogTarget').value.trim();
+    const product = document.getElementById('blogProduct').value.trim();
+    const trends = document.getElementById('blogTrends').value.trim();
+    const tone = document.getElementById('blogToneValue').value;
 
     if (!keywords || !description) {
         showToast('Please fill in all fields', 'error');
@@ -913,32 +913,32 @@ if (ctaGoalTrigger && ctaGoalOptions) {
     });
 }
 
-// ─── Blog Customization Dropdowns ───────────────────────────────
-['blogTarget', 'blogProduct', 'blogTrends', 'blogTone'].forEach(id => {
-    const wrapper = document.getElementById(`${id}Wrapper`);
-    const trigger = document.getElementById(`${id}Trigger`);
-    const textEl = document.getElementById(`${id}Text`);
-    const optionsEl = document.getElementById(`${id}Options`);
-    const hiddenInput = document.getElementById(id);
+// ─── Blog Tone Dropdown ────────────────────────────────────────
+{
+    const wrapper = document.getElementById('blogToneWrapper');
+    const trigger = document.getElementById('blogToneTrigger');
+    const textEl = document.getElementById('blogToneText');
+    const optionsEl = document.getElementById('blogToneOptions');
+    const hiddenInput = document.getElementById('blogToneValue');
 
-    if (!trigger || !optionsEl) return;
+    if (trigger && optionsEl) {
+        trigger.addEventListener('click', () => wrapper.classList.toggle('open'));
 
-    trigger.addEventListener('click', () => wrapper.classList.toggle('open'));
-
-    optionsEl.querySelectorAll('.custom-option').forEach(option => {
-        option.addEventListener('click', function () {
-            hiddenInput.value = this.getAttribute('data-value');
-            textEl.textContent = this.textContent;
-            optionsEl.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
-            this.classList.add('selected');
-            wrapper.classList.remove('open');
+        optionsEl.querySelectorAll('.custom-option').forEach(option => {
+            option.addEventListener('click', function () {
+                hiddenInput.value = this.getAttribute('data-value');
+                textEl.textContent = this.textContent;
+                optionsEl.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                this.classList.add('selected');
+                wrapper.classList.remove('open');
+            });
         });
-    });
 
-    document.addEventListener('click', (e) => {
-        if (!wrapper.contains(e.target)) wrapper.classList.remove('open');
-    });
-});
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) wrapper.classList.remove('open');
+        });
+    }
+}
 let uploadedFiles = [];
 
 // ─── File Upload (drag & drop + click) ──────────────────────────

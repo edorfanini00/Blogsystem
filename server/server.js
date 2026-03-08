@@ -593,16 +593,13 @@ app.post('/api/generate', async (req, res) => {
             return sendError('Missing required fields: keywords, description, wordCount');
         }
 
-        // Map dropdown values to readable labels
-        const targetLabels = { small_businesses: 'Small Businesses', enterprise: 'Enterprise / Corporate', startups: 'Startups & Founders', marketers: 'Marketers & Agencies', developers: 'Developers & Tech Teams', ecommerce: 'E-Commerce Owners', saas: 'SaaS Companies', general: 'General Audience' };
-        const productLabels = { software: 'Software / SaaS', consulting: 'Consulting / Services', ecommerce_product: 'Physical Product', digital_product: 'Digital Product / Course', agency: 'Agency / Freelance', food_bev: 'Food & Beverage', finance: 'Finance / Fintech', health: 'Health & Wellness', other: 'Other' };
-        const trendsLabels = { ai_automation: 'AI & Automation', sustainability: 'Sustainability & Green', remote_work: 'Remote Work & Hybrid', data_privacy: 'Data Privacy & Security', social_commerce: 'Social Commerce', personalization: 'Personalization & CX', industry_specific: 'Industry-Specific', none: 'No Specific Trend' };
+        // Map tone dropdown value to readable label
         const toneLabels = { professional: 'Professional', conversational: 'Conversational', authoritative: 'Authoritative & Expert', friendly: 'Friendly & Approachable', bold: 'Bold & Provocative', educational: 'Educational / Tutorial', storytelling: 'Storytelling / Narrative', data_driven: 'Data-Driven & Analytical' };
 
         const customization = {
-            target: targetLabels[target] || target || 'General Audience',
-            product: productLabels[product] || product || 'General',
-            trends: trendsLabels[trends] || trends || 'None',
+            target: target || '',
+            product: product || '',
+            trends: trends || '',
             tone: toneLabels[tone] || tone || 'Professional',
         };
 
