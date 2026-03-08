@@ -226,18 +226,18 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ─── Clients ─────────────────────────────────────────────────────
 const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey: process.env.ANTHROPIC_API_KEY || 'placeholder',
 });
 
 // OpenRouter client (for image generation)
 const openrouter = new OpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY,
+    apiKey: process.env.OPENROUTER_API_KEY || 'placeholder',
     baseURL: 'https://openrouter.ai/api/v1',
 });
 
 // Perplexity client
 const perplexity = new OpenAI({
-    apiKey: process.env.PERPLEXITY_API_KEY,
+    apiKey: process.env.PERPLEXITY_API_KEY || 'placeholder',
     baseURL: 'https://api.perplexity.ai',
 });
 
