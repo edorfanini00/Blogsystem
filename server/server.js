@@ -11,7 +11,12 @@ import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+let pdfParse;
+try {
+    pdfParse = require('pdf-parse');
+} catch {
+    pdfParse = null;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
