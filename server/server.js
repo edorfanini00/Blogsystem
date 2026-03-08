@@ -11,19 +11,23 @@ import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+let pdfParse;
+try { pdfParse = require('pdf-parse'); } catch { pdfParse = null; }
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const isVercel = !!process.env.VERCEL;
 
-dotenv.config({ path: join(__dirname, '.env') });
+if (!isVercel) {
+    dotenv.config({ path: join(__dirname, '.env') });
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // ─── Multer for file uploads ────────────────────────────────────
-const uploadsDir = join(__dirname, 'uploads');
+const uploadsDir = isVercel ? '/tmp/uploads' : join(__dirname, 'uploads');
 if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
 const upload = multer({ dest: uploadsDir, limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -132,7 +136,7 @@ app.post('/api/send-email', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 // ─── Data Persistence ────────────────────────────────────────────
-const dataDir = join(__dirname, 'data');
+const dataDir = isVercel ? '/tmp/data' : join(__dirname, 'data');
 if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });
 }
@@ -218,18 +222,18 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ─── Clients ─────────────────────────────────────────────────────
 const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey: process.env.ANTHROPIC_API_KEY || 'placeholder',
 });
 
 // OpenRouter client (for image generation)
 const openrouter = new OpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY,
+    apiKey: process.env.OPENROUTER_API_KEY || 'placeholder',
     baseURL: 'https://openrouter.ai/api/v1',
 });
 
 // Perplexity client
 const perplexity = new OpenAI({
-    apiKey: process.env.PERPLEXITY_API_KEY,
+    apiKey: process.env.PERPLEXITY_API_KEY || 'placeholder',
     baseURL: 'https://api.perplexity.ai',
 });
 
@@ -721,7 +725,7 @@ app.post('/api/publish', async (req, res) => {
 // ─── BLOG HISTORY — Storage & CRUD ───────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 
-const BLOGS_FILE = join(__dirname, 'blogs.json');
+const BLOGS_FILE = isVercel ? '/tmp/blogs.json' : join(__dirname, 'blogs.json');
 
 function loadBlogs() {
     if (!existsSync(BLOGS_FILE)) return [];
@@ -800,7 +804,7 @@ app.delete('/api/blogs/:id', (req, res) => {
 // ─── POSTS GENERATOR — Ad Research & Generation ─────────────────
 // ═══════════════════════════════════════════════════════════════════
 
-const ADS_FILE = join(__dirname, 'ads.json');
+const ADS_FILE = isVercel ? '/tmp/ads.json' : join(__dirname, 'ads.json');
 
 function loadAds() {
     if (!existsSync(ADS_FILE)) return [];
@@ -1101,7 +1105,7 @@ RULES:
 // ─── AI SALES — Vapi Outbound Calling ────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 
-const CALLS_FILE = join(__dirname, 'calls.json');
+const CALLS_FILE = isVercel ? '/tmp/calls.json' : join(__dirname, 'calls.json');
 const VAPI_BASE = 'https://api.vapi.ai';
 
 function loadCalls() {
@@ -1381,8 +1385,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─── Start Server ────────────────────────────────────────────────
-app.listen(PORT, () => {
-    console.log(`\n✨ Celeritech Orbit Server running on http://localhost:${PORT}`);
-    console.log(`   Health: http://localhost:${PORT}/api/health\n`);
-});
+if (!isVercel) {
+    app.listen(PORT, () => {
+        console.log(`\n✨ Celeritech Orbit Server running on http://localhost:${PORT}`);
+        console.log(`   Health: http://localhost:${PORT}/api/health\n`);
+    });
+}
+
+export default app;
 
