@@ -1,6 +1,6 @@
 // src/auth.js
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
 
 /**
  * Register a new user

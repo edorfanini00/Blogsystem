@@ -1,5 +1,118 @@
 [
   {
+    "id": "019cbe98-325c-766d-9b42-3532c08af351",
+    "phoneNumber": "7862386494",
+    "contactName": "Claudia",
+    "company": "Celeritech",
+    "status": "callback",
+    "startedAt": "2026-03-05T15:22:52.240Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cbe98-325c-766d-9b42-3532c08af351-1772724194213-73570bd5-dcc2-4a01-9544-1df01ce8e25f-mono.wav",
+    "transcript": "AI: Hi. Is this Claudia? This is Alex from Celery Tech. You have a quick moment to chat?\nUser: Thanks. Please stay on the line.\nAI: Of course, take your time. I'm here when you're ready.\n",
+    "analysis": {
+      "status": "callback",
+      "summary": "Initial contact made with Claudia from Celeritech. Prospect asked to stay on the line, indicating they may be briefly occupied but willing to continue the conversation.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "medium",
+      "followUpRecommendation": "Continue the conversation when prospect returns to the line, introduce the value proposition and discovery questions",
+      "keyQuotes": [
+        "Thanks. Please stay on the line."
+      ]
+    },
+    "endedAt": "2026-03-05T15:23:11.662Z"
+  },
+  {
+    "id": "019cbe95-1f8e-733e-9281-f78249f8ed70",
+    "phoneNumber": "7865160910",
+    "contactName": "Nora",
+    "company": "Next era",
+    "status": "no_answer",
+    "startedAt": "2026-03-05T15:19:31.833Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cbe95-1f8e-733e-9281-f78249f8ed70-1772724030975-252f71b0-6b77-4f57-aea7-38671953622d-mono.wav",
+    "transcript": "AI: Hi. Is this Nora? This is Alex from Celleretech. Do you have a quick moment to chat?\nUser: 6 0 9 1 0\nAI: Hi. This is Alex from Celeratech. Do you have a quick moment to chat?\n",
+    "analysis": {
+      "status": "no_answer",
+      "summary": "Called Nora at Next Era but did not reach her directly. The person who answered only provided numbers and did not engage in conversation.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "none",
+      "followUpRecommendation": "Try calling back at a different time or leave a voicemail with a clear value proposition",
+      "keyQuotes": [
+        "6 0 9 1 0"
+      ]
+    },
+    "endedAt": "2026-03-05T15:20:28.427Z"
+  },
+  {
+    "id": "019cbe94-3664-7996-b47a-f6c6b5dc6620",
+    "phoneNumber": "7866027641",
+    "contactName": "Ricky",
+    "company": "Netapp",
+    "status": "completed",
+    "startedAt": "2026-03-05T15:18:32.053Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-05T15:18:37.282Z"
+  },
+  {
+    "id": "019cbe93-dce1-7668-96b3-dffd54de4b7e",
+    "phoneNumber": "17868247739",
+    "contactName": "Edoardo Orfanini",
+    "company": "celeritech",
+    "status": "no_answer",
+    "startedAt": "2026-03-05T15:18:08.384Z",
+    "duration": null,
+    "recordingUrl": "https://storage.vapi.ai/019cbe93-dce1-7668-96b3-dffd54de4b7e-1772723932219-73a512f8-f488-4bff-a383-d1a3095077ef-mono.wav",
+    "transcript": "AI: Hi. Is this Eduardo Orphanini? This is Alex from Cellaritech. You have a quick moment to chat?\n",
+    "analysis": {
+      "status": "no_answer",
+      "summary": "Call was answered but the prospect only provided their name and company information without engaging in conversation. No meaningful dialogue occurred beyond the initial greeting.",
+      "painPoints": [],
+      "currentSoftware": [],
+      "objections": [],
+      "interestLevel": "none",
+      "followUpRecommendation": "Follow up with another call attempt at a different time or send an introductory email explaining the purpose of the outreach",
+      "keyQuotes": [
+        "Edoardo Orfanini at celeritech"
+      ]
+    },
+    "endedAt": "2026-03-05T15:18:49.674Z"
+  },
+  {
+    "id": "019cbe3e-1806-733b-b9f5-4ed19aa3b729",
+    "phoneNumber": "7868247739",
+    "contactName": "Edoardo Orfanini",
+    "company": "celeritech",
+    "status": "no_answer",
+    "startedAt": "2026-03-05T13:44:26.499Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-05T13:44:32.277Z",
+    "errorReason": "call.start.error-get-transport"
+  },
+  {
+    "id": "019cbadc-ee01-7aa4-af34-95446c72aad8",
+    "phoneNumber": "17868247739",
+    "contactName": "Edoardo Orfanini",
+    "company": "04/16/2024",
+    "status": "no_answer",
+    "startedAt": "2026-03-04T21:59:27.059Z",
+    "duration": null,
+    "recordingUrl": null,
+    "transcript": null,
+    "analysis": null,
+    "endedAt": "2026-03-04T21:59:32.258Z",
+    "errorReason": "call.start.error-get-transport"
+  },
+  {
     "id": "019cb47d-6c88-744a-8a5e-f83dec6d204c",
     "phoneNumber": "17868247739",
     "contactName": "Edoardo Orfanini",
