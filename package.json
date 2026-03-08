@@ -7,6 +7,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "node server/server.js",
     "client": "vite",
+    "build": "vite build",
     "start": "concurrently \"npm run server\" \"npm run client\""
   },
   "dependencies": {
