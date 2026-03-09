@@ -255,22 +255,24 @@ blogForm.addEventListener('submit', async (e) => {
 
                         // Auto-save to blog history
                         try {
+                            const blogData = {
+                                title: data.title,
+                                html: data.htmlContent || cleanContent,
+                                markdown: data.content,
+                                seoTitle: data.metaTitle,
+                                seoDescription: data.metaDescription,
+                                seoKeywords: data.seoKeywords,
+                                keywords, description, wordCount,
+                                userName: window.currentUser?.name || 'Unknown',
+                            };
                             const saveRes = await fetch(`${API_BASE}/api/blogs`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    title: data.title,
-                                    html: data.htmlContent || cleanContent,
-                                    markdown: data.content,
-                                    seoTitle: data.metaTitle,
-                                    seoDescription: data.metaDescription,
-                                    seoKeywords: data.seoKeywords,
-                                    keywords, description, wordCount,
-                                    userName: window.currentUser?.name || 'Unknown',
-                                }),
+                                body: JSON.stringify(blogData),
                             });
                             const saved = await saveRes.json();
                             currentBlogId = saved.id;
+                            saveBlogToLocal(saved);
                             loadBlogHistory();
                         } catch (saveErr) {
                             console.error('Blog save error:', saveErr);
@@ -441,12 +443,48 @@ newBlogBtn.addEventListener('click', () => {
     document.querySelectorAll('.blog-history-item').forEach(i => i.classList.remove('active'));
 });
 
-// ─── Load Blog History ──────────────────────────────────────────
+// ─── localStorage Blog Helpers ─────────────────────────────────
+function getLocalBlogs() {
+    try { return JSON.parse(localStorage.getItem('orbit_blogs') || '[]'); } catch { return []; }
+}
+
+function saveLocalBlogs(blogs) {
+    localStorage.setItem('orbit_blogs', JSON.stringify(blogs));
+}
+
+function saveBlogToLocal(blog) {
+    const blogs = getLocalBlogs();
+    const idx = blogs.findIndex(b => b.id === blog.id);
+    if (idx >= 0) blogs[idx] = blog; else blogs.unshift(blog);
+    saveLocalBlogs(blogs);
+}
+
+function removeBlogFromLocal(blogId) {
+    saveLocalBlogs(getLocalBlogs().filter(b => b.id !== blogId));
+}
+
+// ─── Load Blog History (localStorage + server merge) ───────────
 async function loadBlogHistory() {
     try {
-        const res = await fetch(`${API_BASE}/api/blogs`);
-        if (!res.ok) return;
-        let blogs = await res.json();
+        // Start with localStorage (instant)
+        let blogs = getLocalBlogs();
+
+        // Try to merge with server
+        try {
+            const res = await fetch(`${API_BASE}/api/blogs`);
+            if (res.ok) {
+                const serverBlogs = await res.json();
+                // Merge: add server blogs not in local
+                const localIds = new Set(blogs.map(b => b.id));
+                for (const sb of serverBlogs) {
+                    if (!localIds.has(sb.id)) blogs.push(sb);
+                }
+                // Sort newest first
+                blogs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                // Update localStorage with merged result
+                saveLocalBlogs(blogs);
+            }
+        } catch { /* server unavailable, use local only */ }
 
         const filterVal = document.getElementById('blogHistoryFilter')?.value || 'all';
         const currentUser = window.currentUser?.name || 'Unknown';
@@ -511,9 +549,14 @@ async function loadBlogHistory() {
 // ─── View a Saved Blog ─────────────────────────────────────────
 async function viewBlog(blogId) {
     try {
-        const res = await fetch(`${API_BASE}/api/blogs/${blogId}`);
-        if (!res.ok) return;
-        const blog = await res.json();
+        // Try server first, fall back to localStorage
+        let blog;
+        try {
+            const res = await fetch(`${API_BASE}/api/blogs/${blogId}`);
+            if (res.ok) blog = await res.json();
+        } catch { }
+        if (!blog) blog = getLocalBlogs().find(b => b.id === blogId);
+        if (!blog) { showToast('Blog not found', 'error'); return; }
 
         currentBlogId = blog.id;
         generatedBlog = {
@@ -543,6 +586,18 @@ async function viewBlog(blogId) {
         publishPanel.style.display = 'block';
         publishResult.style.display = 'none';
 
+        // Show save edits button
+        let saveEditsBtn = document.getElementById('saveEditsBtn');
+        if (!saveEditsBtn) {
+            saveEditsBtn = document.createElement('button');
+            saveEditsBtn.id = 'saveEditsBtn';
+            saveEditsBtn.className = 'btn-outline';
+            saveEditsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Edits';
+            previewActions.appendChild(saveEditsBtn);
+        }
+        saveEditsBtn.style.display = 'inline-flex';
+        saveEditsBtn.onclick = () => saveBlogEdits();
+
         // Highlight active history item
         document.querySelectorAll('.blog-history-item').forEach(i => {
             i.classList.toggle('active', i.dataset.blogId === blogId);
@@ -554,11 +609,50 @@ async function viewBlog(blogId) {
     }
 }
 
+// ─── Save Blog Edits ────────────────────────────────────────
+async function saveBlogEdits() {
+    if (!currentBlogId) return;
+    const updatedHtml = blogBody.innerHTML;
+
+    // Extract title from H1
+    const titleMatch = updatedHtml.match(/<h1[^>]*>(.+?)<\/h1>/i);
+    const updatedTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : generatedBlog?.title || 'Untitled';
+
+    // Update server
+    try {
+        await fetch(`${API_BASE}/api/blogs/${currentBlogId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html: updatedHtml, title: updatedTitle }),
+        });
+    } catch { }
+
+    // Update localStorage
+    const blogs = getLocalBlogs();
+    const idx = blogs.findIndex(b => b.id === currentBlogId);
+    if (idx >= 0) {
+        blogs[idx].html = updatedHtml;
+        blogs[idx].title = updatedTitle;
+        blogs[idx].updatedAt = new Date().toISOString();
+        saveLocalBlogs(blogs);
+    }
+
+    // Update in-memory state
+    if (generatedBlog) {
+        generatedBlog.htmlContent = updatedHtml;
+        generatedBlog.title = updatedTitle;
+    }
+
+    loadBlogHistory();
+    showToast('Edits saved!');
+}
+
 // ─── Delete a Blog ──────────────────────────────────────────────
 async function deleteBlog(blogId) {
     const confirmed = await showDeleteModal('Are you sure you want to delete this blog? This action cannot be undone.');
     if (!confirmed) return;
-    await fetch(`${API_BASE}/api/blogs/${blogId}`, { method: 'DELETE' });
+    try { await fetch(`${API_BASE}/api/blogs/${blogId}`, { method: 'DELETE' }); } catch { }
+    removeBlogFromLocal(blogId);
     if (currentBlogId === blogId) {
         newBlogBtn.click();
     }
