@@ -1980,23 +1980,69 @@ function renderRedditAgents() {
     }
 
     redditNoAgents.style.display = 'none';
-    redditAgentList.innerHTML = redditAgents.map(agent => `
+    redditAgentList.innerHTML = redditAgents.map(agent => {
+        const isAuth = !!agent.redditUsername;
+        const authBadge = isAuth
+            ? `<span style="font-size:0.7rem; color:#10b981; margin-left:8px;">● connected (u/${agent.redditUsername})</span>`
+            : `<span style="font-size:0.7rem; color:#f59e0b; margin-left:8px;">● pending auth</span>`;
+
+        return `
         <div class="reddit-agent-item" data-id="${agent.id}">
             <div class="reddit-agent-info">
-                <h4>${agent.name} <span style="font-size:0.7rem; color:#10b981; margin-left:8px;">● Active</span></h4>
+                <h4>${agent.name} ${authBadge}</h4>
                 <p>Monitoring ${agent.subreddits.length} subs for ${agent.keywords.length} keywords</p>
                 <div class="reddit-agent-tags">
                     ${agent.subreddits.slice(0, 3).map(sub => `<span class="reddit-agent-tag">r/${sub}</span>`).join('')}
                     ${agent.subreddits.length > 3 ? `<span class="reddit-agent-tag">+${agent.subreddits.length - 3}</span>` : ''}
                 </div>
             </div>
-            <button class="btn-small-outline" onclick="deleteRedditAgent('${agent.id}')" style="color:#ef4444; border-color: rgba(239,68,68,0.3);">Stop & Delete</button>
+            <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                ${!isAuth ? `<button class="btn-primary btn-sm" onclick="connectRedditAuth('${agent.id}')" style="padding:4px 12px; font-size:0.8rem;">Connect to Reddit</button>` : ''}
+                <button class="btn-small-outline" onclick="deleteRedditAgent('${agent.id}')" style="color:#ef4444; border-color: rgba(239,68,68,0.3);">Stop & Delete</button>
+            </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Attach functions to global scope for onclick handlers
     window.deleteRedditAgent = deleteRedditAgent;
+    window.connectRedditAuth = connectRedditAuth;
 }
+
+// ─── Reddit OAuth Flow ──────────────────────────────────────────
+function connectRedditAuth(agentId) {
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+
+    // Open the auth popup
+    window.open(
+        `/api/reddit/auth?agentId=${agentId}`,
+        'RedditAuth',
+        `width=${width},height=${height},top=${top},left=${left}`
+    );
+}
+
+// Listen for messages from the OAuth popup
+window.addEventListener('message', (event) => {
+    // Only accept messages from same origin
+    if (event.origin !== window.location.origin) return;
+
+    const data = event.data;
+    if (data && data.type === 'REDDIT_AUTH_SUCCESS') {
+        const { agentId, username } = data;
+
+        // Update the agent locally
+        const agentIndex = redditAgents.findIndex(a => a.id === agentId);
+        if (agentIndex !== -1) {
+            redditAgents[agentIndex].redditUsername = username;
+            localStorage.setItem('orbit_reddit_agents', JSON.stringify(redditAgents));
+            renderRedditAgents();
+            showToast(`Successfully linked u/${username} to agent!`);
+        }
+    }
+});
 
 // Render Activity Log
 function renderRedditActivity() {

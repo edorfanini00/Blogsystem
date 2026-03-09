@@ -1634,6 +1634,132 @@ app.get('/api/media/status/:requestId', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// ─── REDDIT OAUTH & AGENTS ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+import { kv } from '@vercel/kv';
+import axios from 'axios';
+
+const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID;
+const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET;
+const REDIRECT_URI = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}/api/reddit/callback`
+    : 'http://localhost:3000/api/reddit/callback';
+
+// ─── GET /api/reddit/auth ─────────────────────────────────────────
+// Redirects the user to Reddit to authorize the app
+app.get('/api/reddit/auth', (req, res) => {
+    if (!REDDIT_CLIENT_ID) {
+        return res.status(500).send('REDDIT_CLIENT_ID is not configured in environment variables.');
+    }
+
+    const { agentId } = req.query;
+    if (!agentId) {
+        return res.status(400).send('agentId query parameter is required');
+    }
+
+    // State encodes the agentId so we know which agent to link the token to on callback
+    const state = Buffer.from(JSON.stringify({ agentId })).toString('base64');
+    const scope = 'read submit identity'; // read posts, submit comments, identity
+    const duration = 'permanent'; // required to get a refresh_token
+
+    const authUrl = `https://www.reddit.com/api/v1/authorize?` +
+        `client_id=${REDDIT_CLIENT_ID}` +
+        `&response_type=code` +
+        `&state=${state}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&duration=${duration}` +
+        `&scope=${encodeURIComponent(scope)}`;
+
+    res.redirect(authUrl);
+});
+
+// ─── GET /api/reddit/callback ─────────────────────────────────────
+// Handles the redirect from Reddit and exchanges code for tokens
+app.get('/api/reddit/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+
+    if (error) {
+        return res.send(`<h2>Reddit Auth Failed</h2><p>${error}</p><script>setTimeout(() => window.close(), 3000);</script>`);
+    }
+
+    if (!code || !state) {
+        return res.status(400).send('Missing code or state');
+    }
+
+    let agentId;
+    try {
+        const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
+        agentId = decodedState.agentId;
+    } catch (e) {
+        return res.status(400).send('Invalid state parameter');
+    }
+
+    try {
+        // Exchange code for tokens
+        const auth = Buffer.from(`${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}`).toString('base64');
+        const tokenResponse = await axios.post('https://www.reddit.com/api/v1/access_token',
+            new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: REDIRECT_URI
+            }).toString(),
+            {
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'CeleritechOrbit/1.0.0'
+                }
+            }
+        );
+
+        const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+        if (!refresh_token) {
+            console.warn('No refresh token received. Ensure duration=permanent is set.');
+            return res.send(`<h2>Authorization Error</h2><p>No refresh token granted by Reddit.</p><script>setTimeout(() => window.close(), 3000);</script>`);
+        }
+
+        // Fetch the Reddit username to display in the UI
+        const meResponse = await axios.get('https://oauth.reddit.com/api/v1/me', {
+            headers: {
+                'Authorization': `Bearer ${access_token}`,
+                'User-Agent': 'CeleritechOrbit/1.0.0'
+            }
+        });
+
+        const redditUsername = meResponse.data.name;
+
+        // Save to Vercel KV database forever
+        await kv.set(`reddit_agent_token:${agentId}`, {
+            refresh_token,
+            username: redditUsername,
+            updatedAt: Date.now()
+        });
+
+        // Return a script that posts a message back to the main window and closes the popup
+        res.send(`
+            <html>
+            <body style="font-family: system-ui; text-align: center; padding: 40px;">
+                <h2 style="color: #10b981;">Successfully Connected!</h2>
+                <p>Linked agent to Reddit account: <strong>u/${redditUsername}</strong></p>
+                <p>You can close this window.</p>
+                <script>
+                    if (window.opener) {
+                        window.opener.postMessage({ type: 'REDDIT_AUTH_SUCCESS', agentId: '${agentId}', username: '${redditUsername}' }, '*');
+                    }
+                    setTimeout(() => window.close(), 2000);
+                </script>
+            </body>
+            </html>
+        `);
+    } catch (err) {
+        console.error('Reddit OAuth Callback Error:', err.response?.data || err.message);
+        res.status(500).send(`<h2>OAuth Error</h2><p>Failed to exchange code for tokens. Ensure Vercel KV is configured.</p><pre>${err.message}</pre>`);
+    }
+});
+
 // ─── GET /api/health ─────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
     res.json({
