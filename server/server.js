@@ -149,7 +149,12 @@ if (!existsSync(usersFile)) {
 }
 
 // ─── Authentication Endpoints (Vercel KV) ────────────────────────
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
+
+const kvc = createClient({
+    url: process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+});
 
 app.post('/api/auth/register', async (req, res) => {
     try {
@@ -164,7 +169,7 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
         }
 
-        let users = await kv.get('orbit_users') || [];
+        let users = await kvc.get('orbit_users') || [];
 
         if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
             return res.status(400).json({ error: 'User with this email already exists' });
@@ -181,7 +186,7 @@ app.post('/api/auth/register', async (req, res) => {
         };
 
         users.push(newUser);
-        await kv.set('orbit_users', users);
+        await kvc.set('orbit_users', users);
 
         // Delete password from response
         const { password: _, ...userWithoutPassword } = newUser;
@@ -206,7 +211,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
         }
 
-        const users = await kv.get('orbit_users') || [];
+        const users = await kvc.get('orbit_users') || [];
 
         const user = users.find(u => u.email === email.toLowerCase());
 
@@ -1740,7 +1745,7 @@ app.get('/api/reddit/callback', async (req, res) => {
         const redditUsername = meResponse.data.name;
 
         // Save to Vercel KV database forever
-        await kv.set(`reddit_agent_token:${agentId}`, {
+        await kvc.set(`reddit_agent_token:${agentId}`, {
             refresh_token,
             username: redditUsername,
             updatedAt: Date.now()
