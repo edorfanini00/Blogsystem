@@ -410,7 +410,7 @@ SEO META — Include these as HTML comments at the very top BEFORE the blog div:
 Preserve all apostrophes, quotes, em dashes, and punctuation properly. No Unicode junk. Make it STUNNING.`;
 }
 
-// ─── Gemini Image Generation ─────────────────────────────────
+// ─── Gemini Nano Banana Image Generation ─────────────────────────
 async function generateImageWithGemini(prompt) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === 'placeholder') {
@@ -419,37 +419,41 @@ async function generateImageWithGemini(prompt) {
     }
 
     const models = [
-        'gemini-2.0-flash-preview-image-generation',
-        'gemini-2.0-flash-exp',
+        'gemini-3-pro-image-preview',
+        'gemini-3.1-flash-image-preview',
+        'gemini-2.5-flash-image',
     ];
 
     for (const model of models) {
         try {
             console.log(`   Trying Gemini model: ${model}`);
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey,
+                },
                 body: JSON.stringify({
                     contents: [{
                         parts: [{ text: `Generate a professional, photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.` }],
                     }],
-                    generationConfig: {
-                        responseModalities: ['TEXT', 'IMAGE'],
-                    },
                 }),
             });
 
             if (!response.ok) {
                 const errText = await response.text();
-                console.error(`   Gemini ${model} HTTP ${response.status}: ${errText.slice(0, 200)}`);
+                console.error(`   Gemini ${model} HTTP ${response.status}: ${errText.slice(0, 300)}`);
                 continue;
             }
 
             const data = await response.json();
             const parts = data.candidates?.[0]?.content?.parts;
-            if (!parts) continue;
+            if (!parts) {
+                console.log(`   Gemini ${model} returned no parts`);
+                continue;
+            }
 
             for (const part of parts) {
                 if (part.inlineData?.data && part.inlineData?.mimeType) {
@@ -462,7 +466,7 @@ async function generateImageWithGemini(prompt) {
                 }
             }
 
-            console.log(`   Gemini ${model} returned no image data`);
+            console.log(`   Gemini ${model} returned no image data in parts`);
         } catch (err) {
             console.error(`   Gemini ${model} error: ${err.message}`);
         }
