@@ -381,6 +381,7 @@ const navItems = document.querySelectorAll('.nav-item');
 const pageBlog = document.getElementById('pageBlog');
 const pageSales = document.getElementById('pageSales');
 const pagePosts = document.getElementById('pagePosts');
+const pageMedia = document.getElementById('pageMedia');
 
 navItems.forEach(item => {
     item.addEventListener('click', e => {
@@ -395,6 +396,7 @@ navItems.forEach(item => {
         pageBlog.style.display = 'none';
         pageSales.style.display = 'none';
         pagePosts.style.display = 'none';
+        pageMedia.style.display = 'none';
 
         // Show selected page
         if (page === 'blogs') {
@@ -406,6 +408,8 @@ navItems.forEach(item => {
         } else if (page === 'posts') {
             pagePosts.style.display = '';
             loadAdHistory();
+        } else if (page === 'media') {
+            pageMedia.style.display = '';
         }
     });
 });
@@ -1528,3 +1532,270 @@ async function deleteAd(adId) {
 // ─── Filter Events ──────────────────────────────────────────────
 document.getElementById('blogHistoryFilter')?.addEventListener('change', loadBlogHistory);
 document.getElementById('postHistoryFilter')?.addEventListener('change', loadAdHistory);
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── IMAGE & VIDEO (FAL.AI) ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const MEDIA_MODELS = {
+    'text-to-image': [
+        { id: 'fal-ai/flux/schnell', name: 'FLUX.1 Schnell (Fast)' },
+        { id: 'fal-ai/flux/dev', name: 'FLUX.1 Dev' },
+        { id: 'fal-ai/flux-pro/v1.1', name: 'FLUX.1 Pro v1.1' },
+        { id: 'fal-ai/flux-pro/v2', name: 'FLUX.2 Pro' },
+        { id: 'fal-ai/recraft-v3', name: 'Recraft V3' },
+    ],
+    'image-to-image': [
+        { id: 'fal-ai/flux-kontext/pro', name: 'FLUX Kontext Pro' },
+        { id: 'fal-ai/seedream/v4.5', name: 'Seedream V4.5' },
+    ],
+    'text-to-video': [
+        { id: 'fal-ai/kling-video/v2.5/pro/text-to-video', name: 'Kling 2.5 Pro' },
+        { id: 'fal-ai/veo3', name: 'Veo 3' },
+        { id: 'fal-ai/ltx-video/v2.3', name: 'LTX-2.3' },
+        { id: 'fal-ai/minimax-video/video-01-live', name: 'Minimax Video' },
+    ],
+    'image-to-video': [
+        { id: 'fal-ai/kling-video/v2.5/pro/image-to-video', name: 'Kling 2.5 Pro i2v' },
+        { id: 'fal-ai/veo2/image-to-video', name: 'Veo 2 i2v' },
+        { id: 'fal-ai/ltx-video/v2.3/image-to-video', name: 'LTX-2.3 i2v' },
+    ],
+};
+
+const MODE_LABELS = {
+    'text-to-image': { icon: '✏️', text: 'Text to Image' },
+    'image-to-image': { icon: '🔄', text: 'Image to Image' },
+    'text-to-video': { icon: '✏️', text: 'Text to Video' },
+    'image-to-video': { icon: '🔄', text: 'Image to Video' },
+};
+
+let currentMediaMode = 'text-to-image';
+let mediaRefDataUrl = null;
+
+// DOM
+const mediaModelSelect = document.getElementById('mediaModel');
+const mediaRefGroup = document.getElementById('mediaRefGroup');
+const mediaDurationGroup = document.getElementById('mediaDurationGroup');
+const mediaResGroup = document.getElementById('mediaResGroup');
+const mediaActiveModeIcon = document.getElementById('mediaActiveModeIcon');
+const mediaActiveModeText = document.getElementById('mediaActiveModeText');
+const mediaForm = document.getElementById('mediaForm');
+const mediaGenerateBtn = document.getElementById('mediaGenerateBtn');
+const mediaProgressContainer = document.getElementById('mediaProgressContainer');
+const mediaProgressText = document.getElementById('mediaProgressText');
+const mediaProgressFill = document.getElementById('mediaProgressFill');
+const mediaEmpty = document.getElementById('mediaEmpty');
+const mediaResult = document.getElementById('mediaResult');
+const mediaResultContent = document.getElementById('mediaResultContent');
+const mediaDownloadBtn = document.getElementById('mediaDownloadBtn');
+const mediaHistoryGrid = document.getElementById('mediaHistoryGrid');
+const mediaHistoryEmpty = document.getElementById('mediaHistoryEmpty');
+const mediaRefUploadArea = document.getElementById('mediaRefUploadArea');
+const mediaRefInput = document.getElementById('mediaRefInput');
+const mediaRefPromptEl = document.getElementById('mediaRefPromptEl');
+const mediaRefPreview = document.getElementById('mediaRefPreview');
+const mediaRefImg = document.getElementById('mediaRefImg');
+const mediaRefClear = document.getElementById('mediaRefClear');
+
+function updateMediaMode(mode) {
+    currentMediaMode = mode;
+    const label = MODE_LABELS[mode];
+    mediaActiveModeIcon.textContent = label.icon;
+    mediaActiveModeText.textContent = label.text;
+
+    // Update active class on options
+    document.querySelectorAll('.media-mode-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.mode === mode);
+    });
+
+    // Populate models
+    mediaModelSelect.innerHTML = MEDIA_MODELS[mode].map(m =>
+        `<option value="${m.id}">${m.name}</option>`
+    ).join('');
+
+    // Show/hide fields
+    const needsRef = mode === 'image-to-image' || mode === 'image-to-video';
+    const isVideo = mode === 'text-to-video' || mode === 'image-to-video';
+    mediaRefGroup.style.display = needsRef ? '' : 'none';
+    mediaDurationGroup.style.display = isVideo ? '' : 'none';
+    mediaResGroup.style.display = isVideo ? '' : 'none';
+}
+
+// Mode option clicks
+document.querySelectorAll('.media-mode-option').forEach(opt => {
+    opt.addEventListener('click', () => updateMediaMode(opt.dataset.mode));
+});
+
+// Initialize
+updateMediaMode('text-to-image');
+
+// Reference image upload
+mediaRefUploadArea.addEventListener('click', (e) => {
+    if (e.target.closest('#mediaRefClear')) return;
+    mediaRefInput.click();
+});
+mediaRefInput.addEventListener('change', () => {
+    const file = mediaRefInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        mediaRefDataUrl = reader.result;
+        mediaRefImg.src = mediaRefDataUrl;
+        mediaRefPromptEl.style.display = 'none';
+        mediaRefPreview.style.display = '';
+    };
+    reader.readAsDataURL(file);
+    mediaRefInput.value = '';
+});
+mediaRefClear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    mediaRefDataUrl = null;
+    mediaRefPromptEl.style.display = '';
+    mediaRefPreview.style.display = 'none';
+});
+
+// Last result for download
+let lastMediaResultUrl = null;
+let lastMediaIsVideo = false;
+
+mediaDownloadBtn.addEventListener('click', () => {
+    if (!lastMediaResultUrl) return;
+    const a = document.createElement('a');
+    a.href = lastMediaResultUrl;
+    a.download = lastMediaIsVideo ? 'fal-video.mp4' : 'fal-image.png';
+    a.click();
+});
+
+// Generate
+mediaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const prompt = document.getElementById('mediaPrompt').value.trim();
+    if (!prompt) return;
+
+    const model = mediaModelSelect.value;
+    const aspectRatio = document.getElementById('mediaAspect').value;
+    const duration = document.getElementById('mediaDuration').value;
+    const resolution = document.getElementById('mediaResolution').value;
+    const isVideo = currentMediaMode.includes('video');
+    const needsRef = currentMediaMode === 'image-to-image' || currentMediaMode === 'image-to-video';
+
+    if (needsRef && !mediaRefDataUrl) {
+        showToast('Please upload a reference image', 'error');
+        return;
+    }
+
+    // UI: loading
+    mediaGenerateBtn.disabled = true;
+    mediaGenerateBtn.querySelector('.btn-text').style.display = 'none';
+    mediaGenerateBtn.querySelector('.btn-loader').style.display = 'inline-flex';
+    mediaEmpty.style.display = 'none';
+    mediaResult.style.display = 'none';
+    mediaProgressContainer.style.display = '';
+    mediaProgressText.textContent = 'Submitting to Fal.ai…';
+    mediaProgressFill.style.width = '10%';
+
+    try {
+        // Submit job
+        const submitRes = await fetch(`${API_BASE}/api/media/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: currentMediaMode,
+                model,
+                prompt,
+                aspectRatio,
+                duration: isVideo ? parseInt(duration) : undefined,
+                resolution: isVideo ? parseInt(resolution) : undefined,
+                referenceImage: needsRef ? mediaRefDataUrl : undefined,
+            }),
+        });
+
+        if (!submitRes.ok) {
+            const err = await submitRes.json();
+            throw new Error(err.error || 'Generation failed');
+        }
+
+        const { requestId, modelUsed } = await submitRes.json();
+        mediaProgressText.textContent = 'Processing…';
+        mediaProgressFill.style.width = '30%';
+
+        // Poll for result
+        let result = null;
+        for (let attempt = 0; attempt < 120; attempt++) {
+            await new Promise(r => setTimeout(r, 3000));
+
+            const statusRes = await fetch(`${API_BASE}/api/media/status/${requestId}?model=${encodeURIComponent(modelUsed)}`);
+            const statusData = await statusRes.json();
+
+            if (statusData.status === 'COMPLETED') {
+                result = statusData.result;
+                break;
+            } else if (statusData.status === 'FAILED') {
+                throw new Error(statusData.error || 'Generation failed');
+            }
+
+            // Update progress
+            const pct = Math.min(30 + attempt * 2, 90);
+            mediaProgressFill.style.width = `${pct}%`;
+            mediaProgressText.textContent = `Processing (${statusData.status})…`;
+        }
+
+        if (!result) throw new Error('Generation timed out');
+
+        mediaProgressFill.style.width = '100%';
+        mediaProgressText.textContent = 'Done!';
+
+        // Display result
+        const url = isVideo ? (result.video?.url || result.url) : (result.images?.[0]?.url || result.url);
+        lastMediaResultUrl = url;
+        lastMediaIsVideo = isVideo;
+
+        if (isVideo) {
+            mediaResultContent.innerHTML = `<video src="${url}" controls autoplay style="width:100%;border-radius:8px;"></video>`;
+        } else {
+            mediaResultContent.innerHTML = `<img src="${url}" alt="${prompt}" style="width:100%;border-radius:8px;" />`;
+        }
+        mediaResult.style.display = '';
+        mediaProgressContainer.style.display = 'none';
+        showToast(`${isVideo ? 'Video' : 'Image'} generated!`);
+
+        // Save to history
+        const history = JSON.parse(localStorage.getItem('orbit_media_history') || '[]');
+        history.unshift({ url, prompt: prompt.slice(0, 60), mode: currentMediaMode, model, ts: Date.now() });
+        if (history.length > 50) history.pop();
+        localStorage.setItem('orbit_media_history', JSON.stringify(history));
+        renderMediaHistory();
+
+    } catch (err) {
+        console.error('Media generation error:', err);
+        showToast(err.message || 'Generation failed', 'error');
+        mediaProgressContainer.style.display = 'none';
+        mediaEmpty.style.display = '';
+    } finally {
+        mediaGenerateBtn.disabled = false;
+        mediaGenerateBtn.querySelector('.btn-text').style.display = 'inline';
+        mediaGenerateBtn.querySelector('.btn-loader').style.display = 'none';
+    }
+});
+
+function renderMediaHistory() {
+    const history = JSON.parse(localStorage.getItem('orbit_media_history') || '[]');
+    if (history.length === 0) {
+        mediaHistoryEmpty.style.display = '';
+        mediaHistoryGrid.style.display = 'none';
+        return;
+    }
+    mediaHistoryEmpty.style.display = 'none';
+    mediaHistoryGrid.style.display = 'grid';
+    mediaHistoryGrid.innerHTML = history.map(item => {
+        const isVid = item.mode?.includes('video');
+        const media = isVid
+            ? `<video src="${item.url}" muted></video>`
+            : `<img src="${item.url}" alt="${item.prompt}" />`;
+        return `<div class="media-history-item" onclick="window.open('${item.url}', '_blank')">
+            ${media}
+            <div class="media-history-label">${item.prompt}</div>
+        </div>`;
+    }).join('');
+}
+renderMediaHistory();

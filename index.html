@@ -65,6 +65,20 @@
           </svg>
           <span>Posts Generator</span>
         </a>
+        <a href="#" class="nav-item" data-page="media">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+            <line x1="7" y1="2" x2="7" y2="22" />
+            <line x1="17" y1="2" x2="17" y2="22" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <line x1="2" y1="7" x2="7" y2="7" />
+            <line x1="2" y1="17" x2="7" y2="17" />
+            <line x1="17" y1="7" x2="22" y2="7" />
+            <line x1="17" y1="17" x2="22" y2="17" />
+          </svg>
+          <span>Image & Video</span>
+        </a>
 
         <div style="flex-grow: 1;"></div>
 
@@ -593,6 +607,183 @@
             <p>Generated ad sets will appear here</p>
           </div>
           <div class="blog-history-list" id="adHistoryList" style="display:none;"></div>
+        </section>
+
+      </div>
+
+      <!-- ═══ PAGE: IMAGE & VIDEO ═══ -->
+      <div class="page" id="pageMedia" style="display:none;">
+        <div class="page-header">
+          <div>
+            <h1>Image & Video</h1>
+            <p class="subtitle">Generate stunning visuals with Fal.ai models.</p>
+          </div>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Input Card -->
+          <section class="card bento-left">
+            <h3 class="card-title">Generation Settings</h3>
+
+            <!-- Mode Selector Dropdown -->
+            <div class="media-mode-selector">
+              <div class="media-mode-group">
+                <button type="button" class="media-mode-trigger" id="mediaCategoryImages">
+                  🖼️ Images
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div class="media-mode-dropdown" id="imageModesDropdown">
+                  <div class="media-mode-option active" data-mode="text-to-image">✏️ Text to Image</div>
+                  <div class="media-mode-option" data-mode="image-to-image">🔄 Image to Image</div>
+                </div>
+              </div>
+              <div class="media-mode-group">
+                <button type="button" class="media-mode-trigger" id="mediaCategoryVideos">
+                  🎬 Videos
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div class="media-mode-dropdown" id="videoModesDropdown">
+                  <div class="media-mode-option" data-mode="text-to-video">✏️ Text to Video</div>
+                  <div class="media-mode-option" data-mode="image-to-video">🔄 Image to Video</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="media-active-mode" id="mediaActiveMode">
+              <span id="mediaActiveModeIcon">✏️</span>
+              <span id="mediaActiveModeText">Text to Image</span>
+            </div>
+
+            <form id="mediaForm">
+              <!-- Prompt -->
+              <div class="form-group">
+                <label for="mediaPrompt">Prompt</label>
+                <div class="input-wrapper">
+                  <textarea id="mediaPrompt" rows="4" placeholder="Describe what you want to generate…"
+                    required></textarea>
+                </div>
+              </div>
+
+              <!-- Reference Image (for image-to-image and image-to-video) -->
+              <div class="form-group" id="mediaRefGroup" style="display:none;">
+                <label>Reference Image</label>
+                <div class="file-upload-area" id="mediaRefUploadArea">
+                  <input type="file" id="mediaRefInput" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+                  <div class="file-upload-prompt" id="mediaRefPromptEl">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <span>Drop image or <strong>click to browse</strong></span>
+                  </div>
+                  <div id="mediaRefPreview" style="display:none;">
+                    <img id="mediaRefImg" style="max-width:100%;border-radius:8px;" />
+                    <button type="button" class="btn-small-outline" id="mediaRefClear" style="margin-top:8px;">✕
+                      Remove</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Model -->
+              <div class="form-group">
+                <label for="mediaModel">Model</label>
+                <div class="input-wrapper">
+                  <select id="mediaModel"></select>
+                </div>
+              </div>
+
+              <!-- Aspect Ratio -->
+              <div class="form-group">
+                <label for="mediaAspect">Aspect Ratio</label>
+                <div class="input-wrapper">
+                  <select id="mediaAspect">
+                    <option value="16:9">16:9 — Landscape</option>
+                    <option value="9:16">9:16 — Portrait</option>
+                    <option value="1:1" selected>1:1 — Square</option>
+                    <option value="4:3">4:3 — Standard</option>
+                    <option value="3:4">3:4 — Portrait Standard</option>
+                    <option value="21:9">21:9 — Cinematic</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Video Duration (for video modes) -->
+              <div class="form-group" id="mediaDurationGroup" style="display:none;">
+                <label for="mediaDuration">Video Duration</label>
+                <div class="input-wrapper">
+                  <select id="mediaDuration">
+                    <option value="5">5 seconds</option>
+                    <option value="10">10 seconds</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Resolution -->
+              <div class="form-group" id="mediaResGroup" style="display:none;">
+                <label for="mediaResolution">Resolution</label>
+                <div class="input-wrapper">
+                  <select id="mediaResolution">
+                    <option value="720">720p</option>
+                    <option value="1080" selected>1080p</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Progress -->
+              <div id="mediaProgressContainer" style="display:none; margin-top: 16px;">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="mediaProgressText">Submitting…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="mediaProgressFill"
+                    style="width:0%; background: var(--accent-primary);"></div>
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" id="mediaGenerateBtn">
+                <span class="btn-text">⚡ Generate</span>
+                <span class="btn-loader" style="display:none"><span class="spinner"></span>Generating…</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Output Card -->
+          <section class="card bento-right" id="mediaOutputCard">
+            <h3 class="card-title">Result</h3>
+
+            <div class="preview-empty" id="mediaEmpty">
+              <div class="preview-empty-icon">🎨</div>
+              <h3>No content yet</h3>
+              <p>Your generated image or video will appear here</p>
+            </div>
+
+            <div id="mediaResult" style="display:none;">
+              <div id="mediaResultContent"></div>
+              <div class="ad-output-actions" id="mediaResultActions" style="margin-top:16px;">
+                <button class="btn-primary btn-sm" id="mediaDownloadBtn">⬇ Download</button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- History Grid -->
+        <section class="card blog-history-card" id="mediaHistoryCard">
+          <h3>Generation History</h3>
+          <div class="media-history-grid" id="mediaHistoryGrid"></div>
+          <div class="blog-history-empty" id="mediaHistoryEmpty">
+            <div class="empty-icon">🎨</div>
+            <h4>No generations yet</h4>
+            <p>Your generated images and videos will appear here</p>
+          </div>
         </section>
 
       </div>

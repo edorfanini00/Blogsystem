@@ -1537,6 +1537,103 @@ Return this exact JSON structure:
     }
 }
 
+// ─── POST /api/media/generate (Fal.ai queue submit) ─────────────
+app.post('/api/media/generate', async (req, res) => {
+    try {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
+
+        const { mode, model, prompt, aspectRatio, duration, resolution, referenceImage } = req.body;
+        if (!prompt || !model) return res.status(400).json({ error: 'Prompt and model are required' });
+
+        console.log(`🎬 Media generation: ${mode} with ${model}`);
+
+        // Build the input payload
+        const input = { prompt };
+
+        // Aspect ratio + image size
+        if (aspectRatio) {
+            input.aspect_ratio = aspectRatio;
+            const [w, h] = aspectRatio.split(':').map(Number);
+            const baseSize = resolution === '720' ? 720 : 1080;
+            if (w > h) {
+                input.image_size = { width: baseSize, height: Math.round(baseSize * h / w) };
+            } else if (h > w) {
+                input.image_size = { width: Math.round(baseSize * w / h), height: baseSize };
+            } else {
+                input.image_size = { width: baseSize, height: baseSize };
+            }
+        }
+
+        // Video settings
+        if (mode?.includes('video')) {
+            if (duration) input.duration = `${duration}s`;
+            if (resolution) input.resolution = `${resolution}p`;
+        }
+
+        // Reference image for i2i / i2v
+        if (referenceImage && (mode === 'image-to-image' || mode === 'image-to-video')) {
+            input.image_url = referenceImage;
+        }
+
+        // Submit to fal.ai queue
+        const queueRes = await fetch(`https://queue.fal.run/${model}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Key ${falKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(input),
+        });
+
+        if (!queueRes.ok) {
+            const errText = await queueRes.text();
+            console.error(`Fal.ai queue error: ${queueRes.status} ${errText.slice(0, 300)}`);
+            return res.status(queueRes.status).json({ error: `Fal.ai: ${errText.slice(0, 200)}` });
+        }
+
+        const queueData = await queueRes.json();
+        console.log(`   Queued: ${queueData.request_id}`);
+        res.json({ requestId: queueData.request_id, modelUsed: model });
+    } catch (err) {
+        console.error('Media generate error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/media/status/:requestId ───────────────────────────
+app.get('/api/media/status/:requestId', async (req, res) => {
+    try {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
+
+        const { requestId } = req.params;
+        const model = req.query.model;
+        if (!model) return res.status(400).json({ error: 'Model query param required' });
+
+        const statusRes = await fetch(`https://queue.fal.run/${model}/requests/${requestId}/status`, {
+            headers: { 'Authorization': `Key ${falKey}` },
+        });
+
+        if (!statusRes.ok) return res.status(statusRes.status).json({ error: 'Status check failed' });
+
+        const statusData = await statusRes.json();
+
+        if (statusData.status === 'COMPLETED') {
+            const resultRes = await fetch(`https://queue.fal.run/${model}/requests/${requestId}`, {
+                headers: { 'Authorization': `Key ${falKey}` },
+            });
+            const result = await resultRes.json();
+            return res.json({ status: 'COMPLETED', result });
+        }
+
+        res.json({ status: statusData.status || 'IN_QUEUE' });
+    } catch (err) {
+        console.error('Media status error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /api/health ─────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
     res.json({
@@ -1548,6 +1645,7 @@ app.get('/api/health', (req, res) => {
             openrouter: !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'your_openrouter_api_key',
             perplexity: !!process.env.PERPLEXITY_API_KEY && process.env.PERPLEXITY_API_KEY !== 'your_perplexity_api_key',
             vapi: !!process.env.VAPI_API_KEY,
+            fal: !!process.env.FAL_KEY,
             wordpress: !!process.env.WORDPRESS_URL && process.env.WORDPRESS_URL !== 'https://yoursite.com',
         },
     });
