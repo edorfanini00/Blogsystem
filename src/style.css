@@ -333,6 +333,8 @@ body {
 
 .keyword-tag {
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--accent-light);
   color: var(--accent-hover);
   padding: 4px 12px;
@@ -340,6 +342,18 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
   animation: tagIn 0.2s ease;
+}
+
+.keyword-tag-remove {
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.keyword-tag-remove:hover {
+  opacity: 1;
 }
 
 @keyframes tagIn {

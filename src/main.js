@@ -64,12 +64,32 @@ wordCountInput.addEventListener('input', () => {
     wordCountValue.textContent = parseInt(wordCountInput.value).toLocaleString();
 });
 
-// ─── Keyword Tags ────────────────────────────────────────────────
-keywordsInput.addEventListener('input', () => {
-    const keywords = keywordsInput.value.split(',').map(k => k.trim()).filter(Boolean);
-    keywordTags.innerHTML = keywords
-        .map(k => `<span class="keyword-tag">${k}</span>`)
+// ─── Keyword Tags ────────────────────────────────────────────
+let keywordsList = [];
+
+function renderKeywordTags() {
+    keywordTags.innerHTML = keywordsList
+        .map((k, i) => `<span class="keyword-tag">${k}<span class="keyword-tag-remove" data-index="${i}">×</span></span>`)
         .join('');
+    keywordTags.querySelectorAll('.keyword-tag-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            keywordsList.splice(parseInt(btn.dataset.index), 1);
+            renderKeywordTags();
+        });
+    });
+}
+
+keywordsInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = keywordsInput.value.trim();
+        if (val && !keywordsList.includes(val)) {
+            keywordsList.push(val);
+            renderKeywordTags();
+        }
+        keywordsInput.value = '';
+    }
 });
 
 // ─── Loading Messages ────────────────────────────────────────────
@@ -121,7 +141,7 @@ function showState(state) {
 blogForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const keywords = keywordsInput.value.trim();
+    const keywords = keywordsList.join(', ');
     const description = descriptionInput.value.trim();
     const wordCount = parseInt(wordCountInput.value);
     const target = document.getElementById('blogTarget').value.trim();
@@ -129,8 +149,8 @@ blogForm.addEventListener('submit', async (e) => {
     const trends = document.getElementById('blogTrends').value.trim();
     const tone = document.getElementById('blogToneValue').value;
 
-    if (!keywords || !description) {
-        showToast('Please fill in all fields', 'error');
+    if (!keywordsList.length || !description) {
+        showToast('Please add at least one keyword and fill in the topic', 'error');
         return;
     }
 
@@ -405,6 +425,7 @@ newBlogBtn.addEventListener('click', () => {
     generatedBlog = null;
     blogForm.reset();
     wordCountValue.textContent = wordCountInput.value;
+    keywordsList = [];
     keywordTags.innerHTML = '';
     previewEmpty.style.display = 'flex';
     previewLoading.style.display = 'none';
