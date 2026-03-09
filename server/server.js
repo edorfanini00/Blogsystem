@@ -753,8 +753,10 @@ app.post('/api/publish', async (req, res) => {
         const wpUser = process.env.WORDPRESS_USERNAME;
         const wpPass = process.env.WORDPRESS_APP_PASSWORD;
 
+        console.log(`📤 Publish request — WP URL: ${wpUrl ? wpUrl.slice(0, 30) + '…' : 'NOT SET'}, User: ${wpUser ? '✓ set' : 'NOT SET'}, Pass: ${wpPass ? '✓ set' : 'NOT SET'}`);
+
         if (!wpUrl || !wpUser || !wpPass) {
-            return res.status(400).json({ error: 'WordPress credentials not configured in .env' });
+            return res.status(400).json({ error: `WordPress credentials not configured. URL: ${!!wpUrl}, User: ${!!wpUser}, Pass: ${!!wpPass}` });
         }
 
         const credentials = Buffer.from(`${wpUser}:${wpPass}`).toString('base64');
