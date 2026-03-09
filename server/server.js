@@ -566,7 +566,7 @@ app.post('/api/generate', async (req, res) => {
         res.end();
     }
 
-    const TOTAL_STEPS = 8;
+    const TOTAL_STEPS = 9;
 
     try {
         const { keywords, description, wordCount, target, product, trends, tone } = req.body;
@@ -594,22 +594,86 @@ app.post('/api/generate', async (req, res) => {
             console.log(`📊 Research insights received (${researchInsights.length} chars)`);
         }
 
-        // Step 2-4: Generate images
-        sendProgress(2, TOTAL_STEPS, 'Generating blog image 1 of 3…');
-        const topicContext = `${keywords}${customization.product ? ' for ' + customization.product : ''}${customization.target ? ' targeting ' + customization.target : ''}`;
-        const trendContext = customization.trends ? `, incorporating ${customization.trends} trends` : '';
-        const imagePrompts = [
-            `Ultra-realistic hero image for a blog about "${topicContext}". Wide-angle cinematic composition showing the concept in action${trendContext}. Modern, sleek, corporate environment with dramatic lighting. No text, no watermarks. 4K editorial quality.`,
-            `Detail close-up photograph related to "${keywords}" — showing specific tools, technology, or products that ${customization.target || 'professionals'} use in the ${customization.product || 'industry'} space. Shallow depth of field, studio-quality macro shot. No text, no logos.`,
-            `Candid photograph of diverse ${customization.target || 'business professionals'} actively engaged with ${customization.product || 'modern solutions'} related to "${keywords}". Natural lighting, authentic workplace energy, editorial style. No text, no watermarks.`,
-        ];
+        // Step 2: Write blog first (no images)
+        sendProgress(2, TOTAL_STEPS, 'Writing SEO-optimized blog with Claude…');
+        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization);
 
+        const message = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8192,
+            messages: [
+                {
+                    role: 'user',
+                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}. Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
+                },
+            ],
+            system: systemPrompt,
+        });
+
+        let htmlContent = message.content[0].text;
+        htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+        // Step 3: Analyze blog sections and create image prompts
+        sendProgress(3, TOTAL_STEPS, 'Analyzing blog sections for image generation…');
+
+        // Extract H2 headings from the blog
+        const h2Matches = [...htmlContent.matchAll(/<h2[^>]*>(.*?)<\/h2>/gi)];
+        const sectionTitles = h2Matches.map(m => m[1].replace(/<[^>]+>/g, '').trim());
+
+        let imagePrompts = [];
+        if (sectionTitles.length >= 3) {
+            // Use Claude to create context-specific prompts from the actual blog sections
+            try {
+                const promptGenResponse = await anthropic.messages.create({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1024,
+                    messages: [{
+                        role: 'user',
+                        content: `Below are the H2 section headings from a blog about "${keywords}" for ${customization.target || 'business professionals'} in the ${customization.product || 'general'} space:
+
+${sectionTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Create exactly 3 image generation prompts — one for each of the first 3 sections. Each prompt must be a highly detailed, photorealistic image description that visually represents that specific section's content. 
+
+Rules:
+- Each prompt must be unique and specific to its section
+- Describe the scene, lighting, composition, subjects, and setting
+- No text, logos, or watermarks in the images
+- Professional, editorial quality
+- Each prompt should be 1-2 sentences max
+
+Return ONLY a JSON array of 3 strings, nothing else. Example: ["prompt 1", "prompt 2", "prompt 3"]`,
+                    }],
+                });
+
+                try {
+                    const raw = promptGenResponse.content[0].text.trim();
+                    imagePrompts = JSON.parse(raw);
+                } catch {
+                    console.log('Could not parse image prompts JSON, using fallback');
+                }
+            } catch (err) {
+                console.error('Image prompt generation error:', err.message);
+            }
+        }
+
+        // Fallback prompts if Claude analysis failed or too few sections
+        if (imagePrompts.length < 3) {
+            const topicContext = `${keywords}${customization.product ? ' for ' + customization.product : ''}`;
+            imagePrompts = [
+                `Ultra-realistic hero image for a blog about "${topicContext}". Wide-angle cinematic composition. Modern, sleek environment with dramatic lighting. No text, no watermarks. Editorial quality.`,
+                `Close-up photograph showing tools, technology, or concepts related to "${keywords}" that ${customization.target || 'professionals'} use. Shallow depth of field, studio-quality. No text, no logos.`,
+                `Diverse ${customization.target || 'professionals'} working with ${customization.product || 'modern solutions'} related to "${keywords}". Natural lighting, authentic energy. No text or watermarks.`,
+            ];
+        }
+
+        // Step 4-6: Generate images with Gemini
         const uploadedImages = [];
         const hasWpCredentials = process.env.WORDPRESS_URL && process.env.WORDPRESS_USERNAME && process.env.WORDPRESS_APP_PASSWORD;
 
         for (let i = 0; i < imagePrompts.length; i++) {
-            sendProgress(2 + i, TOTAL_STEPS, `Generating blog image ${i + 1} of ${imagePrompts.length}…`);
-            console.log(`🎨 Generating image ${i + 1}/${imagePrompts.length}…`);
+            sendProgress(4 + i, TOTAL_STEPS, `Generating image ${i + 1} of ${imagePrompts.length} for section: "${sectionTitles[i] || 'blog'}"…`);
+            console.log(`🎨 Image ${i + 1}/${imagePrompts.length}: "${imagePrompts[i].slice(0, 80)}…"`);
             const img = await generateImageWithGemini(imagePrompts[i]);
             if (img) {
                 if (hasWpCredentials) {
@@ -620,44 +684,46 @@ app.post('/api/generate', async (req, res) => {
                         continue;
                     }
                 }
-                uploadedImages.push({ url: img.url || '', alt: img.alt });
+                // If no WP or upload failed, create a data URL
+                if (img.buffer) {
+                    const dataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
+                    uploadedImages.push({ url: dataUrl, alt: img.alt });
+                } else if (img.url) {
+                    uploadedImages.push({ url: img.url, alt: img.alt });
+                }
             }
         }
 
-        console.log(`✅ ${uploadedImages.length} images ready`);
+        console.log(`✅ ${uploadedImages.length} images generated`);
 
-        // Step 5: Writing blog
-        sendProgress(5, TOTAL_STEPS, 'Writing SEO-optimized blog with Claude…');
-        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, uploadedImages, customization);
+        // Step 7: Inject images into blog HTML after H2 headings
+        sendProgress(7, TOTAL_STEPS, 'Inserting images into blog…');
+        if (uploadedImages.length > 0 && h2Matches.length > 0) {
+            // Work backwards so insertion doesn't shift positions
+            const insertionPoints = [];
+            for (let i = 0; i < Math.min(uploadedImages.length, h2Matches.length); i++) {
+                const h2End = h2Matches[i].index + h2Matches[i][0].length;
+                insertionPoints.push({ position: h2End, image: uploadedImages[i], sectionTitle: sectionTitles[i] });
+            }
+            // Insert backwards
+            for (let i = insertionPoints.length - 1; i >= 0; i--) {
+                const { position, image, sectionTitle } = insertionPoints[i];
+                const imgTag = `\n<img src="${image.url}" alt="${sectionTitle || image.alt}" style="width:100%;height:auto;margin:32px 0 24px;display:block;border-radius:12px;" />\n`;
+                htmlContent = htmlContent.slice(0, position) + imgTag + htmlContent.slice(position);
+            }
+            console.log(`🖼 Injected ${insertionPoints.length} images into blog HTML`);
+        }
 
-        const message = await anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 8192,
-            messages: [
-                {
-                    role: 'user',
-                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}. Remember: output ONLY the HTML, no markdown, no code fences.`,
-                },
-            ],
-            system: systemPrompt,
-        });
-
-        let htmlContent = message.content[0].text;
-
-        // Step 6: Cleaning up
-        sendProgress(6, TOTAL_STEPS, 'Formatting and cleaning HTML…');
-        htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
-
-        // Step 7: Parse SEO
-        sendProgress(7, TOTAL_STEPS, 'Extracting SEO metadata…');
+        // Step 8: Parse SEO
+        sendProgress(8, TOTAL_STEPS, 'Extracting SEO metadata…');
         const seo = parseSeoMeta(htmlContent);
         console.log(`📝 SEO Title: ${seo.seoTitle}`);
 
         const titleMatch = htmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
         const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : seo.seoTitle || keywords;
 
-        // Step 8: Done
-        sendProgress(8, TOTAL_STEPS, 'Blog ready!');
+        // Step 9: Done
+        sendProgress(9, TOTAL_STEPS, 'Blog ready!');
         console.log(`✅ Blog generated: "${title}"`);
 
         sendResult({
