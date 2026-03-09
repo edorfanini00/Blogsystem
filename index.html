@@ -459,6 +459,22 @@
                 <div class="file-list" id="fileList"></div>
               </div>
 
+              <label>Example Images <small>(optional — style references for ad image generation)</small></label>
+              <div class="file-upload-area" id="imageUploadArea">
+                <input type="file" id="adImageInput" multiple accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+                <div class="file-upload-prompt" id="imageUploadPrompt">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span>Drop images here or <strong>click to browse</strong></span>
+                  <small>PNG, JPG, WEBP — used as style references</small>
+                </div>
+                <div class="image-preview-grid" id="imagePreviewGrid"></div>
+              </div>
+
               <h4 class="toggle-section-title">Platform Formats</h4>
               <div class="platform-grid">
                 <label class="platform-btn">
@@ -539,8 +555,24 @@
             <!-- Copy button -->
             <div class="ad-output-actions" id="adOutputActions" style="display:none;">
               <button class="btn-outline" id="adCopyBtn">📋 Copy All</button>
+              <button class="btn-primary btn-sm" id="adGenerateImagesBtn">🎨 Generate Ad Images</button>
               <button class="btn-primary btn-sm" id="adEmailBtn">📧 Send to Agency</button>
             </div>
+
+            <!-- Generate Images Progress -->
+            <div id="adImageProgress" style="display:none; margin-top: 16px;">
+              <div class="progress-header">
+                <span class="spinner-orange"></span>
+                <span id="adImageProgressText">Generating ad images…</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="adImageProgressFill"
+                  style="width:0%; background: var(--accent-primary);"></div>
+              </div>
+            </div>
+
+            <!-- Generated Ad Images Gallery -->
+            <div class="ad-images-gallery" id="adImagesGallery" style="display:none;"></div>
           </section>
 
         </div>

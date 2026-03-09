@@ -24,7 +24,7 @@ if (!isVercel) {
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // ─── Multer for file uploads ────────────────────────────────────
 const uploadsDir = isVercel ? '/tmp/uploads' : join(__dirname, 'uploads');
@@ -905,6 +905,95 @@ app.delete('/api/ads/:id', (req, res) => {
     const ads = loadAds().filter(a => a.id !== req.params.id);
     saveAds(ads);
     res.json({ success: true });
+});
+
+// ─── POST /api/ads/generate-images (SSE) ────────────────────────
+app.post('/api/ads/generate-images', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    function send(data) { res.write(`data: ${JSON.stringify(data)}\n\n`); }
+
+    try {
+        const { adContent, product, description } = req.body;
+        if (!adContent) { send({ type: 'error', error: 'No ad content provided' }); res.end(); return; }
+
+        // Step 1: Use Claude to create image prompts from the ad content
+        send({ type: 'progress', text: 'Analyzing ad content for image ideas…', pct: 10 });
+
+        let imagePrompts = [];
+        try {
+            const promptRes = await anthropic.messages.create({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1024,
+                messages: [{
+                    role: 'user',
+                    content: `Below is generated ad/post content for the product "${product || 'a product'}":
+
+${adContent.slice(0, 3000)}
+
+Create exactly 3 image generation prompts for ad visuals that would accompany these posts. Each prompt should describe a unique, eye-catching ad image.
+
+Rules:
+- Each must be a detailed photorealistic image description (scene, lighting, composition, mood)
+- Images should be scroll-stopping social media ad visuals
+- Include the product/brand context naturally
+- No text, logos, or watermarks in the images
+- Professional, premium advertising quality
+- Each prompt should be 2-3 sentences
+
+Return ONLY a JSON array of 3 strings, nothing else. Example: ["prompt 1", "prompt 2", "prompt 3"]`,
+                }],
+            });
+
+            const raw = promptRes.content[0].text.trim();
+            // Try to extract JSON array from the response
+            const jsonMatch = raw.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                imagePrompts = JSON.parse(jsonMatch[0]);
+            }
+        } catch (err) {
+            console.error('Claude prompt generation error:', err.message);
+        }
+
+        // Fallback if Claude didn't return valid prompts
+        if (!Array.isArray(imagePrompts) || imagePrompts.length < 3) {
+            imagePrompts = [
+                `Stunning social media ad visual for "${product || 'a product'}". Premium product photography, vibrant colors, clean composition, professional studio lighting. No text or logos.`,
+                `Lifestyle photograph showing "${product || 'a product'}" in action. Real-world setting, warm natural lighting, authentic feel, aspirational mood. No text or watermarks.`,
+                `Bold, attention-grabbing ad banner concept for "${product || 'a product'}". Dynamic composition, striking colors, modern minimalist style. No text or logos.`,
+            ];
+        }
+
+        console.log(`🎨 Generating ${imagePrompts.length} ad images for "${product}"`);
+
+        // Step 2-4: Generate each image
+        let generated = 0;
+        for (let i = 0; i < imagePrompts.length; i++) {
+            send({ type: 'progress', text: `Generating image ${i + 1} of ${imagePrompts.length}…`, pct: 20 + (i * 25) });
+            console.log(`   Image ${i + 1}: "${imagePrompts[i].slice(0, 60)}…"`);
+
+            const img = await generateImageWithGemini(imagePrompts[i]);
+            if (img && img.buffer) {
+                const dataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
+                send({ type: 'image', dataUrl, prompt: imagePrompts[i].slice(0, 80), index: i });
+                generated++;
+            } else {
+                console.log(`   Image ${i + 1} generation failed`);
+            }
+        }
+
+        send({ type: 'progress', text: 'Done!', pct: 100 });
+        send({ type: 'complete', count: generated });
+        console.log(`✅ Generated ${generated}/${imagePrompts.length} ad images`);
+    } catch (err) {
+        console.error('❌ Ad image generation error:', err);
+        send({ type: 'error', error: err.message || 'Image generation failed' });
+    }
+    res.end();
 });
 
 // ─── POST /api/ads/generate (SSE) ───────────────────────────────

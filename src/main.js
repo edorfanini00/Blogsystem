@@ -969,6 +969,145 @@ const adHistoryEmpty = document.getElementById('adHistoryEmpty');
 const adHistoryList = document.getElementById('adHistoryList');
 const durationRow = document.getElementById('durationRow');
 
+// ─── Example Image Upload ───────────────────────────────────────
+const imageUploadArea = document.getElementById('imageUploadArea');
+const adImageInput = document.getElementById('adImageInput');
+const imagePreviewGrid = document.getElementById('imagePreviewGrid');
+const adGenerateImagesBtn = document.getElementById('adGenerateImagesBtn');
+const adImagesGallery = document.getElementById('adImagesGallery');
+const adImageProgress = document.getElementById('adImageProgress');
+const adImageProgressText = document.getElementById('adImageProgressText');
+const adImageProgressFill = document.getElementById('adImageProgressFill');
+
+let exampleImages = []; // { name, dataUrl }
+
+imageUploadArea.addEventListener('click', (e) => {
+    if (e.target.closest('.remove-img-btn')) return;
+    adImageInput.click();
+});
+imageUploadArea.addEventListener('dragover', e => { e.preventDefault(); imageUploadArea.classList.add('drag-over'); });
+imageUploadArea.addEventListener('dragleave', () => imageUploadArea.classList.remove('drag-over'));
+imageUploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    imageUploadArea.classList.remove('drag-over');
+    handleImageFiles(e.dataTransfer.files);
+});
+adImageInput.addEventListener('change', () => { handleImageFiles(adImageInput.files); adImageInput.value = ''; });
+
+function handleImageFiles(files) {
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const reader = new FileReader();
+        reader.onload = () => {
+            exampleImages.push({ name: file.name, dataUrl: reader.result });
+            renderImagePreviews();
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function renderImagePreviews() {
+    imagePreviewGrid.innerHTML = exampleImages.map((img, i) => `
+        <div class="image-preview-thumb">
+            <img src="${img.dataUrl}" alt="${img.name}" />
+            <button type="button" class="remove-img-btn" data-idx="${i}">×</button>
+        </div>
+    `).join('');
+    imagePreviewGrid.querySelectorAll('.remove-img-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            exampleImages.splice(parseInt(btn.dataset.idx), 1);
+            renderImagePreviews();
+        });
+    });
+}
+
+// ─── Generate Ad Images ─────────────────────────────────────────
+adGenerateImagesBtn.addEventListener('click', async () => {
+    if (!adFullContent) { showToast('Generate ad text first', 'error'); return; }
+
+    adGenerateImagesBtn.disabled = true;
+    adGenerateImagesBtn.textContent = 'Generating…';
+    adImageProgress.style.display = '';
+    adImageProgressFill.style.width = '0%';
+    adImageProgressText.textContent = 'Analyzing ad content…';
+    adImagesGallery.style.display = 'none';
+    adImagesGallery.innerHTML = '';
+
+    try {
+        const product = document.getElementById('adProduct').value.trim();
+        const description = document.getElementById('adDescription').value.trim();
+
+        const res = await fetch(`${API_BASE}/api/ads/generate-images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                adContent: adFullContent,
+                product,
+                description,
+                exampleImages: exampleImages.map(img => img.dataUrl),
+            }),
+        });
+
+        if (!res.ok) throw new Error('Image generation failed');
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'progress') {
+                        adImageProgressText.textContent = data.text;
+                        adImageProgressFill.style.width = `${data.pct}%`;
+                    }
+                    if (data.type === 'image') {
+                        adImagesGallery.style.display = 'grid';
+                        adImagesGallery.innerHTML += `
+                            <div class="ad-image-card">
+                                <img src="${data.dataUrl}" alt="${data.prompt || 'Ad image'}" />
+                                <div class="ad-image-actions">
+                                    <button onclick="downloadAdImage('${data.dataUrl}', 'ad-image-${data.index}.png')">⬇ Download</button>
+                                </div>
+                            </div>`;
+                    }
+                    if (data.type === 'complete') {
+                        adImageProgress.style.display = 'none';
+                        showToast(`${data.count} ad images generated!`);
+                    }
+                    if (data.type === 'error') throw new Error(data.error);
+                } catch (parseErr) {
+                    if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Ad image generation error:', err);
+        showToast(err.message || 'Image generation failed', 'error');
+        adImageProgress.style.display = 'none';
+    } finally {
+        adGenerateImagesBtn.disabled = false;
+        adGenerateImagesBtn.textContent = '🎨 Generate Ad Images';
+    }
+});
+
+// Download helper
+window.downloadAdImage = function (dataUrl, filename) {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    a.click();
+};
+
 // Toggles
 const videoToggles = ['togReels', 'togYoutubeShorts', 'togVideoScript'];
 
