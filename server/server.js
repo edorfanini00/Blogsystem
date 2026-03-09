@@ -148,14 +148,6 @@ if (!existsSync(usersFile)) {
     console.log('Created users.json file.');
 }
 
-// ─── Authentication Endpoints (Vercel KV) ────────────────────────
-import { createClient } from '@vercel/kv';
-
-const kvc = createClient({
-    url: process.env.KV_REST_API_URL,
-    token: process.env.KV_REST_API_TOKEN,
-});
-
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -168,6 +160,12 @@ app.post('/api/auth/register', async (req, res) => {
             console.error('Vercel KV not configured.');
             return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
         }
+
+        const { createClient } = await import('@vercel/kv');
+        const kvc = createClient({
+            url: process.env.KV_REST_API_URL,
+            token: process.env.KV_REST_API_TOKEN,
+        });
 
         let users = await kvc.get('orbit_users') || [];
 
@@ -210,6 +208,12 @@ app.post('/api/auth/login', async (req, res) => {
             console.error('Vercel KV not configured.');
             return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
         }
+
+        const { createClient } = await import('@vercel/kv');
+        const kvc = createClient({
+            url: process.env.KV_REST_API_URL,
+            token: process.env.KV_REST_API_TOKEN,
+        });
 
         const users = await kvc.get('orbit_users') || [];
 
@@ -1743,6 +1747,12 @@ app.get('/api/reddit/callback', async (req, res) => {
         });
 
         const redditUsername = meResponse.data.name;
+
+        const { createClient } = await import('@vercel/kv');
+        const kvc = createClient({
+            url: process.env.KV_REST_API_URL,
+            token: process.env.KV_REST_API_TOKEN,
+        });
 
         // Save to Vercel KV database forever
         await kvc.set(`reddit_agent_token:${agentId}`, {
