@@ -1637,7 +1637,6 @@ app.get('/api/media/status/:requestId', async (req, res) => {
 // ─── REDDIT OAUTH & AGENTS ───────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 
-import { kv } from '@vercel/kv';
 import axios from 'axios';
 
 const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID;
