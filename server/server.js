@@ -148,7 +148,8 @@ if (!existsSync(usersFile)) {
     console.log('Created users.json file.');
 }
 
-// ─── Authentication Endpoints ────────────────────────────────────
+// ─── Authentication Endpoints (Vercel KV) ────────────────────────
+import { kv } from '@vercel/kv';
 
 app.post('/api/auth/register', async (req, res) => {
     try {
@@ -158,8 +159,7 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Name, email, and password are required' });
         }
 
-        const usersBuf = readFileSync(usersFile, 'utf8');
-        const users = JSON.parse(usersBuf || '[]');
+        let users = await kv.get('orbit_users') || [];
 
         if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
             return res.status(400).json({ error: 'User with this email already exists' });
@@ -176,7 +176,7 @@ app.post('/api/auth/register', async (req, res) => {
         };
 
         users.push(newUser);
-        writeFileSync(usersFile, JSON.stringify(users, null, 2));
+        await kv.set('orbit_users', users);
 
         // Delete password from response
         const { password: _, ...userWithoutPassword } = newUser;
@@ -196,8 +196,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password are required' });
         }
 
-        const usersBuf = readFileSync(usersFile, 'utf8');
-        const users = JSON.parse(usersBuf || '[]');
+        const users = await kv.get('orbit_users') || [];
 
         const user = users.find(u => u.email === email.toLowerCase());
 
