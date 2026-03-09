@@ -1563,17 +1563,34 @@ const MEDIA_MODELS = {
 };
 
 const MODE_LABELS = {
-    'text-to-image': { icon: '✏️', text: 'Text to Image' },
-    'image-to-image': { icon: '🔄', text: 'Image to Image' },
-    'text-to-video': { icon: '✏️', text: 'Text to Video' },
-    'image-to-video': { icon: '🔄', text: 'Image to Video' },
+    'text-to-image': {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+        text: 'Text to Image'
+    },
+    'image-to-image': {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42"/></svg>',
+        text: 'Image to Image'
+    },
+    'text-to-video': {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+        text: 'Text to Video'
+    },
+    'image-to-video': {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42"/></svg>',
+        text: 'Image to Video'
+    },
 };
 
 let currentMediaMode = 'text-to-image';
 let mediaRefDataUrl = null;
 
 // DOM
-const mediaModelSelect = document.getElementById('mediaModel');
+const mediaModelWrapper = document.getElementById('mediaModelWrapper');
+const mediaModelTrigger = document.getElementById('mediaModelTrigger');
+const mediaModelText = document.getElementById('mediaModelText');
+const mediaModelOptions = document.getElementById('mediaModelOptions');
+const mediaModelInput = document.getElementById('mediaModel');
+
 const mediaRefGroup = document.getElementById('mediaRefGroup');
 const mediaDurationGroup = document.getElementById('mediaDurationGroup');
 const mediaResGroup = document.getElementById('mediaResGroup');
@@ -1597,10 +1614,75 @@ const mediaRefPreview = document.getElementById('mediaRefPreview');
 const mediaRefImg = document.getElementById('mediaRefImg');
 const mediaRefClear = document.getElementById('mediaRefClear');
 
+// Helper for generic custom selects
+function setupCustomSelect(wrapperId, triggerId, textId, optionsId, inputId) {
+    const wrapper = document.getElementById(wrapperId);
+    const trigger = document.getElementById(triggerId);
+    const text = document.getElementById(textId);
+    const options = document.getElementById(optionsId);
+    const input = document.getElementById(inputId);
+
+    if (!wrapper) return;
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Close others
+        document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+            if (w !== wrapper) w.classList.remove('open');
+        });
+        wrapper.classList.toggle('open');
+    });
+
+    options.addEventListener('click', (e) => {
+        const option = e.target.closest('.custom-option');
+        if (!option) return;
+
+        input.value = option.getAttribute('data-value');
+        text.textContent = option.textContent;
+
+        options.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+        wrapper.classList.remove('open');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!wrapper.contains(e.target)) {
+            wrapper.classList.remove('open');
+        }
+    });
+}
+
+setupCustomSelect('mediaAspectWrapper', 'mediaAspectTrigger', 'mediaAspectText', 'mediaAspectOptions', 'mediaAspect');
+setupCustomSelect('mediaDurationWrapper', 'mediaDurationTrigger', 'mediaDurationText', 'mediaDurationOptions', 'mediaDuration');
+setupCustomSelect('mediaResWrapper', 'mediaResTrigger', 'mediaResText', 'mediaResOptions', 'mediaResolution');
+
+// Setup Model Select specifically because options are dynamic
+mediaModelTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+        if (w !== mediaModelWrapper) w.classList.remove('open');
+    });
+    mediaModelWrapper.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+    if (!mediaModelWrapper.contains(e.target)) mediaModelWrapper.classList.remove('open');
+});
+mediaModelOptions.addEventListener('click', (e) => {
+    const option = e.target.closest('.custom-option');
+    if (!option) return;
+
+    mediaModelInput.value = option.getAttribute('data-value');
+    mediaModelText.textContent = option.textContent;
+
+    mediaModelOptions.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
+    option.classList.add('selected');
+    mediaModelWrapper.classList.remove('open');
+});
+
 function updateMediaMode(mode) {
     currentMediaMode = mode;
     const label = MODE_LABELS[mode];
-    mediaActiveModeIcon.textContent = label.icon;
+    mediaActiveModeIcon.innerHTML = label.icon;
     mediaActiveModeText.textContent = label.text;
 
     // Update active class on options
@@ -1608,10 +1690,17 @@ function updateMediaMode(mode) {
         opt.classList.toggle('active', opt.dataset.mode === mode);
     });
 
-    // Populate models
-    mediaModelSelect.innerHTML = MEDIA_MODELS[mode].map(m =>
-        `<option value="${m.id}">${m.name}</option>`
+    // Populate dynamic model custom options
+    const models = MEDIA_MODELS[mode];
+    mediaModelOptions.innerHTML = models.map((m, i) =>
+        `<div class="custom-option ${i === 0 ? 'selected' : ''}" data-value="${m.id}">${m.name}</div>`
     ).join('');
+
+    // Set default model value
+    if (models.length > 0) {
+        mediaModelInput.value = models[0].id;
+        mediaModelText.textContent = models[0].name;
+    }
 
     // Show/hide fields
     const needsRef = mode === 'image-to-image' || mode === 'image-to-video';
