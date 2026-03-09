@@ -331,7 +331,7 @@ Be extremely specific and actionable.`
 // ─── Claude System Prompt ────────────────────────────────────────
 function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls, customization = {}) {
     const researchBlock = researchInsights
-        ? `\n\nAUDIENCE & SEO RESEARCH INSIGHTS (use these to shape EVERY aspect of the blog):\n${researchInsights}\n\nCRITICAL — USE THE RESEARCH ABOVE TO:\n- Use the EXACT primary keyword in H1, first paragraph, and throughout\n- Work ALL secondary/long-tail keywords naturally into H2s, H3s, and body text\n- Use LSI keywords throughout to build topical authority\n- Turn question-based keywords into H2/H3 headings\n- Mirror the exact language and phrases the target audience uses\n- Address their specific objections and pain points head-on\n- Fill the content gaps identified in competitor analysis\n- Include specific statistics, data points, and authoritative sources for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n- Reference named entities, brands, and tools the audience already knows\n`
+        ? `\n\n═══ RESEARCH BRIEF (all research has already been completed for you — use it directly) ═══\n${researchInsights}\n═══ END RESEARCH BRIEF ═══\n\nYOU MUST USE THE RESEARCH ABOVE — do NOT guess, invent stats, or do your own research. Everything you need is in the brief above. Specifically:\n- Use the EXACT primary keyword in H1, first paragraph, and throughout\n- Work ALL secondary/long-tail keywords naturally into H2s, H3s, and body text\n- Use LSI keywords throughout to build topical authority\n- Turn question-based keywords into H2/H3 headings\n- Mirror the exact language, phrases, and jargon from the audience research\n- Address the specific objections and pain points found in forums and Reddit\n- Fill the content gaps identified in competitor analysis\n- Include the specific statistics, data points, and authoritative sources from the research for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n- Reference the named entities, brands, and tools mentioned in the research\n`
         : '';
 
     // Build image injection instructions
@@ -346,7 +346,9 @@ Place them naturally throughout the article — one after each major H2 section 
 Use this format: <img src="FULL_URL_HERE" alt="descriptive alt text" style="width:100%;height:auto;margin:32px 0;display:block;" />\n`;
     }
 
-    return `You are a professional blog designer and world-class SEO copywriter. Your goal is to create a stunning, fully styled HTML blog post optimized for Elementor on WordPress.
+    return `You are a professional blog writer and world-class SEO copywriter. You have a completed research brief with real data, keywords, audience insights, and competitor analysis. Your job is to USE that research to write a stunning, fully styled HTML blog post optimized for WordPress.
+
+Do NOT make up statistics or data — everything you need is in the research brief provided below.
 
 TOPIC: ${keywords}
 CONTEXT: ${description}
