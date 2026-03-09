@@ -159,6 +159,11 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Name, email, and password are required' });
         }
 
+        if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+            console.error('Vercel KV not configured.');
+            return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
+        }
+
         let users = await kv.get('orbit_users') || [];
 
         if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
@@ -184,7 +189,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     } catch (err) {
         console.error('Registration error:', err);
-        res.status(500).json({ error: 'Server error during registration' });
+        res.status(500).json({ error: err.message || 'Server error during registration' });
     }
 });
 
@@ -194,6 +199,11 @@ app.post('/api/auth/login', async (req, res) => {
 
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required' });
+        }
+
+        if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+            console.error('Vercel KV not configured.');
+            return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
         }
 
         const users = await kv.get('orbit_users') || [];
@@ -215,7 +225,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     } catch (err) {
         console.error('Login error:', err);
-        res.status(500).json({ error: 'Server error during login' });
+        res.status(500).json({ error: err.message || 'Server error during login' });
     }
 });
 
