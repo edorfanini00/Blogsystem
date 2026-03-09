@@ -242,6 +242,13 @@ body {
   max-height: 85vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .publish-panel {
@@ -716,9 +723,6 @@ body {
   font-size: 1.05rem;
   line-height: 1.8;
   color: #334155;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
 }
 
 .blog-body h1 {
