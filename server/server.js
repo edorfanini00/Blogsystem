@@ -410,83 +410,61 @@ SEO META — Include these as HTML comments at the very top BEFORE the blog div:
 Preserve all apostrophes, quotes, em dashes, and punctuation properly. No Unicode junk. Make it STUNNING.`;
 }
 
-// ─── OpenRouter Image Generation ─────────────────────────────────
-async function generateImageWithOpenRouter(prompt) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey || apiKey === 'your_openrouter_api_key' || apiKey === 'placeholder') {
-        console.warn('⚠ OpenRouter API key not set, skipping image generation');
+// ─── Gemini Image Generation ─────────────────────────────────
+async function generateImageWithGemini(prompt) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'placeholder') {
+        console.warn('⚠ Gemini API key not set, skipping image generation');
         return null;
     }
 
     const models = [
-        'google/gemini-2.5-flash-image',
-        'google/gemini-3.1-flash-image-preview',
-        'openai/gpt-5-image-mini',
+        'gemini-2.0-flash-preview-image-generation',
+        'gemini-2.0-flash-exp',
     ];
 
     for (const model of models) {
         try {
-            console.log(`   Trying model: ${model}`);
-            const response = await openrouter.chat.completions.create({
-                model,
-                messages: [
-                    {
-                        role: 'user',
-                        content: `Generate a professional, photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality for a business blog.`,
+            console.log(`   Trying Gemini model: ${model}`);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: `Generate a professional, photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.` }],
+                    }],
+                    generationConfig: {
+                        responseModalities: ['TEXT', 'IMAGE'],
                     },
-                ],
+                }),
             });
 
-            const choice = response.choices?.[0]?.message;
-            if (!choice) continue;
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error(`   Gemini ${model} HTTP ${response.status}: ${errText.slice(0, 200)}`);
+                continue;
+            }
 
-            // PRIMARY FORMAT: OpenRouter returns images in choice.images[] array
-            if (Array.isArray(choice.images) && choice.images.length > 0) {
-                for (const img of choice.images) {
-                    const url = img.image_url?.url || img.url;
-                    if (url && url.startsWith('data:image/')) {
-                        const match = url.match(/^data:image\/(\w+);base64,(.+)$/s);
-                        if (match) {
-                            console.log(`   ✅ Got image from ${model} (${match[1]}, ${match[2].length} chars base64)`);
-                            return {
-                                buffer: Buffer.from(match[2], 'base64'),
-                                mimeType: `image/${match[1]}`,
-                                alt: prompt,
-                            };
-                        }
-                    }
-                    if (url && url.startsWith('http')) {
-                        console.log(`   ✅ Got image URL from ${model}`);
-                        return { url, alt: prompt };
-                    }
+            const data = await response.json();
+            const parts = data.candidates?.[0]?.content?.parts;
+            if (!parts) continue;
+
+            for (const part of parts) {
+                if (part.inlineData?.data && part.inlineData?.mimeType) {
+                    console.log(`   ✅ Got image from Gemini ${model} (${part.inlineData.mimeType}, ${part.inlineData.data.length} chars base64)`);
+                    return {
+                        buffer: Buffer.from(part.inlineData.data, 'base64'),
+                        mimeType: part.inlineData.mimeType,
+                        alt: prompt,
+                    };
                 }
             }
 
-            // FALLBACK: Check content if it's an array of parts
-            const parts = choice.content;
-            if (Array.isArray(parts)) {
-                for (const part of parts) {
-                    if (part.type === 'image_url' && part.image_url?.url) {
-                        const url = part.image_url.url;
-                        if (url.startsWith('data:image/')) {
-                            const match = url.match(/^data:image\/(\w+);base64,(.+)$/s);
-                            if (match) {
-                                console.log(`   ✅ Got image from content array (${match[1]})`);
-                                return {
-                                    buffer: Buffer.from(match[2], 'base64'),
-                                    mimeType: `image/${match[1]}`,
-                                    alt: prompt,
-                                };
-                            }
-                        }
-                        return { url, alt: prompt };
-                    }
-                }
-            }
-
-            console.log(`   Model ${model} returned no usable image data`);
+            console.log(`   Gemini ${model} returned no image data`);
         } catch (err) {
-            console.error(`   Model ${model} error: ${err.message}`);
+            console.error(`   Gemini ${model} error: ${err.message}`);
         }
     }
 
@@ -628,7 +606,7 @@ app.post('/api/generate', async (req, res) => {
         for (let i = 0; i < imagePrompts.length; i++) {
             sendProgress(2 + i, TOTAL_STEPS, `Generating blog image ${i + 1} of ${imagePrompts.length}…`);
             console.log(`🎨 Generating image ${i + 1}/${imagePrompts.length}…`);
-            const img = await generateImageWithOpenRouter(imagePrompts[i]);
+            const img = await generateImageWithGemini(imagePrompts[i]);
             if (img) {
                 if (hasWpCredentials) {
                     console.log(`📤 Uploading image ${i + 1} to WordPress…`);
@@ -1403,6 +1381,7 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
+            gemini: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'placeholder',
             openrouter: !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'your_openrouter_api_key',
             perplexity: !!process.env.PERPLEXITY_API_KEY && process.env.PERPLEXITY_API_KEY !== 'your_perplexity_api_key',
             vapi: !!process.env.VAPI_API_KEY,
