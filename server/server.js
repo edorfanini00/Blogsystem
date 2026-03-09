@@ -148,6 +148,64 @@ if (!existsSync(usersFile)) {
     console.log('Created users.json file.');
 }
 
+// ─── Redis Credentials Auto-Detection ────────────────────────────
+// Supports: KV_REST_API_URL/TOKEN, UPSTASH_REDIS_REST_URL/TOKEN, or REDIS_URL
+function getRedisCredentials() {
+    // 1. Explicit REST API env vars (Vercel KV or Upstash)
+    const restUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const restToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (restUrl && restToken) return { url: restUrl, token: restToken };
+
+    // 2. Parse REDIS_URL (redis://default:TOKEN@HOSTNAME:PORT) → derive REST credentials
+    const redisUrl = process.env.REDIS_URL;
+    if (redisUrl) {
+        try {
+            const parsed = new URL(redisUrl);
+            const token = parsed.password;
+            const hostname = parsed.hostname;
+            if (token && hostname) {
+                return { url: `https://${hostname}`, token };
+            }
+        } catch (e) {
+            console.error('Failed to parse REDIS_URL:', e.message);
+        }
+    }
+
+    return null;
+}
+
+const redisCreds = getRedisCredentials();
+const useKV = !!redisCreds;
+
+if (useKV) {
+    console.log(`✅ Redis configured — using ${redisCreds.url} for user storage`);
+} else if (!isVercel) {
+    console.log('ℹ️  Redis not configured — using local users.json for user storage');
+} else {
+    console.error('❌ No Redis credentials found. Set REDIS_URL, KV_REST_API_URL/TOKEN, or UPSTASH_REDIS_REST_URL/TOKEN.');
+}
+
+async function getUsers() {
+    if (useKV) {
+        const { createClient } = await import('@vercel/kv');
+        const kvc = createClient({ url: redisCreds.url, token: redisCreds.token });
+        return (await kvc.get('orbit_users')) || [];
+    }
+    try {
+        return JSON.parse(readFileSync(usersFile, 'utf-8'));
+    } catch { return []; }
+}
+
+async function saveUsers(users) {
+    if (useKV) {
+        const { createClient } = await import('@vercel/kv');
+        const kvc = createClient({ url: redisCreds.url, token: redisCreds.token });
+        await kvc.set('orbit_users', users);
+    } else {
+        writeFileSync(usersFile, JSON.stringify(users, null, 2));
+    }
+}
+
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -156,18 +214,7 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Name, email, and password are required' });
         }
 
-        if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-            console.error('Vercel KV not configured.');
-            return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
-        }
-
-        const { createClient } = await import('@vercel/kv');
-        const kvc = createClient({
-            url: process.env.KV_REST_API_URL,
-            token: process.env.KV_REST_API_TOKEN,
-        });
-
-        let users = await kvc.get('orbit_users') || [];
+        let users = await getUsers();
 
         if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
             return res.status(400).json({ error: 'User with this email already exists' });
@@ -184,7 +231,7 @@ app.post('/api/auth/register', async (req, res) => {
         };
 
         users.push(newUser);
-        await kvc.set('orbit_users', users);
+        await saveUsers(users);
 
         // Delete password from response
         const { password: _, ...userWithoutPassword } = newUser;
@@ -204,18 +251,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password are required' });
         }
 
-        if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-            console.error('Vercel KV not configured.');
-            return res.status(500).json({ error: 'Server Error: Vercel KV Database is not connected to your project environment variables.' });
-        }
-
-        const { createClient } = await import('@vercel/kv');
-        const kvc = createClient({
-            url: process.env.KV_REST_API_URL,
-            token: process.env.KV_REST_API_TOKEN,
-        });
-
-        const users = await kvc.get('orbit_users') || [];
+        const users = await getUsers();
 
         const user = users.find(u => u.email === email.toLowerCase());
 
@@ -1749,10 +1785,14 @@ app.get('/api/reddit/callback', async (req, res) => {
         const redditUsername = meResponse.data.name;
 
         const { createClient } = await import('@vercel/kv');
-        const kvc = createClient({
-            url: process.env.KV_REST_API_URL,
-            token: process.env.KV_REST_API_TOKEN,
-        });
+        const kvc = redisCreds ? createClient({
+            url: redisCreds.url,
+            token: redisCreds.token,
+        }) : null;
+
+        if (!kvc) {
+            return res.status(500).send('<h2>OAuth Error</h2><p>No Redis credentials configured.</p>');
+        }
 
         // Save to Vercel KV database forever
         await kvc.set(`reddit_agent_token:${agentId}`, {
@@ -1785,13 +1825,13 @@ app.get('/api/reddit/callback', async (req, res) => {
 
 // ─── TEMPORARY: Debug Environment Variables ─────────────────────
 app.get('/api/debug-env', (req, res) => {
-    const kvKeys = Object.keys(process.env).filter(k => k.startsWith('KV'));
     res.json({
-        kvKeysFound: kvKeys,
+        redisConfigured: !!redisCreds,
+        redisUrl: redisCreds?.url ? redisCreds.url.slice(0, 30) + '…' : null,
+        REDIS_URL_exists: !!process.env.REDIS_URL,
         KV_REST_API_URL_exists: !!process.env.KV_REST_API_URL,
         KV_REST_API_TOKEN_exists: !!process.env.KV_REST_API_TOKEN,
-        KV_URL_exists: !!process.env.KV_URL,
-        allEnvKeysContainingKV: kvKeys,
+        UPSTASH_REDIS_REST_URL_exists: !!process.env.UPSTASH_REDIS_REST_URL,
         VERCEL: !!process.env.VERCEL,
         NODE_ENV: process.env.NODE_ENV,
     });
