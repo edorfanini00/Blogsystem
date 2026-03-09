@@ -1783,6 +1783,20 @@ app.get('/api/reddit/callback', async (req, res) => {
     }
 });
 
+// ─── TEMPORARY: Debug Environment Variables ─────────────────────
+app.get('/api/debug-env', (req, res) => {
+    const kvKeys = Object.keys(process.env).filter(k => k.startsWith('KV'));
+    res.json({
+        kvKeysFound: kvKeys,
+        KV_REST_API_URL_exists: !!process.env.KV_REST_API_URL,
+        KV_REST_API_TOKEN_exists: !!process.env.KV_REST_API_TOKEN,
+        KV_URL_exists: !!process.env.KV_URL,
+        allEnvKeysContainingKV: kvKeys,
+        VERCEL: !!process.env.VERCEL,
+        NODE_ENV: process.env.NODE_ENV,
+    });
+});
+
 // ─── GET /api/health ─────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
     res.json({
