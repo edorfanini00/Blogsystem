@@ -413,7 +413,7 @@ Preserve all apostrophes, quotes, em dashes, and punctuation properly. No Unicod
 // ─── OpenRouter Image Generation ─────────────────────────────────
 async function generateImageWithOpenRouter(prompt) {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey || apiKey === 'your_openrouter_api_key') {
+    if (!apiKey || apiKey === 'your_openrouter_api_key' || apiKey === 'placeholder') {
         console.warn('⚠ OpenRouter API key not set, skipping image generation');
         return null;
     }
@@ -614,10 +614,12 @@ app.post('/api/generate', async (req, res) => {
 
         // Step 2-4: Generate images
         sendProgress(2, TOTAL_STEPS, 'Generating blog image 1 of 3…');
+        const topicContext = `${keywords}${customization.product ? ' for ' + customization.product : ''}${customization.target ? ' targeting ' + customization.target : ''}`;
+        const trendContext = customization.trends ? `, incorporating ${customization.trends} trends` : '';
         const imagePrompts = [
-            `${keywords} - hero banner: professional setting related to the topic, wide angle, premium quality`,
-            `${keywords} - detail shot: close-up showing the solution or technology in action`,
-            `${keywords} - team or person: professional working on or benefiting from the solution`,
+            `Ultra-realistic hero image for a blog about "${topicContext}". Wide-angle cinematic composition showing the concept in action${trendContext}. Modern, sleek, corporate environment with dramatic lighting. No text, no watermarks. 4K editorial quality.`,
+            `Detail close-up photograph related to "${keywords}" — showing specific tools, technology, or products that ${customization.target || 'professionals'} use in the ${customization.product || 'industry'} space. Shallow depth of field, studio-quality macro shot. No text, no logos.`,
+            `Candid photograph of diverse ${customization.target || 'business professionals'} actively engaged with ${customization.product || 'modern solutions'} related to "${keywords}". Natural lighting, authentic workplace energy, editorial style. No text, no watermarks.`,
         ];
 
         const uploadedImages = [];
