@@ -382,9 +382,12 @@ const pageBlog = document.getElementById('pageBlog');
 const pageSales = document.getElementById('pageSales');
 const pagePosts = document.getElementById('pagePosts');
 const pageMedia = document.getElementById('pageMedia');
+const pageReddit = document.getElementById('pageReddit');
 
 navItems.forEach(item => {
     item.addEventListener('click', e => {
+        if (item.id === 'logoutBtn') return; // let logout happen normally
+
         e.preventDefault();
         const page = item.dataset.page;
 
@@ -397,6 +400,7 @@ navItems.forEach(item => {
         pageSales.style.display = 'none';
         pagePosts.style.display = 'none';
         pageMedia.style.display = 'none';
+        if (pageReddit) pageReddit.style.display = 'none';
 
         // Show selected page
         if (page === 'blogs') {
@@ -410,6 +414,10 @@ navItems.forEach(item => {
             loadAdHistory();
         } else if (page === 'media') {
             pageMedia.style.display = '';
+        } else if (page === 'reddit') {
+            if (pageReddit) pageReddit.style.display = '';
+            if (typeof renderRedditAgents === 'function') renderRedditAgents();
+            if (typeof renderRedditActivity === 'function') renderRedditActivity();
         }
     });
 });
@@ -1888,3 +1896,189 @@ function renderMediaHistory() {
     }).join('');
 }
 renderMediaHistory();
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── REDDIT AGENTS ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const redditCreateAgentBtn = document.getElementById('redditCreateAgentBtn');
+const redditCancelAgentBtn = document.getElementById('redditCancelAgentBtn');
+const redditAgentForm = document.getElementById('redditAgentForm');
+const redditAgentList = document.getElementById('redditAgentList');
+const redditNoAgents = document.getElementById('redditNoAgents');
+const redditActivityLog = document.getElementById('redditActivityLog');
+const redditNoActivity = document.getElementById('redditNoActivity');
+const redditManualScanBtn = document.getElementById('redditManualScanBtn');
+
+// Stats Elements
+const redditStatScanned = document.getElementById('redditStatScanned');
+const redditStatPosted = document.getElementById('redditStatPosted');
+const redditStatReplies = document.getElementById('redditStatReplies');
+const redditStatEngagement = document.getElementById('redditStatEngagement');
+
+// State
+let redditAgents = JSON.parse(localStorage.getItem('orbit_reddit_agents') || '[]');
+let redditActivity = JSON.parse(localStorage.getItem('orbit_reddit_activity') || '[]');
+
+// Toggle Form
+if (redditCreateAgentBtn) {
+    redditCreateAgentBtn.addEventListener('click', () => {
+        redditAgentForm.style.display = 'block';
+        redditNoAgents.style.display = 'none';
+        redditAgentForm.scrollIntoView({ behavior: 'smooth' });
+    });
+}
+if (redditCancelAgentBtn) {
+    redditCancelAgentBtn.addEventListener('click', () => {
+        redditAgentForm.style.display = 'none';
+        if (redditAgents.length === 0) redditNoAgents.style.display = 'flex';
+        redditAgentForm.reset();
+    });
+}
+
+// Create Agent
+if (redditAgentForm) {
+    redditAgentForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newAgent = {
+            id: Date.now().toString(),
+            name: document.getElementById('redditAgentName').value,
+            subreddits: document.getElementById('redditAgentSubreddits').value.split(',').map(s => s.trim()),
+            keywords: document.getElementById('redditAgentKeywords').value.split(',').map(s => s.trim()),
+            pitch: document.getElementById('redditAgentPitch').value,
+            status: 'active',
+            created: Date.now()
+        };
+
+        redditAgents.push(newAgent);
+        localStorage.setItem('orbit_reddit_agents', JSON.stringify(redditAgents));
+
+        redditAgentForm.reset();
+        redditAgentForm.style.display = 'none';
+        showToast('Reddit Agent created & active!');
+        renderRedditAgents();
+    });
+}
+
+function deleteRedditAgent(id) {
+    if (confirm('Are you sure you want to delete this agent?')) {
+        redditAgents = redditAgents.filter(a => a.id !== id);
+        localStorage.setItem('orbit_reddit_agents', JSON.stringify(redditAgents));
+        renderRedditAgents();
+        showToast('Agent deleted');
+    }
+}
+
+// Render Agents
+function renderRedditAgents() {
+    if (!redditAgentList) return;
+
+    if (redditAgents.length === 0) {
+        redditAgentList.innerHTML = '';
+        redditNoAgents.style.display = 'flex';
+        return;
+    }
+
+    redditNoAgents.style.display = 'none';
+    redditAgentList.innerHTML = redditAgents.map(agent => `
+        <div class="reddit-agent-item" data-id="${agent.id}">
+            <div class="reddit-agent-info">
+                <h4>${agent.name} <span style="font-size:0.7rem; color:#10b981; margin-left:8px;">● Active</span></h4>
+                <p>Monitoring ${agent.subreddits.length} subs for ${agent.keywords.length} keywords</p>
+                <div class="reddit-agent-tags">
+                    ${agent.subreddits.slice(0, 3).map(sub => `<span class="reddit-agent-tag">r/${sub}</span>`).join('')}
+                    ${agent.subreddits.length > 3 ? `<span class="reddit-agent-tag">+${agent.subreddits.length - 3}</span>` : ''}
+                </div>
+            </div>
+            <button class="btn-small-outline" onclick="deleteRedditAgent('${agent.id}')" style="color:#ef4444; border-color: rgba(239,68,68,0.3);">Stop & Delete</button>
+        </div>
+    `).join('');
+
+    // Attach functions to global scope for onclick handlers
+    window.deleteRedditAgent = deleteRedditAgent;
+}
+
+// Render Activity Log
+function renderRedditActivity() {
+    if (!redditActivityLog) return;
+
+    if (redditActivity.length === 0) {
+        redditActivityLog.innerHTML = '';
+        redditNoActivity.style.display = 'flex';
+        updateRedditStats();
+        return;
+    }
+
+    redditNoActivity.style.display = 'none';
+    redditActivityLog.innerHTML = redditActivity.map(log => `
+        <div class="reddit-timeline-item">
+            <div class="reddit-timeline-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"/><path d="M8 11V15"/><path d="M16 11V15"/><path d="M12 11V15"/></svg>
+            </div>
+            <div class="reddit-timeline-content">
+                <div class="reddit-timeline-header">
+                    <span class="reddit-timeline-agent">${log.agentName}</span>
+                    <span class="reddit-timeline-time">${new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div class="reddit-timeline-post">
+                    <strong>r/${log.subreddit}</strong>: Found matching post containing "${log.keywordMatched}"
+                </div>
+                <div class="reddit-timeline-reply">
+                    "<em>${log.replyContent}</em>"
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    updateRedditStats();
+}
+
+function updateRedditStats() {
+    const totalPosted = redditActivity.length;
+    if (redditStatScanned) redditStatScanned.textContent = (totalPosted * 142).toLocaleString(); // Mock
+    if (redditStatPosted) redditStatPosted.textContent = totalPosted.toLocaleString();
+    if (redditStatReplies) redditStatReplies.textContent = Math.floor(totalPosted * 1.3).toLocaleString(); // Mock
+    if (redditStatEngagement) redditStatEngagement.textContent = Math.floor(totalPosted * 14.5).toLocaleString(); // Mock
+}
+
+// Manual Scan Simulation
+if (redditManualScanBtn) {
+    redditManualScanBtn.addEventListener('click', async () => {
+        if (redditAgents.length === 0) {
+            showToast('Create an agent first!', 'error');
+            return;
+        }
+
+        const originalText = redditManualScanBtn.innerHTML;
+        redditManualScanBtn.innerHTML = '<span class="spinner" style="border-width:2px; height:12px; width:12px;"></span> Scanning Reddit...';
+        redditManualScanBtn.disabled = true;
+
+        // Simulate network/AI delay
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Pick a random agent to log activity for
+        const agent = redditAgents[Math.floor(Math.random() * redditAgents.length)];
+        const sub = agent.subreddits[0] || 'entrepreneur';
+        const keyword = agent.keywords[0] || 'software';
+
+        const newLog = {
+            id: Date.now().toString(),
+            agentName: agent.name,
+            subreddit: sub,
+            keywordMatched: keyword,
+            timestamp: Date.now(),
+            replyContent: `If you're struggling with ${keyword}, I highly recommend checking out Celeritech. We use their tools for exactly this and it streamlined our entire workflow.`
+        };
+
+        // Append to start
+        redditActivity.unshift(newLog);
+        if (redditActivity.length > 30) redditActivity.pop();
+        localStorage.setItem('orbit_reddit_activity', JSON.stringify(redditActivity));
+
+        renderRedditActivity();
+        showToast('Scan complete. 1 new opportunity found and posted.');
+
+        redditManualScanBtn.innerHTML = originalText;
+        redditManualScanBtn.disabled = false;
+    });
+}
