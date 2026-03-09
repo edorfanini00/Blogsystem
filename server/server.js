@@ -187,9 +187,9 @@ if (useKV) {
 
 async function getUsers() {
     if (useKV) {
-        const { createClient } = await import('@vercel/kv');
-        const kvc = createClient({ url: redisCreds.url, token: redisCreds.token });
-        return (await kvc.get('orbit_users')) || [];
+        const { Redis } = await import('@upstash/redis');
+        const redis = new Redis({ url: redisCreds.url, token: redisCreds.token });
+        return (await redis.get('orbit_users')) || [];
     }
     try {
         return JSON.parse(readFileSync(usersFile, 'utf-8'));
@@ -198,9 +198,9 @@ async function getUsers() {
 
 async function saveUsers(users) {
     if (useKV) {
-        const { createClient } = await import('@vercel/kv');
-        const kvc = createClient({ url: redisCreds.url, token: redisCreds.token });
-        await kvc.set('orbit_users', users);
+        const { Redis } = await import('@upstash/redis');
+        const redis = new Redis({ url: redisCreds.url, token: redisCreds.token });
+        await redis.set('orbit_users', JSON.stringify(users));
     } else {
         writeFileSync(usersFile, JSON.stringify(users, null, 2));
     }
@@ -1784,22 +1784,19 @@ app.get('/api/reddit/callback', async (req, res) => {
 
         const redditUsername = meResponse.data.name;
 
-        const { createClient } = await import('@vercel/kv');
-        const kvc = redisCreds ? createClient({
-            url: redisCreds.url,
-            token: redisCreds.token,
-        }) : null;
-
-        if (!kvc) {
+        if (!redisCreds) {
             return res.status(500).send('<h2>OAuth Error</h2><p>No Redis credentials configured.</p>');
         }
 
-        // Save to Vercel KV database forever
-        await kvc.set(`reddit_agent_token:${agentId}`, {
+        const { Redis } = await import('@upstash/redis');
+        const redis = new Redis({ url: redisCreds.url, token: redisCreds.token });
+
+        // Save to Redis database forever
+        await redis.set(`reddit_agent_token:${agentId}`, JSON.stringify({
             refresh_token,
             username: redditUsername,
             updatedAt: Date.now()
-        });
+        }));
 
         // Return a script that posts a message back to the main window and closes the popup
         res.send(`

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@upstash/redis": "^1.36.4",
     "@vercel/kv": "^3.0.0",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
