@@ -2090,6 +2090,10 @@ function handleMediaSuccess(result, mode) {
         return;
     }
 
+    // Set globals for Download button
+    lastMediaResultUrl = url;
+    lastMediaIsVideo = isVideo;
+
     // Display result
     if (isVideo) {
         mediaResultContent.innerHTML = `<video src="${url}" controls autoplay loop style="width:100%; border-radius:16px;"></video>`;

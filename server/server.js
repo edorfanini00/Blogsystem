@@ -1708,10 +1708,14 @@ app.post('/api/media/generate', async (req, res) => {
                 // It doesn't use 'duration' or 'generate_audio' natively like Kling yet.
             } else if (model.includes('veo2')) {
                 // Veo 2.0 specific settings:
-                // Veo doesn't use 'duration' string, default is 5s.
-                // 'image_url' is supported for image-to-video.
-                if (referenceImage && mode === 'image-to-video') {
-                    input.image_url = referenceImage;
+                // Veo strictly expects `duration` as an integer option (5, 6, 7, 8 etc).
+                if (duration) {
+                    const parsedDuration = parseInt(String(duration).replace(/[^0-9]/g, ''));
+                    // Snap to allowed duration or default to 5
+                    input.duration = [5, 6, 7, 8].includes(parsedDuration) ? parsedDuration : 5;
+                }
+                if (actualRefImage && mode === 'image-to-video') {
+                    input.image_url = actualRefImage;
                 }
             } else {
                 // Default/Kling settings
@@ -1732,14 +1736,12 @@ app.post('/api/media/generate', async (req, res) => {
 
         // Final payload sanitization based on model strictness
         if (model.includes('sora')) {
-            // Sora primarily accepts 'prompt'. It often rejects 'aspect_ratio', 'duration', 'generate_audio'
-            delete input.aspect_ratio;
             delete input.duration;
             delete input.generate_audio;
-            // Also it's usually "image_url" for standard fal i2v, but Sora might use something else or only text.
-            // If image-to-video fails with Sora, we may need to drop image_url too, but we will leave it for now.
         } else if (model.includes('veo2')) {
-            // Veo accepts prompt, image_url, and aspect_ratio. It strictly rejects duration and generate_audio strings.
+            delete input.generate_audio; // Veo does not support generate_audio parameter
+        } else if (!mode?.includes('video')) {
+            // Image generation models (e.g., flux, recraft)
             delete input.duration;
             delete input.generate_audio;
         }
