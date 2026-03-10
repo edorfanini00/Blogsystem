@@ -93,6 +93,16 @@
           <span>Reddit Agents</span>
         </a>
 
+        <!-- FULL CAMPAIGN -->
+        <a href="#" class="nav-item" data-page="campaign">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span>Full Campaign</span>
+        </a>
+
         <div style="flex-grow: 1;"></div>
 
         <a href="#" class="nav-item" id="logoutBtn" style="margin-top: auto; filter: grayscale(1);">
@@ -1046,6 +1056,151 @@
             </div>
           </section>
         </div>
+      </div>
+
+      <!-- ═══ PAGE: FULL CAMPAIGN ═══ -->
+      <div class="page" id="pageCampaign" style="display:none;">
+        <div class="dashboard-header">
+          <div>
+            <h1>Full Campaign</h1>
+            <p class="subtitle">Orchestrate a complete marketing campaign — blog, social posts, and visuals in one go.
+            </p>
+          </div>
+          <button class="btn-outline" id="newCampaignBtn">+ New Campaign</button>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Campaign Setup -->
+          <section class="card bento-left">
+            <h3 class="card-title">Campaign Setup</h3>
+            <form id="campaignForm">
+              <div class="form-group">
+                <label for="campaignName">Campaign Name</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignName" placeholder="e.g. Q2 Product Launch, Spring Sale Push"
+                    required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignProduct">Product / Service</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignProduct" placeholder="e.g. Celeritech ERP, Enterpryze SaaS" required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignAudience">Target Audience</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignAudience" placeholder="e.g. Food manufacturers, SaaS founders"
+                    required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignGoal">Campaign Goal</label>
+                <div class="input-wrapper">
+                  <textarea id="campaignGoal" rows="3" placeholder="Describe the campaign objective and key messaging…"
+                    required></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignTrends">Trends / Angles</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignTrends"
+                    placeholder="e.g. AI automation, sustainability, cost reduction" />
+                </div>
+              </div>
+
+              <h4 class="toggle-section-title">Content to Generate</h4>
+              <div class="platform-grid">
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogBlog" checked />
+                  <span>📝 Blog Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogInstagram" checked />
+                  <span>📸 Instagram Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogLinkedin" checked />
+                  <span>💼 LinkedIn Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogX" />
+                  <span>🐦 X (Twitter)</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogReels" />
+                  <span>🎬 Reels Script</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogImage" checked />
+                  <span>🖼️ Hero Image</span>
+                </label>
+              </div>
+
+              <div class="progress-container" id="campaignProgressContainer" style="display:none; margin-top: 16px;">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="campaignLoadingText">Launching campaign…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="campaignProgressFill"
+                    style="width:0%; background: var(--accent-primary);"></div>
+                </div>
+                <div class="progress-percent" id="campaignProgressPercent">0%</div>
+              </div>
+
+              <button type="submit" class="btn-primary" id="campaignGenerateBtn" style="margin-top: 16px;">
+                <span class="btn-text">🚀 Launch Campaign</span>
+                <span class="btn-loader" style="display:none;"><span class="spinner"></span>Generating…</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Campaign Output -->
+          <section class="card bento-right">
+            <h3 class="card-title">Campaign Output</h3>
+
+            <div class="preview-empty" id="campaignEmpty">
+              <div class="preview-empty-icon">🚀</div>
+              <h3>No campaign yet</h3>
+              <p>Configure your campaign and hit Launch — all content will be generated here.</p>
+            </div>
+
+            <div id="campaignOutputBody" style="display:none;">
+              <!-- Campaign output sections rendered by JS -->
+            </div>
+
+            <div class="ad-output-actions" id="campaignOutputActions" style="display:none;">
+              <button class="btn-outline" id="campaignCopyAllBtn">📋 Copy All</button>
+              <button class="btn-primary btn-sm" id="campaignEmailBtn">📧 Send to Agency</button>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Campaign History -->
+        <section class="card blog-history-card" id="campaignHistoryCard">
+          <div class="call-log-header">
+            <h3>Campaign History</h3>
+            <select class="history-filter" id="campaignHistoryFilter"
+              style="margin-left: auto; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 0.8rem; background: var(--bg-card); color: var(--text-primary); outline: none;">
+              <option value="all">Company Wide</option>
+              <option value="me">My Campaigns</option>
+            </select>
+          </div>
+          <div class="blog-history-empty" id="campaignHistoryEmpty">
+            <div class="empty-icon">🚀</div>
+            <h4>No campaigns yet</h4>
+            <p>Launched campaigns will appear here</p>
+          </div>
+          <div class="blog-history-list" id="campaignHistoryList" style="display:none;"></div>
+        </section>
+
       </div>
 
     </main>

@@ -1617,13 +1617,17 @@ app.post('/api/media/generate', async (req, res) => {
         const falKey = process.env.FAL_KEY;
         if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
 
-        const { mode, model, prompt, aspectRatio, duration, resolution, referenceImage } = req.body;
+        const { mode, model, prompt, aspectRatio, duration, resolution, referenceImage, generate_audio, negative_prompt } = req.body;
         if (!prompt || !model) return res.status(400).json({ error: 'Prompt and model are required' });
 
         console.log(`🎬 Media generation: ${mode} with ${model}`);
 
         // Build the input payload
         const input = { prompt };
+
+        if (negative_prompt) {
+            input.negative_prompt = negative_prompt;
+        }
 
         // Aspect ratio
         if (aspectRatio) {
@@ -1643,9 +1647,10 @@ app.post('/api/media/generate', async (req, res) => {
             }
         }
 
-        // Video settings — duration is a string number (e.g. "5"), no suffix
-        if (mode?.includes('video') && duration) {
-            input.duration = String(duration).replace(/[^0-9]/g, '');
+        // Video settings — duration is a string number (e.g. "5"), audio toggle
+        if (mode?.includes('video')) {
+            if (duration) input.duration = String(duration).replace(/[^0-9]/g, '');
+            if (generate_audio === true) input.generate_audio = true;
         }
 
         // Reference image for i2i / i2v

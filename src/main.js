@@ -383,6 +383,7 @@ const pageSales = document.getElementById('pageSales');
 const pagePosts = document.getElementById('pagePosts');
 const pageMedia = document.getElementById('pageMedia');
 const pageReddit = document.getElementById('pageReddit');
+const pageCampaign = document.getElementById('pageCampaign');
 
 navItems.forEach(item => {
     item.addEventListener('click', e => {
@@ -401,6 +402,7 @@ navItems.forEach(item => {
         pagePosts.style.display = 'none';
         pageMedia.style.display = 'none';
         if (pageReddit) pageReddit.style.display = 'none';
+        if (pageCampaign) pageCampaign.style.display = 'none';
 
         // Show selected page
         if (page === 'blogs') {
@@ -418,6 +420,8 @@ navItems.forEach(item => {
             if (pageReddit) pageReddit.style.display = '';
             if (typeof renderRedditAgents === 'function') renderRedditAgents();
             if (typeof renderRedditActivity === 'function') renderRedditActivity();
+        } else if (page === 'campaign') {
+            if (pageCampaign) pageCampaign.style.display = '';
         }
     });
 });
@@ -1684,69 +1688,66 @@ function setupMediaUI() {
             mediaModelHidden.value = firstKey;
             mediaModelText.textContent = firstName;
         }
-        setupPillDropdowns();
     }
 
     // Initial population
     updateMediaUIForType();
 
-    // Setup Pill Dropdowns
-    function setupPillDropdowns() {
-        // Shared close click outside
-        document.addEventListener('click', (e) => {
-            if (!mediaModelDropdownWrapper.contains(e.target)) mediaModelOptions.classList.remove('show');
-            if (!mediaAspectDropdownWrapper.contains(e.target)) mediaAspectOptions.classList.remove('show');
-            if (currentMediaBaseType === 'video' && mediaDurationDropdownWrapper && !mediaDurationDropdownWrapper.contains(e.target)) {
-                mediaDurationOptions.classList.remove('show');
-            }
-        });
-
-        // Model Pill
-        mediaModelTrigger.onclick = (e) => {
-            e.stopPropagation();
-            mediaModelOptions.classList.toggle('show');
-        };
-        mediaModelOptions.querySelectorAll('.media-gen-option').forEach(opt => {
-            opt.onclick = () => {
-                mediaModelOptions.querySelectorAll('.media-gen-option').forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                mediaModelHidden.value = opt.dataset.value;
-                mediaModelText.textContent = opt.textContent;
-                mediaModelOptions.classList.remove('show');
-            };
-        });
-
-        // Aspect Pill
-        mediaAspectTrigger.onclick = (e) => {
-            e.stopPropagation();
-            mediaAspectOptions.classList.toggle('show');
-        };
-        mediaAspectOptions.querySelectorAll('.media-gen-option').forEach(opt => {
-            opt.onclick = () => {
-                mediaAspectOptions.querySelectorAll('.media-gen-option').forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                mediaAspectHidden.value = opt.dataset.value;
-                mediaAspectText.textContent = opt.textContent;
-                mediaAspectOptions.classList.remove('show');
-            };
-        });
-
-        // Duration Pill
-        if (mediaDurationTrigger) {
-            mediaDurationTrigger.onclick = (e) => {
-                e.stopPropagation();
-                mediaDurationOptions.classList.toggle('show');
-            };
-            mediaDurationOptions.querySelectorAll('.media-gen-option').forEach(opt => {
-                opt.onclick = () => {
-                    mediaDurationOptions.querySelectorAll('.media-gen-option').forEach(o => o.classList.remove('selected'));
-                    opt.classList.add('selected');
-                    mediaDurationHidden.value = opt.dataset.value;
-                    mediaDurationText.textContent = opt.textContent;
-                    mediaDurationOptions.classList.remove('show');
-                };
-            });
+    // ─── Setup Pill Dropdowns (runs once) ────────────────
+    // Shared close-on-click-outside (single listener)
+    document.addEventListener('click', (e) => {
+        if (!mediaModelDropdownWrapper.contains(e.target)) mediaModelOptions.classList.remove('show');
+        if (!mediaAspectDropdownWrapper.contains(e.target)) mediaAspectOptions.classList.remove('show');
+        if (mediaDurationDropdownWrapper && !mediaDurationDropdownWrapper.contains(e.target)) {
+            mediaDurationOptions.classList.remove('show');
         }
+    });
+
+    // Model Pill — use event delegation so dynamically-populated options work
+    mediaModelTrigger.onclick = (e) => {
+        e.stopPropagation();
+        mediaModelOptions.classList.toggle('show');
+    };
+    mediaModelOptions.addEventListener('click', (e) => {
+        const opt = e.target.closest('.media-gen-option');
+        if (!opt) return;
+        mediaModelOptions.querySelectorAll('.media-gen-option').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        mediaModelHidden.value = opt.dataset.value;
+        mediaModelText.textContent = opt.textContent;
+        mediaModelOptions.classList.remove('show');
+    });
+
+    // Aspect Pill
+    mediaAspectTrigger.onclick = (e) => {
+        e.stopPropagation();
+        mediaAspectOptions.classList.toggle('show');
+    };
+    mediaAspectOptions.querySelectorAll('.media-gen-option').forEach(opt => {
+        opt.onclick = () => {
+            mediaAspectOptions.querySelectorAll('.media-gen-option').forEach(o => o.classList.remove('selected'));
+            opt.classList.add('selected');
+            mediaAspectHidden.value = opt.dataset.value;
+            mediaAspectText.textContent = opt.textContent;
+            mediaAspectOptions.classList.remove('show');
+        };
+    });
+
+    // Duration Pill
+    if (mediaDurationTrigger) {
+        mediaDurationTrigger.onclick = (e) => {
+            e.stopPropagation();
+            mediaDurationOptions.classList.toggle('show');
+        };
+        mediaDurationOptions.querySelectorAll('.media-gen-option').forEach(opt => {
+            opt.onclick = () => {
+                mediaDurationOptions.querySelectorAll('.media-gen-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                mediaDurationHidden.value = opt.dataset.value;
+                mediaDurationText.textContent = opt.textContent;
+                mediaDurationOptions.classList.remove('show');
+            };
+        });
     }
 
     // Toggleables
@@ -1824,10 +1825,13 @@ function setupCustomSelect(wrapperId, triggerId, textId, optionsId, inputId) {
     });
 }
 
-setupCustomSelect('mediaAspectWrapper', 'mediaAspectTrigger', 'mediaAspectText', 'mediaAspectOptions', 'mediaAspect');
-setupCustomSelect('mediaDurationWrapper', 'mediaDurationTrigger', 'mediaDurationText', 'mediaDurationOptions', 'mediaDuration');
+// Note: Media pill dropdowns (model, aspect, duration) are handled inside setupMediaUI() with the correct classes.
+// Only keep setupCustomSelect for non-media custom selects that actually use .custom-select-wrapper.
 setupCustomSelect('mediaResWrapper', 'mediaResTrigger', 'mediaResText', 'mediaResOptions', 'mediaResolution');
 setupCustomSelect('mediaTotalDurationWrapper', 'mediaTotalDurationTrigger', 'mediaTotalDurationText', 'mediaTotalDurationOptions', 'mediaTotalDuration');
+
+// ─── Initialize Media UI ─────────────────────────────
+setupMediaUI();
 
 const mediaTotalDurationGroup = document.getElementById('mediaTotalDurationGroup');
 
