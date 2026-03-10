@@ -222,6 +222,25 @@
                 </div>
               </div>
 
+              <div class="form-group" style="position:relative;">
+                <label>Language</label>
+                <div class="custom-select-wrapper" id="blogLangWrapper">
+                  <div class="custom-select-trigger" id="blogLangTrigger">
+                    <span id="blogLangText">English</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="custom-select-options" id="blogLangOptions">
+                    <div class="custom-option selected" data-value="english">English</div>
+                    <div class="custom-option" data-value="spanish">Spanish</div>
+                    <div class="custom-option" data-value="both">Both (English + Spanish)</div>
+                  </div>
+                  <input type="hidden" id="blogLangValue" value="english">
+                </div>
+              </div>
+
               <button type="submit" class="btn-primary" id="generateBtn">
                 <span class="btn-text">Generate Blog</span>
                 <span class="btn-loader" style="display:none;">
@@ -234,6 +253,10 @@
 
           <!-- Preview Panel -->
           <section class="card preview-panel" id="previewPanel">
+            <div class="lang-tabs" id="langTabs" style="display:none;">
+              <button class="lang-tab active" data-lang="en">🇬🇧 English</button>
+              <button class="lang-tab" data-lang="es">🇪🇸 Spanish</button>
+            </div>
             <div class="card-header-flex">
               <h3>Blog Preview</h3>
               <div class="preview-actions" id="previewActions" style="display:none;">

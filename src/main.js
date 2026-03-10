@@ -28,6 +28,8 @@ const toastContainer = document.getElementById('toastContainer');
 // ─── State ───────────────────────────────────────────────────────
 let generatedBlog = null;
 let currentBlogId = null;
+let spanishBlogHtml = null;
+let currentPreviewLang = 'en';
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
 
 // ─── Configure marked ────────────────────────────────────────────
@@ -148,6 +150,7 @@ blogForm.addEventListener('submit', async (e) => {
     const product = document.getElementById('blogProduct').value.trim();
     const trends = document.getElementById('blogTrends').value.trim();
     const tone = document.getElementById('blogToneValue').value;
+    const language = document.getElementById('blogLangValue').value;
 
     if (!keywordsList.length || !description) {
         showToast('Please add at least one keyword and fill in the topic', 'error');
@@ -190,7 +193,7 @@ blogForm.addEventListener('submit', async (e) => {
         const res = await fetch(`${API_BASE}/api/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keywords, description, wordCount, target, product, trends, tone }),
+            body: JSON.stringify({ keywords, description, wordCount, target, product, trends, tone, language }),
         });
 
         const reader = res.body.getReader();
@@ -253,6 +256,21 @@ blogForm.addEventListener('submit', async (e) => {
                         publishPanel.style.display = 'block';
                         showToast(`Blog generated: "${data.title}"`);
 
+                        // Handle language tabs
+                        const langTabs = document.getElementById('langTabs');
+                        if (data.spanishHtmlContent) {
+                            spanishBlogHtml = data.spanishHtmlContent;
+                            langTabs.style.display = 'flex';
+                            // Reset to English tab
+                            currentPreviewLang = 'en';
+                            langTabs.querySelectorAll('.lang-tab').forEach(t => {
+                                t.classList.toggle('active', t.dataset.lang === 'en');
+                            });
+                        } else {
+                            spanishBlogHtml = null;
+                            langTabs.style.display = 'none';
+                        }
+
                         // Auto-save to blog history
                         try {
                             const blogData = {
@@ -264,6 +282,8 @@ blogForm.addEventListener('submit', async (e) => {
                                 seoKeywords: data.seoKeywords,
                                 keywords, description, wordCount,
                                 userName: window.currentUser?.name || 'Unknown',
+                                spanishHtml: data.spanishHtmlContent || null,
+                                spanishTitle: data.spanishTitle || null,
                             };
                             const saveRes = await fetch(`${API_BASE}/api/blogs`, {
                                 method: 'POST',
@@ -325,6 +345,7 @@ publishBtn.addEventListener('click', async () => {
     publishResult.style.display = 'none';
 
     try {
+        // Publish English version
         const res = await fetch(`${API_BASE}/api/publish`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -341,10 +362,35 @@ publishBtn.addEventListener('click', async () => {
         }
 
         const result = await res.json();
+        let successMsg = '✓ English draft created successfully!';
+
+        // If we have Spanish content, publish it too
+        if (spanishBlogHtml) {
+            try {
+                const spanishTitle = generatedBlog.spanishTitle || `[ES] ${generatedBlog.title}`;
+                const spanishRes = await fetch(`${API_BASE}/api/publish`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: spanishTitle,
+                        htmlContent: spanishBlogHtml,
+                        featuredMediaId: generatedBlog.featuredMediaId || null,
+                    }),
+                });
+                if (spanishRes.ok) {
+                    successMsg = '✓ Both English and Spanish drafts created!';
+                } else {
+                    successMsg += '<br/>⚠ Spanish draft failed to publish.';
+                }
+            } catch (esErr) {
+                console.error('Spanish publish error:', esErr);
+                successMsg += '<br/>⚠ Spanish draft failed to publish.';
+            }
+        }
 
         publishResult.className = 'publish-result success';
         publishResult.innerHTML = `
-      ✓ Draft created successfully!<br/>
+      ${successMsg}<br/>
       <a href="https://celeritech.biz/ent_reg/" target="_blank">Edit in WordPress →</a>
     `;
         publishResult.style.display = 'block';
@@ -582,7 +628,22 @@ async function viewBlog(blogId) {
             metaTitle: blog.seoTitle,
             metaDescription: blog.seoDescription,
             seoKeywords: blog.seoKeywords,
+            spanishTitle: blog.spanishTitle || null,
         };
+
+        // Restore Spanish content
+        const langTabs = document.getElementById('langTabs');
+        if (blog.spanishHtml) {
+            spanishBlogHtml = blog.spanishHtml;
+            langTabs.style.display = 'flex';
+            currentPreviewLang = 'en';
+            langTabs.querySelectorAll('.lang-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.lang === 'en');
+            });
+        } else {
+            spanishBlogHtml = null;
+            langTabs.style.display = 'none';
+        }
 
         // Show SEO bar
         if (blog.seoTitle || blog.seoDescription) {
@@ -1206,6 +1267,60 @@ if (ctaGoalTrigger && ctaGoalOptions) {
 
         document.addEventListener('click', (e) => {
             if (!wrapper.contains(e.target)) wrapper.classList.remove('open');
+        });
+    }
+}
+
+// ─── Blog Language Dropdown ────────────────────────────────────
+{
+    const wrapper = document.getElementById('blogLangWrapper');
+    const trigger = document.getElementById('blogLangTrigger');
+    const textEl = document.getElementById('blogLangText');
+    const optionsEl = document.getElementById('blogLangOptions');
+    const hiddenInput = document.getElementById('blogLangValue');
+
+    if (trigger && optionsEl) {
+        trigger.addEventListener('click', () => wrapper.classList.toggle('open'));
+
+        optionsEl.querySelectorAll('.custom-option').forEach(option => {
+            option.addEventListener('click', function () {
+                hiddenInput.value = this.getAttribute('data-value');
+                textEl.textContent = this.textContent;
+                optionsEl.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                this.classList.add('selected');
+                wrapper.classList.remove('open');
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) wrapper.classList.remove('open');
+        });
+    }
+}
+
+// ─── Language Preview Tabs ─────────────────────────────────────
+{
+    const langTabs = document.getElementById('langTabs');
+    if (langTabs) {
+        langTabs.querySelectorAll('.lang-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const lang = tab.dataset.lang;
+                currentPreviewLang = lang;
+                langTabs.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                const blogBody = document.getElementById('blogBody');
+                if (lang === 'es' && spanishBlogHtml) {
+                    blogBody.innerHTML = spanishBlogHtml;
+                } else if (generatedBlog) {
+                    let cleanContent = generatedBlog.content
+                        .replace(/<!--\s*SEO_TITLE:.*?-->\n?/g, '')
+                        .replace(/<!--\s*META_DESC:.*?-->\n?/g, '')
+                        .replace(/<!--\s*SEO_KEYWORDS:.*?-->\n?/g, '');
+                    blogBody.innerHTML = cleanContent;
+                }
+                blogBody.contentEditable = 'true';
+            });
         });
     }
 }

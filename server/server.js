@@ -642,10 +642,10 @@ app.post('/api/generate', async (req, res) => {
         res.end();
     }
 
-    const TOTAL_STEPS = 9;
+    const TOTAL_STEPS = (req.body.language === 'both' || req.body.language === 'spanish') ? 10 : 9;
 
     try {
-        const { keywords, description, wordCount, target, product, trends, tone } = req.body;
+        const { keywords, description, wordCount, target, product, trends, tone, language } = req.body;
 
         if (!keywords || !description || !wordCount) {
             return sendError('Missing required fields: keywords, description, wordCount');
@@ -661,7 +661,7 @@ app.post('/api/generate', async (req, res) => {
             tone: toneLabels[tone] || tone || 'Professional',
         };
 
-        console.log(`\n🚀 Generating blog: "${keywords}" (~${wordCount} words) [${customization.target} | ${customization.tone}]`);
+        console.log(`\n🚀 Generating blog: "${keywords}" (~${wordCount} words) [${customization.target} | ${customization.tone} | lang: ${language || 'english'}]`);
 
         // Step 1: Perplexity research
         sendProgress(1, TOTAL_STEPS, 'Researching target audience & SEO keywords…');
@@ -680,7 +680,7 @@ app.post('/api/generate', async (req, res) => {
             messages: [
                 {
                     role: 'user',
-                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}. Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
+                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}.${language === 'spanish' ? ' IMPORTANT: Write the ENTIRE blog in Spanish. All headings, body text, callout badges, CTA — everything must be in Spanish.' : ''} Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
                 },
             ],
             system: systemPrompt,
@@ -798,8 +798,54 @@ Return ONLY a JSON array of 3 strings, nothing else. Example: ["prompt 1", "prom
         const titleMatch = htmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
         const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : seo.seoTitle || keywords;
 
-        // Step 9: Done
-        sendProgress(9, TOTAL_STEPS, 'Blog ready!');
+        // Step 9: Spanish translation (if language is 'both')
+        let spanishHtmlContent = null;
+        let spanishTitle = null;
+
+        if (language === 'both') {
+            sendProgress(9, TOTAL_STEPS, 'Translating blog to Spanish…');
+            console.log('🌐 Translating blog to Spanish…');
+
+            try {
+                const translationResponse = await anthropic.messages.create({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 8192,
+                    messages: [{
+                        role: 'user',
+                        content: `Translate the following HTML blog post from English to Spanish. 
+
+CRITICAL RULES:
+- Translate ALL visible text content to Spanish (headings, paragraphs, list items, blockquotes, CTA text, button text, callout badges)
+- DO NOT change any HTML tags, attributes, styles, class names, or structure
+- DO NOT change any image URLs or image alt attributes
+- DO NOT change any inline CSS styles
+- Keep all <!-- SEO comments --> but translate their content
+- The translation must be natural, fluent Spanish — not word-for-word translation
+- Maintain the same tone and energy as the original
+- Output ONLY the translated HTML, nothing else
+
+Here is the HTML to translate:
+
+${htmlContent}`,
+                    }],
+                });
+
+                spanishHtmlContent = translationResponse.content[0].text;
+                spanishHtmlContent = spanishHtmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+                // Extract Spanish title
+                const spanishTitleMatch = spanishHtmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
+                spanishTitle = spanishTitleMatch ? spanishTitleMatch[1].replace(/<[^>]+>/g, '') : `[ES] ${title}`;
+
+                console.log(`✅ Spanish translation complete: "${spanishTitle}"`);
+            } catch (transErr) {
+                console.error('❌ Spanish translation error:', transErr.message);
+                // Continue without Spanish — don't fail the whole request
+            }
+        }
+
+        // Final step: Done
+        sendProgress(TOTAL_STEPS, TOTAL_STEPS, 'Blog ready!');
         console.log(`✅ Blog generated: "${title}"`);
 
         sendResult({
@@ -811,6 +857,8 @@ Return ONLY a JSON array of 3 strings, nothing else. Example: ["prompt 1", "prom
             seoKeywords: seo.seoKeywords,
             images: uploadedImages,
             featuredMediaId: uploadedImages[0]?.id || null,
+            spanishHtmlContent,
+            spanishTitle,
         });
     } catch (err) {
         console.error('❌ Generation error:', err);
@@ -891,7 +939,7 @@ function saveBlogs(blogs) {
 
 // ─── POST /api/blogs — Save a generated blog ───────────────────
 app.post('/api/blogs', (req, res) => {
-    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount, userName } = req.body;
+    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount, userName, spanishHtml, spanishTitle } = req.body;
     const blogs = loadBlogs();
     const blog = {
         id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
@@ -905,6 +953,8 @@ app.post('/api/blogs', (req, res) => {
         keywords: keywords || '',
         description: description || '',
         wordCount: wordCount || 0,
+        spanishHtml: spanishHtml || null,
+        spanishTitle: spanishTitle || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         published: false,
