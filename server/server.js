@@ -148,80 +148,42 @@ if (!existsSync(usersFile)) {
     console.log('Created users.json file.');
 }
 
-// ─── Redis Credentials Auto-Detection ────────────────────────────
-// Supports: KV_REST_API_URL/TOKEN, UPSTASH_REDIS_REST_URL/TOKEN, or REDIS_URL
-function getRedisCredentials() {
-    // 1. Explicit REST API env vars (Vercel KV or Upstash)
-    const restUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const restToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (restUrl && restToken) return { url: restUrl.replace(/\/$/, ''), token: restToken, source: 'REST env vars' };
+// ─── Redis via ioredis (uses REDIS_URL directly) ────────────────
+import Redis from 'ioredis';
 
-    // 2. Parse REDIS_URL (redis://default:TOKEN@HOSTNAME:PORT) → derive REST credentials
-    const redisUrl = process.env.REDIS_URL;
-    if (redisUrl) {
-        try {
-            const parsed = new URL(redisUrl);
-            const token = decodeURIComponent(parsed.password);
-            const hostname = parsed.hostname;
-            if (token && hostname) {
-                return { url: `https://${hostname}`, token, source: 'REDIS_URL' };
-            }
-        } catch (e) {
-            console.error('Failed to parse REDIS_URL:', e.message);
-        }
+const REDIS_URL = process.env.KV_URL || process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL;
+const useKV = !!REDIS_URL;
+let redis = null;
+
+function getRedis() {
+    if (!redis && REDIS_URL) {
+        redis = new Redis(REDIS_URL, {
+            maxRetriesPerRequest: 1,
+            connectTimeout: 5000,
+            commandTimeout: 5000,
+            lazyConnect: true,
+            tls: REDIS_URL.startsWith('rediss://') ? {} : undefined,
+        });
+        redis.on('error', (err) => console.error('Redis error:', err.message));
     }
-
-    return null;
+    return redis;
 }
-
-const redisCreds = getRedisCredentials();
-const useKV = !!redisCreds;
 
 if (useKV) {
-    console.log(`✅ Redis configured via ${redisCreds.source} — ${redisCreds.url}`);
+    console.log('✅ Redis configured via REDIS_URL');
 } else if (!isVercel) {
-    console.log('ℹ️  Redis not configured — using local users.json for user storage');
+    console.log('ℹ️  Redis not configured — using local users.json');
 } else {
-    console.error('❌ No Redis credentials found. Set REDIS_URL, KV_REST_API_URL/TOKEN, or UPSTASH_REDIS_REST_URL/TOKEN.');
-}
-
-// ─── Direct Upstash REST API (no library needed) ────────────────
-async function redisGet(key) {
-    const res = await fetch(`${redisCreds.url}/get/${key}`, {
-        headers: { Authorization: `Bearer ${redisCreds.token}` },
-        signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Redis GET failed (${res.status}): ${text}`);
-    }
-    const data = await res.json();
-    if (data.result === null) return null;
-    try { return JSON.parse(data.result); } catch { return data.result; }
-}
-
-async function redisSet(key, value) {
-    const res = await fetch(`${redisCreds.url}`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${redisCreds.token}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(['SET', key, JSON.stringify(value)]),
-        signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Redis SET failed (${res.status}): ${text}`);
-    }
-    return await res.json();
+    console.error('❌ No REDIS_URL found.');
 }
 
 // ─── User Storage (Redis on Vercel, local JSON fallback) ────────
 async function getUsers() {
     if (useKV) {
-        const users = await redisGet('orbit_users');
-        return users || [];
+        const r = getRedis();
+        await r.connect().catch(() => { });
+        const data = await r.get('orbit_users');
+        return data ? JSON.parse(data) : [];
     }
     try {
         return JSON.parse(readFileSync(usersFile, 'utf-8'));
@@ -230,32 +192,37 @@ async function getUsers() {
 
 async function saveUsers(users) {
     if (useKV) {
-        await redisSet('orbit_users', users);
+        const r = getRedis();
+        await r.connect().catch(() => { });
+        await r.set('orbit_users', JSON.stringify(users));
     } else {
         writeFileSync(usersFile, JSON.stringify(users, null, 2));
     }
 }
 
+async function redisSet(key, value) {
+    const r = getRedis();
+    await r.connect().catch(() => { });
+    await r.set(key, JSON.stringify(value));
+}
+
 // ─── Redis Connection Test ──────────────────────────────────────
 app.get('/api/test-redis', async (req, res) => {
-    if (!redisCreds) {
+    if (!useKV) {
         return res.json({
-            ok: false, error: 'No Redis credentials detected', envVars: {
+            ok: false, error: 'No REDIS_URL env var found', envVars: {
                 REDIS_URL: !!process.env.REDIS_URL,
-                KV_REST_API_URL: !!process.env.KV_REST_API_URL,
-                UPSTASH_REDIS_REST_URL: !!process.env.UPSTASH_REDIS_REST_URL,
+                KV_URL: !!process.env.KV_URL,
             }
         });
     }
     try {
-        const pingRes = await fetch(`${redisCreds.url}/ping`, {
-            headers: { Authorization: `Bearer ${redisCreds.token}` },
-            signal: AbortSignal.timeout(5000),
-        });
-        const pingData = await pingRes.json();
-        res.json({ ok: pingRes.ok, source: redisCreds.source, url: redisCreds.url, ping: pingData, status: pingRes.status });
+        const r = getRedis();
+        await r.connect().catch(() => { });
+        const pong = await r.ping();
+        res.json({ ok: true, ping: pong });
     } catch (err) {
-        res.json({ ok: false, source: redisCreds.source, url: redisCreds.url, error: err.message });
+        res.json({ ok: false, error: err.message });
     }
 });
 
@@ -1873,12 +1840,9 @@ app.get('/api/reddit/callback', async (req, res) => {
 // ─── TEMPORARY: Debug Environment Variables ─────────────────────
 app.get('/api/debug-env', (req, res) => {
     res.json({
-        redisConfigured: !!redisCreds,
-        redisUrl: redisCreds?.url ? redisCreds.url.slice(0, 30) + '…' : null,
+        redisConfigured: useKV,
         REDIS_URL_exists: !!process.env.REDIS_URL,
-        KV_REST_API_URL_exists: !!process.env.KV_REST_API_URL,
-        KV_REST_API_TOKEN_exists: !!process.env.KV_REST_API_TOKEN,
-        UPSTASH_REDIS_REST_URL_exists: !!process.env.UPSTASH_REDIS_REST_URL,
+        KV_URL_exists: !!process.env.KV_URL,
         VERCEL: !!process.env.VERCEL,
         NODE_ENV: process.env.NODE_ENV,
     });
