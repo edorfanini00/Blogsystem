@@ -2667,27 +2667,27 @@ body {
   font-weight: 400;
 }
 
-/* Negative Prompt Row */
-.media-negative-input-row {
-  margin-bottom: 20px;
-  padding: 0;
+/* Inline Negative Prompt */
+.inline-negative-input {
+  display: flex;
+  align-items: center;
 }
 
-.media-negative-input-row input {
-  width: 100%;
-  background: var(--bg-main);
+.inline-negative-input input {
+  width: 200px;
+  background: #fff;
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
+  border-radius: 30px;
   color: var(--text-primary);
-  padding: 12px 16px;
-  font-size: 0.95rem;
+  padding: 8px 16px;
+  font-size: 0.85rem;
   outline: none;
   transition: all var(--transition);
 }
 
-.media-negative-input-row input:focus {
+.inline-negative-input input:focus {
   border-color: var(--accent-primary);
-  background: #fff;
+  width: 300px;
   box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
 }
 

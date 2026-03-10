@@ -758,313 +758,277 @@
                 style="font-size:0.75rem; color: rgba(255,255,255,0.6); margin-top: 6px;">Submitting to Fal.ai...</div>
             </div>
 
-            <!-- Negative Prompt Input (hidden by default) -->
-            <div class="media-negative-input-row" id="mediaNegativeRow" style="display:none;">
-              <input type="text" id="mediaNegativePromptModern" placeholder="Negative prompt (e.g. blur, distort...)" />
-            </div>
-
-            <!-- Bottom: Settings Pills -->
-            <div class="media-bottom-toolbar">
-              <div class="media-pills-scroll">
-
-                <!-- Model -->
-                <div class="modern-pill-wrapper" id="modModelWrapper">
-                  <div class="modern-pill" id="modModelTrigger">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 2L2 7l10 5 10-5-10-5Z" />
-                      <path d="M2 17l10 5 10-5" />
-                      <path d="M2 12l10 5 10-5" />
-                    </svg>
-                    <span id="modModelText">Kling 3.0</span>
-                  </div>
-                  <div class="modern-pill-options" id="modModelOptions">
-                    <!-- Populated via JS -->
-                  </div>
-                </div>
-
-                <!-- Aspect Ratio -->
-                <div class="modern-pill-wrapper" id="modAspectWrapper">
-                  <div class="modern-pill" id="modAspectTrigger">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
-                    </svg>
-                    <span id="modAspectText">16:9</span>
-                  </div>
-                  <div class="modern-pill-options" id="modAspectOptions">
-                    <div class="custom-option selected" data-value="16:9">16:9</div>
-                    <div class="custom-option" data-value="9:16">9:16</div>
-                    <div class="custom-option" data-value="1:1">1:1</div>
-                  </div>
-                </div>
-
-                <!-- Audio Toggle (Video Only) -->
-                <div class="modern-pill-wrapper" id="modAudioWrapper" style="display:none;">
-                  <div class="modern-pill" id="modAudioTrigger">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                    </svg>
-                    <span id="modAudioText">Audio</span>
-                  </div>
-                </div>
-
-                <!-- Duration (Video Only) -->
-                <div class="modern-pill-wrapper" id="modDurationWrapper" style="display:none;">
-                  <div class="modern-pill" id="modDurationTrigger">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span id="modDurationText">5 sec</span>
-                  </div>
-                  <div class="modern-pill-options" id="modDurationOptions">
-                    <div class="custom-option selected" data-value="5">5 sec</div>
-                    <div class="custom-option" data-value="10">10 sec</div>
-                    <div class="custom-option" data-value="15">15 sec</div>
-                  </div>
-                </div>
-
-                <!-- Total Duration/Chaining (Video Only) -->
-                <div class="modern-pill-wrapper" id="modTotalDurationWrapper" style="display:none;">
-                  <div class="modern-pill" id="modTotalDurationTrigger">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                    <span id="modTotalDurationText">Single clip</span>
-                  </div>
-                  <div class="modern-pill-options" id="modTotalDurationOptions">
-                    <div class="custom-option selected" data-value="0">Single clip</div>
-                    <div class="custom-option" data-value="30">30s (2 clips)</div>
-                    <div class="custom-option" data-value="45">45s (3 clips)</div>
-                    <div class="custom-option" data-value="60">60s (4 clips)</div>
-                  </div>
-                </div>
-
-
-
-                <!-- Negative Prompt Pill -->
-                <div class="modern-pill" id="modNegativeTrigger">
-                  <span>Negative Prompt</span>
-                </div>
+            <!-- Audio Toggle (Video Only) -->
+            <div class="modern-pill-wrapper" id="modAudioWrapper" style="display:none;">
+              <div class="modern-pill" id="modAudioTrigger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </svg>
+                <span id="modAudioText">Audio</span>
               </div>
-
-              <button type="submit" class="modern-submit-btn" id="mediaGenerateBtnModern">
-                <span class="btn-text">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
-                  </svg>
-                </span>
-                <span class="btn-loader" style="display:none"><span class="spinner-orange"
-                    style="width:20px;height:20px;border-width:2px;"></span></span>
-              </button>
             </div>
 
-            <!-- Hidden Inputs for JS -->
-            <input type="hidden" id="modModel" value="fal-ai/flux/schnell">
-            <input type="hidden" id="modAspect" value="16:9">
-            <input type="hidden" id="modDuration" value="5">
-            <input type="hidden" id="modTotalDuration" value="0">
-            <input type="hidden" id="modAudio" value="false">
-          </form>
-        </section>
-
-        <!-- History Grid -->
-        <section class="card blog-history-card" id="mediaHistoryCard">
-          <h3>Generation History</h3>
-          <div class="media-history-grid" id="mediaHistoryGrid"></div>
-          <div class="blog-history-empty" id="mediaHistoryEmpty">
-            <div class="empty-icon" style="opacity: 0.5;">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
+            <!-- Duration (Video Only) -->
+            <div class="modern-pill-wrapper" id="modDurationWrapper" style="display:none;">
+              <div class="modern-pill" id="modDurationTrigger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span id="modDurationText">5 sec</span>
+              </div>
+              <div class="modern-pill-options" id="modDurationOptions">
+                <div class="custom-option selected" data-value="5">5 sec</div>
+                <div class="custom-option" data-value="10">10 sec</div>
+                <div class="custom-option" data-value="15">15 sec</div>
+              </div>
             </div>
-            <h4 style="margin-top: 12px;">No generations yet</h4>
-            <p>Your generated images and videos will appear here</p>
-          </div>
-        </section>
 
+            <!-- Total Duration/Chaining (Video Only) -->
+            <div class="modern-pill-wrapper" id="modTotalDurationWrapper" style="display:none;">
+              <div class="modern-pill" id="modTotalDurationTrigger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+                <span id="modTotalDurationText">Single clip</span>
+              </div>
+              <div class="modern-pill-options" id="modTotalDurationOptions">
+                <div class="custom-option selected" data-value="0">Single clip</div>
+                <div class="custom-option" data-value="30">30s (2 clips)</div>
+                <div class="custom-option" data-value="45">45s (3 clips)</div>
+                <div class="custom-option" data-value="60">60s (4 clips)</div>
+              </div>
+            </div>
+
+            <!-- Negative Prompt Pill / Input -->
+            <div class="modern-pill" id="modNegativeTrigger">
+              <span>Negative Prompt</span>
+            </div>
+
+            <!-- Inline Expanding Input -->
+            <div class="inline-negative-input" id="mediaNegativeRow" style="display:none;">
+              <input type="text" id="mediaNegativePromptModern" placeholder="e.g. blur, distort..." />
+            </div>
       </div>
 
-      <!-- ═══ PAGE: REDDIT AGENTS ═══ -->
-      <div class="page" id="pageReddit" style="display:none;">
-        <div class="page-header">
-          <div>
-            <h1>Reddit Agents</h1>
-            <p class="subtitle">24/7 autonomous agents that scan Reddit and sell your product.</p>
-          </div>
-          <button class="btn-primary" id="redditCreateAgentBtn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-              <path d="M12 5v14M5 12h14" />
+      <button type="submit" class="modern-submit-btn" id="mediaGenerateBtnModern">
+        <span class="btn-text">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5" />
+            <polyline points="5 12 12 5 19 12" />
+          </svg>
+        </span>
+        <span class="btn-loader" style="display:none"><span class="spinner-orange"
+            style="width:20px;height:20px;border-width:2px;"></span></span>
+      </button>
+  </div>
+
+  <!-- Hidden Inputs for JS -->
+  <input type="hidden" id="modModel" value="fal-ai/flux/schnell">
+  <input type="hidden" id="modAspect" value="16:9">
+  <input type="hidden" id="modDuration" value="5">
+  <input type="hidden" id="modTotalDuration" value="0">
+  <input type="hidden" id="modAudio" value="false">
+  </form>
+  </section>
+
+  <!-- History Grid -->
+  <section class="card blog-history-card" id="mediaHistoryCard">
+    <h3>Generation History</h3>
+    <div class="media-history-grid" id="mediaHistoryGrid"></div>
+    <div class="blog-history-empty" id="mediaHistoryEmpty">
+      <div class="empty-icon" style="opacity: 0.5;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <polyline points="21 15 16 10 5 21" />
+        </svg>
+      </div>
+      <h4 style="margin-top: 12px;">No generations yet</h4>
+      <p>Your generated images and videos will appear here</p>
+    </div>
+  </section>
+
+  </div>
+
+  <!-- ═══ PAGE: REDDIT AGENTS ═══ -->
+  <div class="page" id="pageReddit" style="display:none;">
+    <div class="page-header">
+      <div>
+        <h1>Reddit Agents</h1>
+        <p class="subtitle">24/7 autonomous agents that scan Reddit and sell your product.</p>
+      </div>
+      <button class="btn-primary" id="redditCreateAgentBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        Create Agent
+      </button>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="bento-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+      <div class="card stat-card">
+        <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--accent-primary);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h4>Posts Scanned</h4>
+          <p class="stat-value" id="redditStatScanned">0</p>
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h4>Comments Posted</h4>
+          <p class="stat-value" id="redditStatPosted">0</p>
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 2L11 13"></path>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h4>Replies Received</h4>
+          <p class="stat-value" id="redditStatReplies">0</p>
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h4>Total Engagement</h4>
+          <p class="stat-value" id="redditStatEngagement">0</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bento-grid">
+      <!-- Active Agents Management -->
+      <section class="card bento-left" id="redditAgentManagerCard">
+        <h3 class="card-title">Active Agents</h3>
+
+        <div id="redditAgentList">
+          <!-- Rendered via JS -->
+        </div>
+
+        <div class="preview-empty" id="redditNoAgents" style="padding: 32px 16px;">
+          <div class="preview-empty-icon" style="opacity: 0.5;">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+              <path d="M8 11V15" />
+              <path d="M16 11V15" />
+              <path d="M12 11V15" />
             </svg>
-            Create Agent
+          </div>
+          <h3 style="margin-top: 16px;">No agents running</h3>
+          <p style="text-align: center; max-width: 250px; margin: 0 auto;">Create an agent to start scanning Reddit
+            for leads automatically.</p>
+        </div>
+
+        <!-- Hidden Agent Creator Form -->
+        <form id="redditAgentForm"
+          style="display:none; margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h4 style="margin:0;font-size:1.1rem;font-weight:600;color:var(--text-primary);">Configure New Agent
+            </h4>
+            <button type="button" class="btn-small-outline" id="redditCancelAgentBtn">Cancel</button>
+          </div>
+
+          <div class="form-group">
+            <label for="redditAgentName">Agent Name</label>
+            <div class="input-wrapper">
+              <input type="text" id="redditAgentName" placeholder="e.g. ERP Sales Bot" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="redditAgentSubreddits">Target Subreddits (comma separated)</label>
+            <div class="input-wrapper">
+              <input type="text" id="redditAgentSubreddits" placeholder="e.g. compsci, entrepreneur, SaaS" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="redditAgentKeywords">Trigger Keywords (comma separated)</label>
+            <div class="input-wrapper">
+              <input type="text" id="redditAgentKeywords" placeholder="e.g. looking for ERP, inventory management mess"
+                required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="redditAgentPitch">Product Pitch & Instructions</label>
+            <div class="input-wrapper">
+              <textarea id="redditAgentPitch" rows="4"
+                placeholder="Tell the AI what to pitch when it finds a match. e.g. 'I work at Celeritech, we build an ERP for food manu...'"
+                required></textarea>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" style="width:100%;">Save & Start Agent</button>
+        </form>
+      </section>
+
+      <!-- Activity Log -->
+      <section class="card bento-right" id="redditActivityCard">
+        <h3 class="card-title">Activity Log</h3>
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <button class="btn-small-outline" id="redditManualScanBtn" style="width:100%; justify-content:center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="margin-right:6px;">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
+            </svg>
+            Force Scan Now
           </button>
         </div>
 
-        <!-- Stats Bar -->
-        <div class="bento-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
-          <div class="card stat-card">
-            <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--accent-primary);">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <h4>Posts Scanned</h4>
-              <p class="stat-value" id="redditStatScanned">0</p>
-            </div>
-          </div>
-          <div class="card stat-card">
-            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <h4>Comments Posted</h4>
-              <p class="stat-value" id="redditStatPosted">0</p>
-            </div>
-          </div>
-          <div class="card stat-card">
-            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 2L11 13"></path>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <h4>Replies Received</h4>
-              <p class="stat-value" id="redditStatReplies">0</p>
-            </div>
-          </div>
-          <div class="card stat-card">
-            <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <h4>Total Engagement</h4>
-              <p class="stat-value" id="redditStatEngagement">0</p>
-            </div>
-          </div>
+        <div id="redditActivityLog" class="reddit-timeline">
+          <!-- Logs populated via JS -->
         </div>
 
-        <div class="bento-grid">
-          <!-- Active Agents Management -->
-          <section class="card bento-left" id="redditAgentManagerCard">
-            <h3 class="card-title">Active Agents</h3>
-
-            <div id="redditAgentList">
-              <!-- Rendered via JS -->
-            </div>
-
-            <div class="preview-empty" id="redditNoAgents" style="padding: 32px 16px;">
-              <div class="preview-empty-icon" style="opacity: 0.5;">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path
-                    d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
-                  <path d="M8 11V15" />
-                  <path d="M16 11V15" />
-                  <path d="M12 11V15" />
-                </svg>
-              </div>
-              <h3 style="margin-top: 16px;">No agents running</h3>
-              <p style="text-align: center; max-width: 250px; margin: 0 auto;">Create an agent to start scanning Reddit
-                for leads automatically.</p>
-            </div>
-
-            <!-- Hidden Agent Creator Form -->
-            <form id="redditAgentForm"
-              style="display:none; margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 24px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h4 style="margin:0;font-size:1.1rem;font-weight:600;color:var(--text-primary);">Configure New Agent
-                </h4>
-                <button type="button" class="btn-small-outline" id="redditCancelAgentBtn">Cancel</button>
-              </div>
-
-              <div class="form-group">
-                <label for="redditAgentName">Agent Name</label>
-                <div class="input-wrapper">
-                  <input type="text" id="redditAgentName" placeholder="e.g. ERP Sales Bot" required>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="redditAgentSubreddits">Target Subreddits (comma separated)</label>
-                <div class="input-wrapper">
-                  <input type="text" id="redditAgentSubreddits" placeholder="e.g. compsci, entrepreneur, SaaS" required>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="redditAgentKeywords">Trigger Keywords (comma separated)</label>
-                <div class="input-wrapper">
-                  <input type="text" id="redditAgentKeywords"
-                    placeholder="e.g. looking for ERP, inventory management mess" required>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="redditAgentPitch">Product Pitch & Instructions</label>
-                <div class="input-wrapper">
-                  <textarea id="redditAgentPitch" rows="4"
-                    placeholder="Tell the AI what to pitch when it finds a match. e.g. 'I work at Celeritech, we build an ERP for food manu...'"
-                    required></textarea>
-                </div>
-              </div>
-
-              <button type="submit" class="btn-primary" style="width:100%;">Save & Start Agent</button>
-            </form>
-          </section>
-
-          <!-- Activity Log -->
-          <section class="card bento-right" id="redditActivityCard">
-            <h3 class="card-title">Activity Log</h3>
-            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-              <button class="btn-small-outline" id="redditManualScanBtn" style="width:100%; justify-content:center;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  style="margin-right:6px;">
-                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
-                </svg>
-                Force Scan Now
-              </button>
-            </div>
-
-            <div id="redditActivityLog" class="reddit-timeline">
-              <!-- Logs populated via JS -->
-            </div>
-
-            <div class="preview-empty" id="redditNoActivity">
-              <div class="preview-empty-icon" style="opacity: 0.5;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-              </div>
-              <h4 style="margin-top: 12px;">No activity yet</h4>
-              <p>Logs will appear here once agents start posting.</p>
-            </div>
-          </section>
+        <div class="preview-empty" id="redditNoActivity">
+          <div class="preview-empty-icon" style="opacity: 0.5;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <h4 style="margin-top: 12px;">No activity yet</h4>
+          <p>Logs will appear here once agents start posting.</p>
         </div>
-      </div>
+      </section>
+    </div>
+  </div>
 
-    </main>
+  </main>
   </div>
 
   <!-- Delete Confirmation Modal -->
