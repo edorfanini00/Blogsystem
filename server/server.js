@@ -1697,15 +1697,34 @@ app.post('/api/media/generate', async (req, res) => {
             }
         }
 
-        // Video settings — duration is a string number (e.g. "5"), audio toggle
+        // Video Settings
         if (mode?.includes('video')) {
-            if (duration) input.duration = String(duration).replace(/[^0-9]/g, '');
-            if (generate_audio === true) input.generate_audio = true;
-        }
+            if (model.includes('sora')) {
+                // Sora (No Watermark) specific settings:
+                // Fal.ai sora endpoint usually takes prompt and aspect_ratio.
+                // It doesn't use 'duration' or 'generate_audio' natively like Kling yet.
+            } else if (model.includes('veo2')) {
+                // Veo 2.0 specific settings:
+                // Veo doesn't use 'duration' string, default is 5s.
+                // 'image_url' is supported for image-to-video.
+                if (referenceImage && mode === 'image-to-video') {
+                    input.image_url = referenceImage;
+                }
+            } else {
+                // Default/Kling settings
+                if (duration) input.duration = String(duration).replace(/[^0-9]/g, '');
+                if (generate_audio === true) input.generate_audio = true;
+            }
 
-        // Reference image for i2i / i2v
-        if (referenceImage && (mode === 'image-to-image' || mode === 'image-to-video')) {
-            input.image_url = referenceImage;
+            // Reference image for all models that support image-to-video
+            if (referenceImage && (mode === 'image-to-image' || mode === 'image-to-video')) {
+                if (!input.image_url) input.image_url = referenceImage; // Veo2 might use specific key, image_url is standard for fal i2v
+            }
+        } else {
+            // Reference image for i2i
+            if (referenceImage && mode === 'image-to-image') {
+                input.image_url = referenceImage;
+            }
         }
 
         console.log(`   Payload keys: ${Object.keys(input).join(', ')}`);

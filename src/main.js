@@ -1678,10 +1678,13 @@ const MEDIA_MODELS = {
     },
     'text-to-video': {
         'fal-ai/kling-video/v3/pro/text-to-video': 'Kling 3.0 Pro',
+        'fal-ai/veo2/text-to-video': 'Veo 2.0',
+        'fal-ai/sora': 'Sora (No Watermark)',
         'fal-ai/kling-video/v1.2/pro': 'Kling 1.2 Pro (Legacy)',
     },
     'image-to-video': {
         'fal-ai/kling-video/v3/pro/image-to-video': 'Kling 3.0 Pro',
+        'fal-ai/veo2/image-to-video': 'Veo 2.0',
         'fal-ai/kling-video/v1.2/pro': 'Kling 1.2 Pro (Legacy)',
     },
 };
