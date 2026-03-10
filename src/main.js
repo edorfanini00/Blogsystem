@@ -1570,6 +1570,7 @@ const MEDIA_MODELS = {
 // Media DOM Elements (Redesigned)
 const mediaTypeImageBtn = document.getElementById('mediaTypeImageBtn');
 const mediaTypeVideoBtn = document.getElementById('mediaTypeVideoBtn');
+const mediaTypeAudioBtn = document.getElementById('mediaTypeAudioBtn');
 const mediaRefTriggerBtn = document.getElementById('mediaRefTriggerBtn');
 const mediaRefInput = document.getElementById('mediaRefInput');
 const mediaRefPreviewMini = document.getElementById('mediaRefPreviewMini');
@@ -1616,10 +1617,11 @@ let currentMediaBaseType = 'video'; // 'image' or 'video'
 function setupMediaUI() {
     if (!mediaForm) return;
 
-    // Toggle Image/Video Base Type
+    // Toggle Image/Video/Audio Base Type
     mediaTypeImageBtn.addEventListener('click', () => {
         mediaTypeImageBtn.classList.add('active');
         mediaTypeVideoBtn.classList.remove('active');
+        if (mediaTypeAudioBtn) mediaTypeAudioBtn.classList.remove('active');
         currentMediaBaseType = 'image';
         updateMediaUIForType();
     });
@@ -1627,25 +1629,46 @@ function setupMediaUI() {
     mediaTypeVideoBtn.addEventListener('click', () => {
         mediaTypeVideoBtn.classList.add('active');
         mediaTypeImageBtn.classList.remove('active');
+        if (mediaTypeAudioBtn) mediaTypeAudioBtn.classList.remove('active');
         currentMediaBaseType = 'video';
         updateMediaUIForType();
     });
+
+    if (mediaTypeAudioBtn) {
+        mediaTypeAudioBtn.addEventListener('click', () => {
+            mediaTypeAudioBtn.classList.add('active');
+            mediaTypeImageBtn.classList.remove('active');
+            mediaTypeVideoBtn.classList.remove('active');
+            currentMediaBaseType = 'audio';
+            updateMediaUIForType();
+        });
+    }
 
     function updateMediaUIForType() {
         populateMediaModels(currentMediaBaseType);
         if (currentMediaBaseType === 'image') {
             mediaDurationDropdownWrapper.style.display = 'none';
             mediaAudioBtn.style.display = 'none';
+            mediaAspectDropdownWrapper.style.display = 'flex';
+        } else if (currentMediaBaseType === 'audio') {
+            mediaDurationDropdownWrapper.style.display = 'flex';
+            mediaAudioBtn.style.display = 'none';
+            mediaAspectDropdownWrapper.style.display = 'none';
         } else {
             mediaDurationDropdownWrapper.style.display = 'flex';
             mediaAudioBtn.style.display = 'flex';
+            mediaAspectDropdownWrapper.style.display = 'flex';
         }
     }
 
     function populateMediaModels(type) {
         if (!mediaModelOptions) return;
         mediaModelOptions.innerHTML = '';
-        const models = type === 'image' ? MEDIA_MODELS['text-to-image'] : MEDIA_MODELS['text-to-video'];
+        let models = {};
+        if (type === 'image') models = MEDIA_MODELS['text-to-image'];
+        else if (type === 'audio') models = { 'fal-ai/playai/tts/v3': 'PlayAI TTS', 'fal-ai/stable-audio': 'Stable Audio' }; // Fallback models for audio
+        else models = MEDIA_MODELS['text-to-video'];
+
         let firstKey = null, firstName = null;
 
         Object.entries(models).forEach(([key, name], index) => {
@@ -1808,97 +1831,9 @@ setupCustomSelect('mediaTotalDurationWrapper', 'mediaTotalDurationTrigger', 'med
 
 const mediaTotalDurationGroup = document.getElementById('mediaTotalDurationGroup');
 
-// Setup Model Select specifically because options are dynamic
-mediaModelTrigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-        if (w !== mediaModelWrapper) w.classList.remove('open');
-    });
-    mediaModelWrapper.classList.toggle('open');
-});
-document.addEventListener('click', (e) => {
-    if (!mediaModelWrapper.contains(e.target)) mediaModelWrapper.classList.remove('open');
-});
-mediaModelOptions.addEventListener('click', (e) => {
-    const option = e.target.closest('.custom-option');
-    if (!option) return;
 
-    mediaModelInput.value = option.getAttribute('data-value');
-    mediaModelText.textContent = option.textContent;
 
-    mediaModelOptions.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
-    option.classList.add('selected');
-    mediaModelWrapper.classList.remove('open');
-});
 
-function updateMediaMode(mode) {
-    currentMediaMode = mode;
-    const label = MODE_LABELS[mode];
-    mediaActiveModeIcon.innerHTML = label.icon;
-    mediaActiveModeText.textContent = label.text;
-
-    // Update active class on options
-    document.querySelectorAll('.media-mode-option').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.mode === mode);
-    });
-
-    // Populate dynamic model custom options
-    const models = MEDIA_MODELS[mode];
-    mediaModelOptions.innerHTML = models.map((m, i) =>
-        `<div class="custom-option ${i === 0 ? 'selected' : ''}" data-value="${m.id}">${m.name}</div>`
-    ).join('');
-
-    // Set default model value
-    if (models.length > 0) {
-        mediaModelInput.value = models[0].id;
-        mediaModelText.textContent = models[0].name;
-    }
-
-    // Show/hide fields
-    const needsRef = mode === 'image-to-image' || mode === 'image-to-video';
-    const isVideo = mode === 'text-to-video' || mode === 'image-to-video';
-    mediaRefGroup.style.display = needsRef ? '' : 'none';
-    mediaDurationGroup.style.display = isVideo ? '' : 'none';
-    mediaResGroup.style.display = isVideo ? '' : 'none';
-    mediaTotalDurationGroup.style.display = isVideo ? '' : 'none';
-}
-
-// Mode option clicks
-document.querySelectorAll('.media-mode-option').forEach(opt => {
-    opt.addEventListener('click', () => updateMediaMode(opt.dataset.mode));
-});
-
-// Initialize
-updateMediaMode('text-to-image');
-
-// Reference image upload
-mediaRefUploadArea.addEventListener('click', (e) => {
-    if (e.target.closest('#mediaRefClear')) return;
-    mediaRefInput.click();
-});
-mediaRefInput.addEventListener('change', () => {
-    const file = mediaRefInput.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-        mediaRefDataUrl = reader.result;
-        mediaRefImg.src = mediaRefDataUrl;
-        mediaRefPromptEl.style.display = 'none';
-        mediaRefPreview.style.display = '';
-    };
-    reader.readAsDataURL(file);
-    mediaRefInput.value = '';
-});
-mediaRefClear.addEventListener('click', (e) => {
-    e.stopPropagation();
-    mediaRefDataUrl = null;
-    mediaRefPromptEl.style.display = '';
-    mediaRefPreview.style.display = 'none';
-});
-
-// Last result for download
-let lastMediaResultUrl = null;
-let lastMediaIsVideo = false;
 
 mediaDownloadBtn.addEventListener('click', () => {
     if (!lastMediaResultUrl) return;
@@ -1909,12 +1844,74 @@ mediaDownloadBtn.addEventListener('click', () => {
 });
 
 // Generate
+async function handleMediaGeneration(e) {
+    e.preventDefault();
+
+    const prompt = mediaPrompt.value.trim();
+    if (!prompt) {
+        showToast('Please enter a prompt', 'error');
+        return;
+    }
+
+    const modelId = mediaModelHidden.value;
+    const inferredMode = currentMediaBaseType; // 'image', 'video', 'audio'
+
+    // UI Loading state
+    mediaGenerateBtn.disabled = true;
+    mediaGenerateBtn.querySelector('.btn-text').style.display = 'none';
+    mediaGenerateBtn.querySelector('.btn-loader').style.display = 'block'; // Or inline-flex depending on your CSS
+    mediaProgressContainer.style.display = 'block';
+    mediaProgressFill.style.width = '10%';
+    mediaProgressText.textContent = 'Initializing...';
+    mediaResultContent.innerHTML = '';
+
+    const isVideo = inferredMode === 'video';
+    const isAudio = inferredMode === 'audio';
+
+    // Form Data preparation
+    const requestData = {
+        model: modelId,
+        prompt,
+        mode: inferredMode,
+        aspectRatio: mediaAspectHidden.value || '16:9',
+        referenceImageUrl: mediaRefImgMini.src && mediaRefImgMini.src.startsWith('data:') ? mediaRefImgMini.src : null, // Assuming you upload base64 or upload it first
+    };
+
+    if (isVideo || inferredMode === 'image-to-video' || inferredMode === 'text-to-video') {
+        requestData.duration = mediaDurationHidden.value || '5';
+        requestData.audio = mediaAudioHidden.value === 'true';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/api/media/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        mediaProgressFill.style.width = '30%';
+        mediaProgressText.textContent = 'Generating...';
+
+        // Wait for it
+        await pollMediaStatus(data.requestId, inferredMode, modelId);
+
+    } catch (err) {
+        console.error('Generation Error:', err);
+        showToast(err.message || 'Generation failed', 'error');
+        resetMediaBtn();
+    }
+}
+
+// Generate
 // ─── Helper: Poll Fal.ai status ──────────────────────────────
-async function pollMediaStatus(requestId, inferredMode) {
+async function pollMediaStatus(requestId, inferredMode, modelId) {
     for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-            const statusRes = await fetch(`/api/media/status/${requestId}`);
+            const statusRes = await fetch(`/api/media/status/${requestId}?model=${encodeURIComponent(modelId)}`);
 
             const contentType = statusRes.headers.get("content-type");
             if (contentType && contentType.indexOf("application/json") !== -1) {
