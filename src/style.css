@@ -2563,8 +2563,8 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: #ccc;
   cursor: pointer;
   display: flex;
@@ -2574,7 +2574,8 @@ body {
 }
 
 .media-gen-img-square-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
 
@@ -2656,6 +2657,12 @@ body {
 
 .media-gen-prompt-wrapper {
   flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
 }
 
 .media-gen-prompt-wrapper textarea {
@@ -2722,8 +2729,8 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 500;
@@ -2735,14 +2742,15 @@ body {
 
 .media-gen-pill-trigger:hover,
 .media-gen-pill.toggleable:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
 
 .media-gen-pill.toggleable.active {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.7);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Custom Dropdown Menus for Pills */
