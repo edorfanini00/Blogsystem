@@ -1558,12 +1558,14 @@ const MEDIA_MODELS = {
         { id: 'fal-ai/seedream/v4.5', name: 'Seedream V4.5' },
     ],
     'text-to-video': [
+        { id: 'fal-ai/kling-video/v3/pro/text-to-video', name: 'Kling 3.0 Pro' },
         { id: 'fal-ai/kling-video/v2.5/pro/text-to-video', name: 'Kling 2.5 Pro' },
         { id: 'fal-ai/veo3', name: 'Veo 3' },
         { id: 'fal-ai/ltx-video/v2.3', name: 'LTX-2.3' },
         { id: 'fal-ai/minimax-video/video-01-live', name: 'Minimax Video' },
     ],
     'image-to-video': [
+        { id: 'fal-ai/kling-video/v3/pro/image-to-video', name: 'Kling 3.0 Pro i2v' },
         { id: 'fal-ai/kling-video/v2.5/pro/image-to-video', name: 'Kling 2.5 Pro i2v' },
         { id: 'fal-ai/veo2/image-to-video', name: 'Veo 2 i2v' },
         { id: 'fal-ai/ltx-video/v2.3/image-to-video', name: 'LTX-2.3 i2v' },
