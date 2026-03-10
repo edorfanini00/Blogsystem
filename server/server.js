@@ -154,17 +154,17 @@ function getRedisCredentials() {
     // 1. Explicit REST API env vars (Vercel KV or Upstash)
     const restUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
     const restToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (restUrl && restToken) return { url: restUrl, token: restToken };
+    if (restUrl && restToken) return { url: restUrl.replace(/\/$/, ''), token: restToken, source: 'REST env vars' };
 
     // 2. Parse REDIS_URL (redis://default:TOKEN@HOSTNAME:PORT) → derive REST credentials
     const redisUrl = process.env.REDIS_URL;
     if (redisUrl) {
         try {
             const parsed = new URL(redisUrl);
-            const token = parsed.password;
+            const token = decodeURIComponent(parsed.password);
             const hostname = parsed.hostname;
             if (token && hostname) {
-                return { url: `https://${hostname}`, token };
+                return { url: `https://${hostname}`, token, source: 'REDIS_URL' };
             }
         } catch (e) {
             console.error('Failed to parse REDIS_URL:', e.message);
@@ -178,18 +178,50 @@ const redisCreds = getRedisCredentials();
 const useKV = !!redisCreds;
 
 if (useKV) {
-    console.log(`✅ Redis configured — using ${redisCreds.url} for user storage`);
+    console.log(`✅ Redis configured via ${redisCreds.source} — ${redisCreds.url}`);
 } else if (!isVercel) {
     console.log('ℹ️  Redis not configured — using local users.json for user storage');
 } else {
     console.error('❌ No Redis credentials found. Set REDIS_URL, KV_REST_API_URL/TOKEN, or UPSTASH_REDIS_REST_URL/TOKEN.');
 }
 
+// ─── Direct Upstash REST API (no library needed) ────────────────
+async function redisGet(key) {
+    const res = await fetch(`${redisCreds.url}/get/${key}`, {
+        headers: { Authorization: `Bearer ${redisCreds.token}` },
+        signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Redis GET failed (${res.status}): ${text}`);
+    }
+    const data = await res.json();
+    if (data.result === null) return null;
+    try { return JSON.parse(data.result); } catch { return data.result; }
+}
+
+async function redisSet(key, value) {
+    const res = await fetch(`${redisCreds.url}`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${redisCreds.token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(['SET', key, JSON.stringify(value)]),
+        signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Redis SET failed (${res.status}): ${text}`);
+    }
+    return await res.json();
+}
+
+// ─── User Storage (Redis on Vercel, local JSON fallback) ────────
 async function getUsers() {
     if (useKV) {
-        const { Redis } = await import('@upstash/redis');
-        const redis = new Redis({ url: redisCreds.url, token: redisCreds.token });
-        return (await redis.get('orbit_users')) || [];
+        const users = await redisGet('orbit_users');
+        return users || [];
     }
     try {
         return JSON.parse(readFileSync(usersFile, 'utf-8'));
@@ -198,13 +230,34 @@ async function getUsers() {
 
 async function saveUsers(users) {
     if (useKV) {
-        const { Redis } = await import('@upstash/redis');
-        const redis = new Redis({ url: redisCreds.url, token: redisCreds.token });
-        await redis.set('orbit_users', JSON.stringify(users));
+        await redisSet('orbit_users', users);
     } else {
         writeFileSync(usersFile, JSON.stringify(users, null, 2));
     }
 }
+
+// ─── Redis Connection Test ──────────────────────────────────────
+app.get('/api/test-redis', async (req, res) => {
+    if (!redisCreds) {
+        return res.json({
+            ok: false, error: 'No Redis credentials detected', envVars: {
+                REDIS_URL: !!process.env.REDIS_URL,
+                KV_REST_API_URL: !!process.env.KV_REST_API_URL,
+                UPSTASH_REDIS_REST_URL: !!process.env.UPSTASH_REDIS_REST_URL,
+            }
+        });
+    }
+    try {
+        const pingRes = await fetch(`${redisCreds.url}/ping`, {
+            headers: { Authorization: `Bearer ${redisCreds.token}` },
+            signal: AbortSignal.timeout(5000),
+        });
+        const pingData = await pingRes.json();
+        res.json({ ok: pingRes.ok, source: redisCreds.source, url: redisCreds.url, ping: pingData, status: pingRes.status });
+    } catch (err) {
+        res.json({ ok: false, source: redisCreds.source, url: redisCreds.url, error: err.message });
+    }
+});
 
 app.post('/api/auth/register', async (req, res) => {
     try {
@@ -1788,15 +1841,12 @@ app.get('/api/reddit/callback', async (req, res) => {
             return res.status(500).send('<h2>OAuth Error</h2><p>No Redis credentials configured.</p>');
         }
 
-        const { Redis } = await import('@upstash/redis');
-        const redis = new Redis({ url: redisCreds.url, token: redisCreds.token });
-
-        // Save to Redis database forever
-        await redis.set(`reddit_agent_token:${agentId}`, JSON.stringify({
+        // Save to Redis database
+        await redisSet(`reddit_agent_token:${agentId}`, {
             refresh_token,
             username: redditUsername,
             updatedAt: Date.now()
-        }));
+        });
 
         // Return a script that posts a message back to the main window and closes the popup
         res.send(`
