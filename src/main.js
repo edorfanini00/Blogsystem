@@ -1598,9 +1598,6 @@ const mediaRefImgModern = document.getElementById('mediaRefImgModern');
 const mediaRefClearModern = document.getElementById('mediaRefClearModern');
 
 const mediaPromptModern = document.getElementById('mediaPromptModern');
-const mediaNegativeRow = document.getElementById('mediaNegativeRow');
-const mediaNegativePromptModern = document.getElementById('mediaNegativePromptModern');
-const modNegativeTrigger = document.getElementById('modNegativeTrigger');
 
 const modModelText = document.getElementById('modModelText');
 const modModelOptions = document.getElementById('modModelOptions');
@@ -1717,13 +1714,6 @@ modAudioWrapper.addEventListener('click', () => {
     modAudioText.textContent = isActive ? 'Audio Off' : 'Audio On';
     modAudioWrapper.querySelector('.modern-pill').style.background = isActive ? '' : 'rgba(234, 88, 12, 0.2)';
     modAudioWrapper.querySelector('svg').style.color = isActive ? '' : 'var(--accent-primary)';
-});
-
-// Negative Prompt Toggle
-modNegativeTrigger.addEventListener('click', () => {
-    const isHidden = mediaNegativeRow.style.display === 'none';
-    mediaNegativeRow.style.display = isHidden ? '' : 'none';
-    if (isHidden) mediaNegativePromptModern.focus();
 });
 
 // Auto-expand textarea
