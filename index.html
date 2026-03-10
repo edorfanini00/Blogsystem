@@ -664,22 +664,20 @@
           </div>
         </section>
 
-        <!-- Compact Input Panel (Modern Layout) -->
-        <section class="media-input-modern" id="mediaInputPanelModern">
+        <!-- Dark Floating Input Panel (bottom) -->
+        <div class="media-gen-floating-panel">
 
-          <!-- Left side: Icons for Image vs Video vs Audio -->
-          <div class="media-nav-sidebar">
-            <button type="button" class="nav-icon-btn active" id="btnTypeImage" title="Image Generation">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
+          <!-- Left Column: Type Selector (Image / Video / Audio) -->
+          <div class="media-type-pill">
+            <button type="button" class="type-btn" id="mediaTypeImageBtn" title="Image Mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
                 <polyline points="21 15 16 10 5 21" />
               </svg>
             </button>
-            <button type="button" class="nav-icon-btn" id="btnTypeVideo" title="Video Generation">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
+            <button type="button" class="type-btn active" id="mediaTypeVideoBtn" title="Video Mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
                 <line x1="7" y1="2" x2="7" y2="22" />
                 <line x1="17" y1="2" x2="17" y2="22" />
@@ -690,335 +688,367 @@
                 <line x1="17" y1="17" x2="22" y2="17" />
               </svg>
             </button>
-            <button type="button" class="nav-icon-btn disabled" id="btnTypeAudio"
-              title="Audio Generation (Coming Soon)">
+            <button type="button" class="type-btn" id="mediaTypeAudioBtn" title="Audio Mode">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-                <path
-                  d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+                <path d="M12 4v16" />
+                <path d="M8 8v8" />
+                <path d="M16 8v8" />
+                <path d="M4 11v2" />
+                <path d="M20 11v2" />
               </svg>
             </button>
           </div>
 
-          <!-- Main Input Form Area -->
-          <form id="mediaFormModern" class="media-form-modern">
+          <!-- Main Input Area -->
+          <form id="mediaForm" class="media-gen-main">
 
-            <!-- Top: Image Upload Row -->
-            <div class="media-top-upload-row">
-              <div class="media-upload-box" id="mediaUploadBoxPrimary">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-                <div class="plus-badge">+</div>
-              </div>
-              <svg class="exchange-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="16 3 21 3 21 8" />
-                <line x1="4" y1="14" x2="21" y2="3" />
-                <polyline points="8 21 3 21 3 16" />
-                <line x1="20" y1="10" x2="3" y2="21" />
-              </svg>
-              <!-- Second image box (visual only placeholder for now) -->
-              <div class="media-upload-box inactive">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-                <div class="plus-badge">+</div>
+            <!-- Top Row: Image Uploads & Minimize -->
+            <div class="media-gen-top-row">
+              <div class="media-gen-image-inputs">
+                <input type="file" id="mediaRefInput" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+                <button type="button" class="media-gen-img-square-btn" id="mediaRefTriggerBtn" title="Add Image">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <line x1="12" y1="10" x2="12" y2="16" />
+                    <line x1="9" y1="13" x2="15" y2="13" />
+                  </svg>
+                </button>
+                <div id="mediaRefPreviewMini" style="display:none;" class="media-ref-preview-mini">
+                  <img id="mediaRefImgMini" />
+                  <button type="button" class="media-ref-clear-mini" id="mediaRefClearBtn">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="swap-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 3 21 3 21 8" />
+                    <line x1="4" y1="14" x2="21" y2="3" />
+                    <polyline points="8 21 3 21 3 16" />
+                    <line x1="20" y1="10" x2="3" y2="21" />
+                  </svg>
+                </div>
+
+                <!-- Second Image Upload (UI only for now to match screenshot) -->
+                <button type="button" class="media-gen-img-square-btn view-only-btn" title="Add Style Reference">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <line x1="12" y1="10" x2="12" y2="16" />
+                    <line x1="9" y1="13" x2="15" y2="13" />
+                  </svg>
+                </button>
               </div>
 
-              <!-- Hidden file input & Preview -->
-              <input type="file" id="mediaRefInputModern" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
-              <div class="media-preview-box" id="mediaRefPreviewModern" style="display:none;">
-                <img id="mediaRefImgModern" />
-                <button type="button" class="remove-btn" id="mediaRefClearModern">✕</button>
-              </div>
+              <button type="button" class="media-minimize-btn" title="Minimize">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="5" x2="19" y2="19" />
+                  <polyline points="19 9 19 19 9 19" />
+                </svg>
+              </button>
             </div>
 
-            <!-- Middle: Prompt Area -->
-            <div class="media-prompt-area">
-              <textarea id="mediaPromptModern" rows="1" placeholder="Describe the image you want to create"
-                required></textarea>
+            <!-- Middle Row: Prompt -->
+            <div class="media-gen-middle-row">
+              <div class="media-gen-prompt-wrapper">
+                <textarea id="mediaPrompt" placeholder="Describe the video you want to create" required></textarea>
+              </div>
+              <button type="button" class="media-gen-enhance-btn" title="Enhance prompt">
+                ✨
+                <span style="font-size: 10px; font-weight: bold; margin-left: 2px;">T</span>
+              </button>
             </div>
 
-            <!-- Progress -->
-            <div id="mediaProgressModern" style="display:none; margin-bottom: 12px; padding: 0 12px;">
+            <!-- Internal Progress loader -->
+            <div class="media-gen-progress" id="mediaProgressContainer" style="display:none;">
               <div class="progress-bar-track"
-                style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                <div class="progress-bar-fill" id="mediaProgressFillModern"
-                  style="width:0%; background: linear-gradient(90deg, #f97316, #ea580c); height: 100%;"></div>
+                style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px;">
+                <div class="progress-bar-fill" id="mediaProgressFill"
+                  style="width:0%; background: #fff; height: 100%; border-radius: 2px;"></div>
               </div>
-              <div id="mediaProgressTextModern"
-                style="font-size:0.75rem; color: rgba(255,255,255,0.6); margin-top: 6px;">Submitting to Fal.ai...</div>
+              <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-top: 6px; text-align: center;"
+                id="mediaProgressText">Generating…</div>
             </div>
 
-            <!-- Audio Toggle (Video Only) -->
-            <div class="modern-pill-wrapper" id="modAudioWrapper" style="display:none;">
-              <div class="modern-pill" id="modAudioTrigger">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
-                <span id="modAudioText">Audio</span>
+            <!-- Bottom Row: Settings & Submit -->
+            <div class="media-gen-bottom-row">
+              <div class="media-gen-settings-row">
+                <!-- Model -->
+                <div class="media-gen-pill" id="mediaModelDropdownWrapper">
+                  <div class="media-gen-pill-trigger" id="mediaModelTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                    <span id="mediaModelText">Kling 3.0</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaModelOptions">
+                    <!-- Populated via JS -->
+                  </div>
+                  <input type="hidden" id="mediaModel" required>
+                </div>
+
+                <!-- Aspect Ratio -->
+                <div class="media-gen-pill" id="mediaAspectDropdownWrapper">
+                  <div class="media-gen-pill-trigger" id="mediaAspectTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="6" width="20" height="12" rx="2" />
+                    </svg>
+                    <span id="mediaAspectText">16:9</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaAspectOptions">
+                    <div class="media-gen-option selected" data-value="16:9">16:9</div>
+                    <div class="media-gen-option" data-value="9:16">9:16</div>
+                    <div class="media-gen-option" data-value="1:1">1:1</div>
+                  </div>
+                  <input type="hidden" id="mediaAspect" value="16:9">
+                </div>
+
+                <!-- Audio Toggle (Video Only) -->
+                <div class="media-gen-pill toggleable" id="mediaAudioBtn" style="display:flex;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                  <span>Audio</span>
+                  <input type="hidden" id="mediaAudio" value="false">
+                </div>
+
+                <!-- Duration (Video Only) -->
+                <div class="media-gen-pill" id="mediaDurationDropdownWrapper" style="display:flex;">
+                  <div class="media-gen-pill-trigger" id="mediaDurationTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span id="mediaDurationText">7 sec</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaDurationOptions">
+                    <div class="media-gen-option selected" data-value="7">7 sec</div>
+                    <div class="media-gen-option" data-value="14">14 sec</div>
+                  </div>
+                  <input type="hidden" id="mediaDuration" value="7">
+                </div>
               </div>
+
+              <!-- Submit Button -->
+              <button type="submit" class="media-gen-submit-btn" id="mediaGenerateBtn">
+                <span class="btn-text">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="5 12 12 5 19 12" />
+                  </svg>
+                </span>
+                <span class="btn-loader" style="display:none;"><span class="spinner"
+                    style="border-color: rgba(0,0,0,0.2); border-top-color: #000;"></span></span>
+              </button>
             </div>
 
-            <!-- Duration (Video Only) -->
-            <div class="modern-pill-wrapper" id="modDurationWrapper" style="display:none;">
-              <div class="modern-pill" id="modDurationTrigger">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span id="modDurationText">5 sec</span>
-              </div>
-              <div class="modern-pill-options" id="modDurationOptions">
-                <div class="custom-option selected" data-value="5">5 sec</div>
-                <div class="custom-option" data-value="10">10 sec</div>
-                <div class="custom-option" data-value="15">15 sec</div>
-              </div>
+          </form>
+        </div>
+
+        <!-- History Grid -->
+        <section class="card blog-history-card" id="mediaHistoryCard">
+          <h3>Generation History</h3>
+          <div class="media-history-grid" id="mediaHistoryGrid"></div>
+          <div class="blog-history-empty" id="mediaHistoryEmpty">
+            <div class="empty-icon" style="opacity: 0.5;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
             </div>
+            <h4 style="margin-top: 12px;">No generations yet</h4>
+            <p>Your generated images and videos will appear here</p>
+          </div>
+        </section>
 
-            <!-- Total Duration/Chaining (Video Only) -->
-            <div class="modern-pill-wrapper" id="modTotalDurationWrapper" style="display:none;">
-              <div class="modern-pill" id="modTotalDurationTrigger">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <span id="modTotalDurationText">Single clip</span>
-              </div>
-              <div class="modern-pill-options" id="modTotalDurationOptions">
-                <div class="custom-option selected" data-value="0">Single clip</div>
-                <div class="custom-option" data-value="30">30s (2 clips)</div>
-                <div class="custom-option" data-value="45">45s (3 clips)</div>
-                <div class="custom-option" data-value="60">60s (4 clips)</div>
-              </div>
-            </div>
       </div>
 
-      <button type="submit" class="modern-submit-btn" id="mediaGenerateBtnModern">
-        <span class="btn-text">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="19" x2="12" y2="5" />
-            <polyline points="5 12 12 5 19 12" />
-          </svg>
-        </span>
-        <span class="btn-loader" style="display:none"><span class="spinner-orange"
-            style="width:20px;height:20px;border-width:2px;"></span></span>
-      </button>
-  </div>
-
-  <!-- Hidden Inputs for JS -->
-  <input type="hidden" id="modModel" value="fal-ai/flux/schnell">
-  <input type="hidden" id="modAspect" value="16:9">
-  <input type="hidden" id="modDuration" value="5">
-  <input type="hidden" id="modTotalDuration" value="0">
-  <input type="hidden" id="modAudio" value="false">
-  </form>
-  </section>
-
-  <!-- History Grid -->
-  <section class="card blog-history-card" id="mediaHistoryCard">
-    <h3>Generation History</h3>
-    <div class="media-history-grid" id="mediaHistoryGrid"></div>
-    <div class="blog-history-empty" id="mediaHistoryEmpty">
-      <div class="empty-icon" style="opacity: 0.5;">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-          stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-          <circle cx="8.5" cy="8.5" r="1.5" />
-          <polyline points="21 15 16 10 5 21" />
-        </svg>
-      </div>
-      <h4 style="margin-top: 12px;">No generations yet</h4>
-      <p>Your generated images and videos will appear here</p>
-    </div>
-  </section>
-
-  </div>
-
-  <!-- ═══ PAGE: REDDIT AGENTS ═══ -->
-  <div class="page" id="pageReddit" style="display:none;">
-    <div class="page-header">
-      <div>
-        <h1>Reddit Agents</h1>
-        <p class="subtitle">24/7 autonomous agents that scan Reddit and sell your product.</p>
-      </div>
-      <button class="btn-primary" id="redditCreateAgentBtn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Create Agent
-      </button>
-    </div>
-
-    <!-- Stats Bar -->
-    <div class="bento-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
-      <div class="card stat-card">
-        <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--accent-primary);">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <h4>Posts Scanned</h4>
-          <p class="stat-value" id="redditStatScanned">0</p>
-        </div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <h4>Comments Posted</h4>
-          <p class="stat-value" id="redditStatPosted">0</p>
-        </div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 2L11 13"></path>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <h4>Replies Received</h4>
-          <p class="stat-value" id="redditStatReplies">0</p>
-        </div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <h4>Total Engagement</h4>
-          <p class="stat-value" id="redditStatEngagement">0</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="bento-grid">
-      <!-- Active Agents Management -->
-      <section class="card bento-left" id="redditAgentManagerCard">
-        <h3 class="card-title">Active Agents</h3>
-
-        <div id="redditAgentList">
-          <!-- Rendered via JS -->
-        </div>
-
-        <div class="preview-empty" id="redditNoAgents" style="padding: 32px 16px;">
-          <div class="preview-empty-icon" style="opacity: 0.5;">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path
-                d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
-              <path d="M8 11V15" />
-              <path d="M16 11V15" />
-              <path d="M12 11V15" />
+      <!-- ═══ PAGE: REDDIT AGENTS ═══ -->
+      <div class="page" id="pageReddit" style="display:none;">
+        <div class="page-header">
+          <div>
+            <h1>Reddit Agents</h1>
+            <p class="subtitle">24/7 autonomous agents that scan Reddit and sell your product.</p>
+          </div>
+          <button class="btn-primary" id="redditCreateAgentBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+              <path d="M12 5v14M5 12h14" />
             </svg>
-          </div>
-          <h3 style="margin-top: 16px;">No agents running</h3>
-          <p style="text-align: center; max-width: 250px; margin: 0 auto;">Create an agent to start scanning Reddit
-            for leads automatically.</p>
-        </div>
-
-        <!-- Hidden Agent Creator Form -->
-        <form id="redditAgentForm"
-          style="display:none; margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 24px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h4 style="margin:0;font-size:1.1rem;font-weight:600;color:var(--text-primary);">Configure New Agent
-            </h4>
-            <button type="button" class="btn-small-outline" id="redditCancelAgentBtn">Cancel</button>
-          </div>
-
-          <div class="form-group">
-            <label for="redditAgentName">Agent Name</label>
-            <div class="input-wrapper">
-              <input type="text" id="redditAgentName" placeholder="e.g. ERP Sales Bot" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="redditAgentSubreddits">Target Subreddits (comma separated)</label>
-            <div class="input-wrapper">
-              <input type="text" id="redditAgentSubreddits" placeholder="e.g. compsci, entrepreneur, SaaS" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="redditAgentKeywords">Trigger Keywords (comma separated)</label>
-            <div class="input-wrapper">
-              <input type="text" id="redditAgentKeywords" placeholder="e.g. looking for ERP, inventory management mess"
-                required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="redditAgentPitch">Product Pitch & Instructions</label>
-            <div class="input-wrapper">
-              <textarea id="redditAgentPitch" rows="4"
-                placeholder="Tell the AI what to pitch when it finds a match. e.g. 'I work at Celeritech, we build an ERP for food manu...'"
-                required></textarea>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primary" style="width:100%;">Save & Start Agent</button>
-        </form>
-      </section>
-
-      <!-- Activity Log -->
-      <section class="card bento-right" id="redditActivityCard">
-        <h3 class="card-title">Activity Log</h3>
-        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-          <button class="btn-small-outline" id="redditManualScanBtn" style="width:100%; justify-content:center;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              style="margin-right:6px;">
-              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
-            </svg>
-            Force Scan Now
+            Create Agent
           </button>
         </div>
 
-        <div id="redditActivityLog" class="reddit-timeline">
-          <!-- Logs populated via JS -->
-        </div>
-
-        <div class="preview-empty" id="redditNoActivity">
-          <div class="preview-empty-icon" style="opacity: 0.5;">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
+        <!-- Stats Bar -->
+        <div class="bento-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--accent-primary);">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Posts Scanned</h4>
+              <p class="stat-value" id="redditStatScanned">0</p>
+            </div>
           </div>
-          <h4 style="margin-top: 12px;">No activity yet</h4>
-          <p>Logs will appear here once agents start posting.</p>
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Comments Posted</h4>
+              <p class="stat-value" id="redditStatPosted">0</p>
+            </div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13"></path>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Replies Received</h4>
+              <p class="stat-value" id="redditStatReplies">0</p>
+            </div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Total Engagement</h4>
+              <p class="stat-value" id="redditStatEngagement">0</p>
+            </div>
+          </div>
         </div>
-      </section>
-    </div>
-  </div>
 
-  </main>
+        <div class="bento-grid">
+          <!-- Active Agents Management -->
+          <section class="card bento-left" id="redditAgentManagerCard">
+            <h3 class="card-title">Active Agents</h3>
+
+            <div id="redditAgentList">
+              <!-- Rendered via JS -->
+            </div>
+
+            <div class="preview-empty" id="redditNoAgents" style="padding: 32px 16px;">
+              <div class="preview-empty-icon" style="opacity: 0.5;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path
+                    d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                  <path d="M8 11V15" />
+                  <path d="M16 11V15" />
+                  <path d="M12 11V15" />
+                </svg>
+              </div>
+              <h3 style="margin-top: 16px;">No agents running</h3>
+              <p style="text-align: center; max-width: 250px; margin: 0 auto;">Create an agent to start scanning Reddit
+                for leads automatically.</p>
+            </div>
+
+            <!-- Hidden Agent Creator Form -->
+            <form id="redditAgentForm"
+              style="display:none; margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h4 style="margin:0;font-size:1.1rem;font-weight:600;color:var(--text-primary);">Configure New Agent
+                </h4>
+                <button type="button" class="btn-small-outline" id="redditCancelAgentBtn">Cancel</button>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentName">Agent Name</label>
+                <div class="input-wrapper">
+                  <input type="text" id="redditAgentName" placeholder="e.g. ERP Sales Bot" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentSubreddits">Target Subreddits (comma separated)</label>
+                <div class="input-wrapper">
+                  <input type="text" id="redditAgentSubreddits" placeholder="e.g. compsci, entrepreneur, SaaS" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentKeywords">Trigger Keywords (comma separated)</label>
+                <div class="input-wrapper">
+                  <input type="text" id="redditAgentKeywords"
+                    placeholder="e.g. looking for ERP, inventory management mess" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentPitch">Product Pitch & Instructions</label>
+                <div class="input-wrapper">
+                  <textarea id="redditAgentPitch" rows="4"
+                    placeholder="Tell the AI what to pitch when it finds a match. e.g. 'I work at Celeritech, we build an ERP for food manu...'"
+                    required></textarea>
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" style="width:100%;">Save & Start Agent</button>
+            </form>
+          </section>
+
+          <!-- Activity Log -->
+          <section class="card bento-right" id="redditActivityCard">
+            <h3 class="card-title">Activity Log</h3>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+              <button class="btn-small-outline" id="redditManualScanBtn" style="width:100%; justify-content:center;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  style="margin-right:6px;">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
+                </svg>
+                Force Scan Now
+              </button>
+            </div>
+
+            <div id="redditActivityLog" class="reddit-timeline">
+              <!-- Logs populated via JS -->
+            </div>
+
+            <div class="preview-empty" id="redditNoActivity">
+              <div class="preview-empty-icon" style="opacity: 0.5;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </div>
+              <h4 style="margin-top: 12px;">No activity yet</h4>
+              <p>Logs will appear here once agents start posting.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+    </main>
   </div>
 
   <!-- Delete Confirmation Modal -->
