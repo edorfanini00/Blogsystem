@@ -1665,6 +1665,9 @@ function setupCustomSelect(wrapperId, triggerId, textId, optionsId, inputId) {
 setupCustomSelect('mediaAspectWrapper', 'mediaAspectTrigger', 'mediaAspectText', 'mediaAspectOptions', 'mediaAspect');
 setupCustomSelect('mediaDurationWrapper', 'mediaDurationTrigger', 'mediaDurationText', 'mediaDurationOptions', 'mediaDuration');
 setupCustomSelect('mediaResWrapper', 'mediaResTrigger', 'mediaResText', 'mediaResOptions', 'mediaResolution');
+setupCustomSelect('mediaTotalDurationWrapper', 'mediaTotalDurationTrigger', 'mediaTotalDurationText', 'mediaTotalDurationOptions', 'mediaTotalDuration');
+
+const mediaTotalDurationGroup = document.getElementById('mediaTotalDurationGroup');
 
 // Setup Model Select specifically because options are dynamic
 mediaModelTrigger.addEventListener('click', (e) => {
@@ -1718,6 +1721,7 @@ function updateMediaMode(mode) {
     mediaRefGroup.style.display = needsRef ? '' : 'none';
     mediaDurationGroup.style.display = isVideo ? '' : 'none';
     mediaResGroup.style.display = isVideo ? '' : 'none';
+    mediaTotalDurationGroup.style.display = isVideo ? '' : 'none';
 }
 
 // Mode option clicks
@@ -1766,15 +1770,71 @@ mediaDownloadBtn.addEventListener('click', () => {
 });
 
 // Generate
+// ─── Helper: submit one video/image job and poll until done ──────
+async function submitAndPoll(payload) {
+    const submitRes = await fetch(`${API_BASE}/api/media/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!submitRes.ok) {
+        const err = await submitRes.json();
+        throw new Error(err.error || 'Generation failed');
+    }
+    const { requestId, modelUsed } = await submitRes.json();
+
+    for (let attempt = 0; attempt < 120; attempt++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const statusRes = await fetch(`${API_BASE}/api/media/status/${requestId}?model=${encodeURIComponent(modelUsed)}`);
+        const statusData = await statusRes.json();
+        if (statusData.status === 'COMPLETED') return statusData.result;
+        if (statusData.status === 'FAILED') throw new Error(statusData.error || 'Generation failed');
+    }
+    throw new Error('Generation timed out');
+}
+
+// ─── Helper: extract last frame from video URL as base64 data URL ─
+function extractLastFrame(videoUrl) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
+        video.preload = 'auto';
+        video.muted = true;
+        video.src = videoUrl;
+
+        video.addEventListener('loadedmetadata', () => {
+            // Seek to near the end
+            video.currentTime = Math.max(0, video.duration - 0.1);
+        });
+
+        video.addEventListener('seeked', () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            } catch (err) {
+                reject(new Error('Could not extract last frame: ' + err.message));
+            }
+        });
+
+        video.addEventListener('error', () => reject(new Error('Failed to load video for frame extraction')));
+        video.load();
+    });
+}
+
 mediaForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const prompt = document.getElementById('mediaPrompt').value.trim();
     if (!prompt) return;
 
-    const model = mediaModelSelect.value;
+    const model = mediaModelInput.value;
     const aspectRatio = document.getElementById('mediaAspect').value;
     const duration = document.getElementById('mediaDuration').value;
     const resolution = document.getElementById('mediaResolution').value;
+    const totalDuration = parseInt(document.getElementById('mediaTotalDuration').value) || 0;
     const isVideo = currentMediaMode.includes('video');
     const needsRef = currentMediaMode === 'image-to-image' || currentMediaMode === 'image-to-video';
 
@@ -1783,6 +1843,10 @@ mediaForm.addEventListener('submit', async (e) => {
         return;
     }
 
+    // Calculate number of segments
+    const clipLen = parseInt(duration) || 5;
+    const totalSegments = (isVideo && totalDuration > 0) ? Math.ceil(totalDuration / clipLen) : 1;
+
     // UI: loading
     mediaGenerateBtn.disabled = true;
     mediaGenerateBtn.querySelector('.btn-text').style.display = 'none';
@@ -1790,77 +1854,91 @@ mediaForm.addEventListener('submit', async (e) => {
     mediaEmpty.style.display = 'none';
     mediaResult.style.display = 'none';
     mediaProgressContainer.style.display = '';
-    mediaProgressText.textContent = 'Submitting to Fal.ai…';
-    mediaProgressFill.style.width = '10%';
+    mediaProgressText.textContent = totalSegments > 1
+        ? `Generating segment 1/${totalSegments}…`
+        : 'Submitting to Fal.ai…';
+    mediaProgressFill.style.width = '5%';
 
     try {
-        // Submit job
-        const submitRes = await fetch(`${API_BASE}/api/media/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: currentMediaMode,
-                model,
-                prompt,
-                aspectRatio,
-                duration: isVideo ? parseInt(duration) : undefined,
-                resolution: isVideo ? parseInt(resolution) : undefined,
-                referenceImage: needsRef ? mediaRefDataUrl : undefined,
-            }),
-        });
+        const segmentUrls = [];
+        let currentRefImage = needsRef ? mediaRefDataUrl : undefined;
 
-        if (!submitRes.ok) {
-            const err = await submitRes.json();
-            throw new Error(err.error || 'Generation failed');
-        }
+        // Find a suitable image-to-video model for continuation segments
+        const i2vModels = MEDIA_MODELS['image-to-video'] || [];
+        // Try to find same-series model for i2v, or fall back to first i2v model
+        const modelBase = model.split('/').slice(0, -1).join('/');
+        const continuationModel = i2vModels.find(m => m.id.startsWith(modelBase))?.id || i2vModels[0]?.id || model;
 
-        const { requestId, modelUsed } = await submitRes.json();
-        mediaProgressText.textContent = 'Processing…';
-        mediaProgressFill.style.width = '30%';
+        for (let seg = 0; seg < totalSegments; seg++) {
+            const isFirst = seg === 0;
+            const segPct = (seg / totalSegments) * 100;
 
-        // Poll for result
-        let result = null;
-        for (let attempt = 0; attempt < 120; attempt++) {
-            await new Promise(r => setTimeout(r, 3000));
-
-            const statusRes = await fetch(`${API_BASE}/api/media/status/${requestId}?model=${encodeURIComponent(modelUsed)}`);
-            const statusData = await statusRes.json();
-
-            if (statusData.status === 'COMPLETED') {
-                result = statusData.result;
-                break;
-            } else if (statusData.status === 'FAILED') {
-                throw new Error(statusData.error || 'Generation failed');
+            if (totalSegments > 1) {
+                mediaProgressText.textContent = `Generating segment ${seg + 1}/${totalSegments}…`;
+                mediaProgressFill.style.width = `${Math.max(5, segPct)}%`;
             }
 
-            // Update progress
-            const pct = Math.min(30 + attempt * 2, 90);
-            mediaProgressFill.style.width = `${pct}%`;
-            mediaProgressText.textContent = `Processing (${statusData.status})…`;
-        }
+            // Determine mode and model for this segment
+            let segMode = isFirst ? currentMediaMode : 'image-to-video';
+            let segModel = isFirst ? model : continuationModel;
+            let segRef = isFirst ? currentRefImage : currentRefImage;
 
-        if (!result) throw new Error('Generation timed out');
+            const payload = {
+                mode: segMode,
+                model: segModel,
+                prompt: isFirst ? prompt : `Continue the scene smoothly: ${prompt}`,
+                aspectRatio,
+                duration: isVideo ? clipLen : undefined,
+                resolution: isVideo ? parseInt(resolution) : undefined,
+                referenceImage: (segMode === 'image-to-image' || segMode === 'image-to-video') ? segRef : undefined,
+            };
+
+            const result = await submitAndPoll(payload);
+            const url = isVideo ? (result.video?.url || result.url) : (result.images?.[0]?.url || result.url);
+
+            if (!url) throw new Error(`Segment ${seg + 1} returned no URL`);
+            segmentUrls.push(url);
+
+            // Extract last frame for next segment
+            if (isVideo && seg < totalSegments - 1) {
+                mediaProgressText.textContent = `Extracting last frame from segment ${seg + 1}…`;
+                currentRefImage = await extractLastFrame(url);
+            }
+        }
 
         mediaProgressFill.style.width = '100%';
         mediaProgressText.textContent = 'Done!';
 
-        // Display result
-        const url = isVideo ? (result.video?.url || result.url) : (result.images?.[0]?.url || result.url);
-        lastMediaResultUrl = url;
+        // Display result(s)
         lastMediaIsVideo = isVideo;
 
-        if (isVideo) {
+        if (isVideo && segmentUrls.length > 1) {
+            // Show all segments as a playlist
+            lastMediaResultUrl = segmentUrls[0];
+            mediaResultContent.innerHTML = segmentUrls.map((url, i) => `
+                <div style="margin-bottom:12px;">
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Segment ${i + 1}/${segmentUrls.length}</div>
+                    <video src="${url}" controls ${i === 0 ? 'autoplay' : ''} style="width:100%;border-radius:8px;"></video>
+                </div>
+            `).join('');
+        } else if (isVideo) {
+            const url = segmentUrls[0];
+            lastMediaResultUrl = url;
             mediaResultContent.innerHTML = `<video src="${url}" controls autoplay style="width:100%;border-radius:8px;"></video>`;
         } else {
+            const url = segmentUrls[0];
+            lastMediaResultUrl = url;
             mediaResultContent.innerHTML = `<img src="${url}" alt="${prompt}" style="width:100%;border-radius:8px;" />`;
         }
+
         mediaResult.style.display = '';
         mediaProgressContainer.style.display = 'none';
-        showToast(`${isVideo ? 'Video' : 'Image'} generated!`);
+        const label = isVideo ? (segmentUrls.length > 1 ? `${segmentUrls.length}-segment video` : 'Video') : 'Image';
+        showToast(`${label} generated!`);
 
         // Save to history
         const history = JSON.parse(localStorage.getItem('orbit_media_history') || '[]');
-        history.unshift({ url, prompt: prompt.slice(0, 60), mode: currentMediaMode, model, ts: Date.now() });
+        history.unshift({ url: segmentUrls[0], prompt: prompt.slice(0, 60), mode: currentMediaMode, model, ts: Date.now(), segments: segmentUrls.length > 1 ? segmentUrls : undefined });
         if (history.length > 50) history.pop();
         localStorage.setItem('orbit_media_history', JSON.stringify(history));
         renderMediaHistory();

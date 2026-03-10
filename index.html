@@ -795,9 +795,9 @@
                 <input type="hidden" id="mediaAspect" value="1:1">
               </div>
 
-              <!-- Video Duration (for video modes) -->
+              <!-- Video Segment Duration (for video modes) -->
               <div class="form-group" id="mediaDurationGroup" style="display:none; position: relative;">
-                <label>Video Duration</label>
+                <label>Clip Length</label>
                 <div class="custom-select-wrapper" id="mediaDurationWrapper">
                   <div class="custom-select-trigger" id="mediaDurationTrigger">
                     <span id="mediaDurationText">5 seconds</span>
@@ -812,6 +812,28 @@
                   </div>
                 </div>
                 <input type="hidden" id="mediaDuration" value="5">
+              </div>
+
+              <!-- Total Duration / Chaining (for video modes) -->
+              <div class="form-group" id="mediaTotalDurationGroup" style="display:none; position: relative;">
+                <label>Total Duration <small style="color:var(--text-muted);">(chains clips
+                    automatically)</small></label>
+                <div class="custom-select-wrapper" id="mediaTotalDurationWrapper">
+                  <div class="custom-select-trigger" id="mediaTotalDurationTrigger">
+                    <span id="mediaTotalDurationText">Single clip</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round" class="caret" style="color: var(--text-muted);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="custom-select-options" id="mediaTotalDurationOptions">
+                    <div class="custom-option selected" data-value="0">Single clip</div>
+                    <div class="custom-option" data-value="30">30 seconds (2 clips)</div>
+                    <div class="custom-option" data-value="45">45 seconds (3 clips)</div>
+                    <div class="custom-option" data-value="60">60 seconds (4 clips)</div>
+                  </div>
+                </div>
+                <input type="hidden" id="mediaTotalDuration" value="0">
               </div>
 
               <!-- Resolution -->
