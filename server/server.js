@@ -10,6 +10,7 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob';
 const require = createRequire(import.meta.url);
 let pdfParse;
 try { pdfParse = require('pdf-parse'); } catch { pdfParse = null; }
@@ -1660,6 +1661,30 @@ Return this exact JSON structure:
         };
     }
 }
+
+// ─── POST /api/media/upload-token (Vercel Blob) ─────────────
+app.post('/api/media/upload-token', async (req, res) => {
+    try {
+        const { filename, contentType } = req.body;
+        if (!filename) return res.status(400).json({ error: 'Filename is required' });
+
+        if (!process.env.BLOB_READ_WRITE_TOKEN) {
+            return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is missing' });
+        }
+
+        const token = await generateClientTokenFromReadWriteToken({
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+            pathname: `orbit-media/${Date.now()}-${filename}`,
+            maximumSizeInBytes: 50 * 1024 * 1024, // 50MB
+            // Not setting onUploadCompleted because we just need the clientToken to perform the upload immediately.
+        });
+
+        res.json({ clientToken: token });
+    } catch (e) {
+        console.error('Blob Token Error:', e);
+        res.status(500).json({ error: 'Failed to generate upload token', details: e.message });
+    }
+});
 
 // ─── POST /api/media/generate (Fal.ai queue submit) ─────────────
 app.post('/api/media/generate', async (req, res) => {

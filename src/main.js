@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { put } from '@vercel/blob/client';
 
 // ─── DOM Elements ────────────────────────────────────────────────
 const blogForm = document.getElementById('blogForm');
@@ -1996,8 +1997,50 @@ async function handleMediaGeneration(e) {
         prompt,
         mode: inferredMode,
         aspectRatio: mediaAspectHidden.value || '16:9',
-        referenceImageUrl: mediaRefImgMini.src && mediaRefImgMini.src.startsWith('data:') ? mediaRefImgMini.src : null, // Assuming you upload base64 or upload it first
     };
+
+    // If an image is selected, upload to Vercel Blob instead of base64
+    if (mediaRefInput.files && mediaRefInput.files[0]) {
+        mediaProgressText.textContent = 'Uploading high-res image to Blob store...';
+        try {
+            const file = mediaRefInput.files[0];
+            const tokenRes = await fetch(`${API_BASE}/api/media/upload-token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.name, contentType: file.type })
+            });
+
+            if (!tokenRes.ok) throw new Error('Failed to get secure upload token');
+
+            const { clientToken } = await tokenRes.json();
+            if (!clientToken) throw new Error('Server returned empty Blob token. Please verify Vercel Blob is connected.');
+
+            mediaProgressText.textContent = 'Transferring file to cloud...';
+            const blob = await put(`orbit-media/${Date.now()}-${file.name}`, file, {
+                access: 'public',
+                token: clientToken,
+            });
+
+            requestData.referenceImageUrl = blob.url;
+
+            // Re-assign the miniature preview to the fast cloud URL and clear the file 
+            // so we don't redundantly re-upload it if they click "Generate" again.
+            mediaRefImgMini.src = blob.url;
+            mediaRefInput.value = '';
+        } catch (uploadErr) {
+            console.error('Blob Upload Error:', uploadErr);
+            showToast('Cloud upload failed: ' + uploadErr.message, 'error');
+            resetMediaBtn();
+            return;
+        }
+    } else if (mediaRefImgMini.src && mediaRefImgMini.src.startsWith('http')) {
+        // Fallback or reusing already uploaded URL
+        requestData.referenceImageUrl = mediaRefImgMini.src;
+    } else if (mediaRefImgMini.src && mediaRefImgMini.src.startsWith('data:')) {
+        // We shouldn't hit this normally if they just uploaded, but as a fallback
+        requestData.referenceImageUrl = mediaRefImgMini.src;
+    }
+
 
     if (isVideo || inferredMode === 'image-to-video' || inferredMode === 'text-to-video') {
         requestData.duration = mediaDurationHidden.value || '5';
