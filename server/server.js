@@ -1727,6 +1727,20 @@ app.post('/api/media/generate', async (req, res) => {
             }
         }
 
+        // Final payload sanitization based on model strictness
+        if (model.includes('sora')) {
+            // Sora primarily accepts 'prompt'. It often rejects 'aspect_ratio', 'duration', 'generate_audio'
+            delete input.aspect_ratio;
+            delete input.duration;
+            delete input.generate_audio;
+            // Also it's usually "image_url" for standard fal i2v, but Sora might use something else or only text.
+            // If image-to-video fails with Sora, we may need to drop image_url too, but we will leave it for now.
+        } else if (model.includes('veo2')) {
+            // Veo accepts prompt, image_url, and aspect_ratio. It strictly rejects duration and generate_audio strings.
+            delete input.duration;
+            delete input.generate_audio;
+        }
+
         console.log(`   Payload keys: ${Object.keys(input).join(', ')}`);
 
         // Submit to fal.ai queue
@@ -1745,8 +1759,16 @@ app.post('/api/media/generate', async (req, res) => {
             return res.status(queueRes.status).json({ error: `Fal.ai: ${errText.slice(0, 200)}` });
         }
 
-        const queueData = await queueRes.json();
-        console.log(`   Queued: ${queueData.request_id}`);
+        const resText = await queueRes.text();
+        let queueData;
+        try {
+            queueData = JSON.parse(resText);
+        } catch (parseErr) {
+            console.error(`Fal.ai non-JSON response: ${resText.slice(0, 200)}`);
+            return res.status(500).json({ error: `Fal.ai invalid response: ${resText.slice(0, 100)}` });
+        }
+
+        console.log(`   Queued: ${queueData.request_id || 'unknown'}`);
         res.json({ requestId: queueData.request_id, modelUsed: model });
     } catch (err) {
         console.error('Media generate error:', err);
@@ -1768,15 +1790,40 @@ app.get('/api/media/status/:requestId', async (req, res) => {
             headers: { 'Authorization': `Key ${falKey}` },
         });
 
-        if (!statusRes.ok) return res.status(statusRes.status).json({ error: 'Status check failed' });
+        if (!statusRes.ok) {
+            const errText = await statusRes.text();
+            console.error(`Fal.ai status error: ${statusRes.status} ${errText.slice(0, 200)}`);
+            return res.status(statusRes.status).json({ error: `Status check failed: ${errText.slice(0, 100)}` });
+        }
 
-        const statusData = await statusRes.json();
+        const statusRawText = await statusRes.text();
+        let statusData;
+        try {
+            statusData = JSON.parse(statusRawText);
+        } catch (e) {
+            console.error(`Fal.ai non-JSON status response: ${statusRawText.slice(0, 200)}`);
+            return res.status(500).json({ error: 'Invalid status response format' });
+        }
 
         if (statusData.status === 'COMPLETED') {
             const resultRes = await fetch(`https://queue.fal.run/${model}/requests/${requestId}`, {
                 headers: { 'Authorization': `Key ${falKey}` },
             });
-            const result = await resultRes.json();
+
+            if (!resultRes.ok) {
+                const resErr = await resultRes.text();
+                return res.status(resultRes.status).json({ error: `Result fetch failed: ${resErr.slice(0, 100)}` });
+            }
+
+            const resultRaw = await resultRes.text();
+            let result;
+            try {
+                result = JSON.parse(resultRaw);
+            } catch (e) {
+                console.error(`Fal.ai non-JSON result response: ${resultRaw.slice(0, 200)}`);
+                return res.status(500).json({ error: 'Invalid result format' });
+            }
+
             return res.json({ status: 'COMPLETED', result });
         }
 
