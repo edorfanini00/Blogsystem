@@ -1667,8 +1667,11 @@ app.post('/api/media/generate', async (req, res) => {
         const falKey = process.env.FAL_KEY;
         if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
 
-        const { mode, model, prompt, aspectRatio, duration, resolution, referenceImage, generate_audio, negative_prompt } = req.body;
+        const { mode, model, prompt, aspectRatio, duration, resolution, referenceImage, referenceImageUrl, generate_audio, audio, negative_prompt } = req.body;
         if (!prompt || !model) return res.status(400).json({ error: 'Prompt and model are required' });
+
+        const actualRefImage = referenceImage || referenceImageUrl;
+        const actualGenerateAudio = generate_audio !== undefined ? generate_audio : audio;
 
         console.log(`🎬 Media generation: ${mode} with ${model}`);
 
@@ -1713,17 +1716,17 @@ app.post('/api/media/generate', async (req, res) => {
             } else {
                 // Default/Kling settings
                 if (duration) input.duration = String(duration).replace(/[^0-9]/g, '');
-                if (generate_audio === true) input.generate_audio = true;
+                if (actualGenerateAudio === true) input.generate_audio = true;
             }
 
             // Reference image for all models that support image-to-video
-            if (referenceImage && (mode === 'image-to-image' || mode === 'image-to-video')) {
-                if (!input.image_url) input.image_url = referenceImage; // Veo2 might use specific key, image_url is standard for fal i2v
+            if (actualRefImage && (mode === 'image-to-image' || mode === 'image-to-video')) {
+                if (!input.image_url) input.image_url = actualRefImage; // Veo2 might use specific key, image_url is standard for fal i2v
             }
         } else {
             // Reference image for i2i
-            if (referenceImage && mode === 'image-to-image') {
-                input.image_url = referenceImage;
+            if (actualRefImage && mode === 'image-to-image') {
+                input.image_url = actualRefImage;
             }
         }
 

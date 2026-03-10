@@ -2011,8 +2011,24 @@ async function handleMediaGeneration(e) {
             body: JSON.stringify(requestData)
         });
 
+        if (!res.ok) {
+            let errText = await res.text();
+            if (res.status === 413) {
+                throw new Error('Image is too large. Vercel allows max 4.5MB.');
+            }
+            try {
+                const parsed = JSON.parse(errText);
+                throw new Error(parsed.error || 'Server error');
+            } catch (e) {
+                // Not JSON (e.g., Vercel 502/504 HTML screen)
+                throw new Error(`Server returned ${res.status}: ${errText.slice(0, 100)}`);
+            }
+        }
+
         const data = await res.json();
-        if (!data.success) throw new Error(data.error);
+        if (!data.success && data.error) {
+            throw new Error(data.error);
+        }
 
         mediaProgressFill.style.width = '30%';
         mediaProgressText.textContent = 'Generating...';
