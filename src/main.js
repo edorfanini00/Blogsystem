@@ -1584,53 +1584,59 @@ const MODE_LABELS = {
     },
 };
 
-let currentMediaMode = 'text-to-image';
+let currentMediaCategory = 'image'; // 'image' or 'video'
 let mediaRefDataUrl = null;
 
-// DOM
-const mediaModelWrapper = document.getElementById('mediaModelWrapper');
-const mediaModelTrigger = document.getElementById('mediaModelTrigger');
-const mediaModelText = document.getElementById('mediaModelText');
-const mediaModelOptions = document.getElementById('mediaModelOptions');
-const mediaModelInput = document.getElementById('mediaModel');
+// Modern DOM Elements
+const btnTypeImage = document.getElementById('btnTypeImage');
+const btnTypeVideo = document.getElementById('btnTypeVideo');
 
-const mediaRefGroup = document.getElementById('mediaRefGroup');
-const mediaDurationGroup = document.getElementById('mediaDurationGroup');
-const mediaResGroup = document.getElementById('mediaResGroup');
-const mediaActiveModeIcon = document.getElementById('mediaActiveModeIcon');
-const mediaActiveModeText = document.getElementById('mediaActiveModeText');
-const mediaForm = document.getElementById('mediaForm');
-const mediaGenerateBtn = document.getElementById('mediaGenerateBtn');
-const mediaProgressContainer = document.getElementById('mediaProgressContainer');
-const mediaProgressText = document.getElementById('mediaProgressText');
-const mediaProgressFill = document.getElementById('mediaProgressFill');
+const mediaUploadBoxPrimary = document.getElementById('mediaUploadBoxPrimary');
+const mediaRefInputModern = document.getElementById('mediaRefInputModern');
+const mediaRefPreviewModern = document.getElementById('mediaRefPreviewModern');
+const mediaRefImgModern = document.getElementById('mediaRefImgModern');
+const mediaRefClearModern = document.getElementById('mediaRefClearModern');
+
+const mediaPromptModern = document.getElementById('mediaPromptModern');
+const mediaNegativeRow = document.getElementById('mediaNegativeRow');
+const mediaNegativePromptModern = document.getElementById('mediaNegativePromptModern');
+const modNegativeTrigger = document.getElementById('modNegativeTrigger');
+
+const modModelText = document.getElementById('modModelText');
+const modModelOptions = document.getElementById('modModelOptions');
+const modModel = document.getElementById('modModel');
+
+const modDurationWrapper = document.getElementById('modDurationWrapper');
+const modTotalDurationWrapper = document.getElementById('modTotalDurationWrapper');
+const modAudioWrapper = document.getElementById('modAudioWrapper');
+const modAudioText = document.getElementById('modAudioText');
+const modAudio = document.getElementById('modAudio');
+
+const mediaFormModern = document.getElementById('mediaFormModern');
+const mediaGenerateBtnModern = document.getElementById('mediaGenerateBtnModern');
+const mediaProgressModern = document.getElementById('mediaProgressModern');
+const mediaProgressFillModern = document.getElementById('mediaProgressFillModern');
+const mediaProgressTextModern = document.getElementById('mediaProgressTextModern');
+
 const mediaEmpty = document.getElementById('mediaEmpty');
 const mediaResult = document.getElementById('mediaResult');
 const mediaResultContent = document.getElementById('mediaResultContent');
 const mediaDownloadBtn = document.getElementById('mediaDownloadBtn');
 const mediaHistoryGrid = document.getElementById('mediaHistoryGrid');
 const mediaHistoryEmpty = document.getElementById('mediaHistoryEmpty');
-const mediaRefUploadArea = document.getElementById('mediaRefUploadArea');
-const mediaRefInput = document.getElementById('mediaRefInput');
-const mediaRefPromptEl = document.getElementById('mediaRefPromptEl');
-const mediaRefPreview = document.getElementById('mediaRefPreview');
-const mediaRefImg = document.getElementById('mediaRefImg');
-const mediaRefClear = document.getElementById('mediaRefClear');
 
-// Helper for generic custom selects
-function setupCustomSelect(wrapperId, triggerId, textId, optionsId, inputId) {
+// Generic Modern Select Helper
+function setupModernSelect(wrapperId, triggerId, textId, optionsId, inputId) {
     const wrapper = document.getElementById(wrapperId);
+    if (!wrapper) return;
     const trigger = document.getElementById(triggerId);
     const text = document.getElementById(textId);
     const options = document.getElementById(optionsId);
     const input = document.getElementById(inputId);
 
-    if (!wrapper) return;
-
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Close others
-        document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+        document.querySelectorAll('.modern-pill-wrapper.open').forEach(w => {
             if (w !== wrapper) w.classList.remove('open');
         });
         wrapper.classList.toggle('open');
@@ -1639,115 +1645,113 @@ function setupCustomSelect(wrapperId, triggerId, textId, optionsId, inputId) {
     options.addEventListener('click', (e) => {
         const option = e.target.closest('.custom-option');
         if (!option) return;
-
         input.value = option.getAttribute('data-value');
         text.textContent = option.textContent;
-
         options.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
         option.classList.add('selected');
         wrapper.classList.remove('open');
     });
 
     document.addEventListener('click', (e) => {
-        if (!wrapper.contains(e.target)) {
-            wrapper.classList.remove('open');
-        }
+        if (!wrapper.contains(e.target)) wrapper.classList.remove('open');
     });
 }
 
-setupCustomSelect('mediaAspectWrapper', 'mediaAspectTrigger', 'mediaAspectText', 'mediaAspectOptions', 'mediaAspect');
-setupCustomSelect('mediaDurationWrapper', 'mediaDurationTrigger', 'mediaDurationText', 'mediaDurationOptions', 'mediaDuration');
-setupCustomSelect('mediaResWrapper', 'mediaResTrigger', 'mediaResText', 'mediaResOptions', 'mediaResolution');
-setupCustomSelect('mediaTotalDurationWrapper', 'mediaTotalDurationTrigger', 'mediaTotalDurationText', 'mediaTotalDurationOptions', 'mediaTotalDuration');
+setupModernSelect('modAspectWrapper', 'modAspectTrigger', 'modAspectText', 'modAspectOptions', 'modAspect');
+setupModernSelect('modDurationWrapper', 'modDurationTrigger', 'modDurationText', 'modDurationOptions', 'modDuration');
+setupModernSelect('modTotalDurationWrapper', 'modTotalDurationTrigger', 'modTotalDurationText', 'modTotalDurationOptions', 'modTotalDuration');
 
-const mediaTotalDurationGroup = document.getElementById('mediaTotalDurationGroup');
-
-// Setup Model Select specifically because options are dynamic
-mediaModelTrigger.addEventListener('click', (e) => {
+// Custom Model Select Setup
+const modModelWrapper = document.getElementById('modModelWrapper');
+const modModelTrigger = document.getElementById('modModelTrigger');
+modModelTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-        if (w !== mediaModelWrapper) w.classList.remove('open');
+    document.querySelectorAll('.modern-pill-wrapper.open').forEach(w => {
+        if (w !== modModelWrapper) w.classList.remove('open');
     });
-    mediaModelWrapper.classList.toggle('open');
+    modModelWrapper.classList.toggle('open');
 });
-document.addEventListener('click', (e) => {
-    if (!mediaModelWrapper.contains(e.target)) mediaModelWrapper.classList.remove('open');
-});
-mediaModelOptions.addEventListener('click', (e) => {
+modModelOptions.addEventListener('click', (e) => {
     const option = e.target.closest('.custom-option');
     if (!option) return;
-
-    mediaModelInput.value = option.getAttribute('data-value');
-    mediaModelText.textContent = option.textContent;
-
-    mediaModelOptions.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
+    modModel.value = option.getAttribute('data-value');
+    modModelText.textContent = option.textContent;
+    modModelOptions.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
     option.classList.add('selected');
-    mediaModelWrapper.classList.remove('open');
+    modModelWrapper.classList.remove('open');
+});
+document.addEventListener('click', (e) => {
+    if (!modModelWrapper.contains(e.target)) modModelWrapper.classList.remove('open');
 });
 
-function updateMediaMode(mode) {
-    currentMediaMode = mode;
-    const label = MODE_LABELS[mode];
-    mediaActiveModeIcon.innerHTML = label.icon;
-    mediaActiveModeText.textContent = label.text;
+// Category Toggle
+function setMediaCategory(cat) {
+    currentMediaCategory = cat;
+    btnTypeImage.classList.toggle('active', cat === 'image');
+    btnTypeVideo.classList.toggle('active', cat === 'video');
 
-    // Update active class on options
-    document.querySelectorAll('.media-mode-option').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.mode === mode);
-    });
+    const isVideo = cat === 'video';
+    modDurationWrapper.style.display = isVideo ? '' : 'none';
+    modTotalDurationWrapper.style.display = isVideo ? '' : 'none';
+    modAudioWrapper.style.display = isVideo ? '' : 'none';
 
-    // Populate dynamic model custom options
-    const models = MEDIA_MODELS[mode];
-    mediaModelOptions.innerHTML = models.map((m, i) =>
+    // Populate Models
+    const models = isVideo ? MEDIA_MODELS['text-to-video'] : MEDIA_MODELS['text-to-image'];
+    modModelOptions.innerHTML = models.map((m, i) =>
         `<div class="custom-option ${i === 0 ? 'selected' : ''}" data-value="${m.id}">${m.name}</div>`
     ).join('');
 
-    // Set default model value
     if (models.length > 0) {
-        mediaModelInput.value = models[0].id;
-        mediaModelText.textContent = models[0].name;
+        modModel.value = models[0].id;
+        modModelText.textContent = models[0].name;
     }
-
-    // Show/hide fields
-    const needsRef = mode === 'image-to-image' || mode === 'image-to-video';
-    const isVideo = mode === 'text-to-video' || mode === 'image-to-video';
-    mediaRefGroup.style.display = needsRef ? '' : 'none';
-    mediaDurationGroup.style.display = isVideo ? '' : 'none';
-    mediaResGroup.style.display = isVideo ? '' : 'none';
-    mediaTotalDurationGroup.style.display = isVideo ? '' : 'none';
 }
+btnTypeImage.addEventListener('click', () => setMediaCategory('image'));
+btnTypeVideo.addEventListener('click', () => setMediaCategory('video'));
+setMediaCategory('image'); // Init
 
-// Mode option clicks
-document.querySelectorAll('.media-mode-option').forEach(opt => {
-    opt.addEventListener('click', () => updateMediaMode(opt.dataset.mode));
+// Audio Toggle
+modAudioWrapper.addEventListener('click', () => {
+    const isActive = modAudio.value === 'true';
+    modAudio.value = isActive ? 'false' : 'true';
+    modAudioText.textContent = isActive ? 'Audio Off' : 'Audio On';
+    modAudioWrapper.querySelector('.modern-pill').style.background = isActive ? '' : 'rgba(234, 88, 12, 0.2)';
+    modAudioWrapper.querySelector('svg').style.color = isActive ? '' : 'var(--accent-primary)';
 });
 
-// Initialize
-updateMediaMode('text-to-image');
-
-// Reference image upload
-mediaRefUploadArea.addEventListener('click', (e) => {
-    if (e.target.closest('#mediaRefClear')) return;
-    mediaRefInput.click();
+// Negative Prompt Toggle
+modNegativeTrigger.addEventListener('click', () => {
+    const isHidden = mediaNegativeRow.style.display === 'none';
+    mediaNegativeRow.style.display = isHidden ? '' : 'none';
+    if (isHidden) mediaNegativePromptModern.focus();
 });
-mediaRefInput.addEventListener('change', () => {
-    const file = mediaRefInput.files[0];
+
+// Auto-expand textarea
+mediaPromptModern.addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+});
+
+// Image Upload Handling
+mediaUploadBoxPrimary.addEventListener('click', () => mediaRefInputModern.click());
+mediaRefInputModern.addEventListener('change', () => {
+    const file = mediaRefInputModern.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
         mediaRefDataUrl = reader.result;
-        mediaRefImg.src = mediaRefDataUrl;
-        mediaRefPromptEl.style.display = 'none';
-        mediaRefPreview.style.display = '';
+        mediaRefImgModern.src = mediaRefDataUrl;
+        mediaUploadBoxPrimary.style.display = 'none';
+        mediaRefPreviewModern.style.display = '';
     };
     reader.readAsDataURL(file);
-    mediaRefInput.value = '';
+    mediaRefInputModern.value = '';
 });
-mediaRefClear.addEventListener('click', (e) => {
+mediaRefClearModern.addEventListener('click', (e) => {
     e.stopPropagation();
     mediaRefDataUrl = null;
-    mediaRefPromptEl.style.display = '';
-    mediaRefPreview.style.display = 'none';
+    mediaUploadBoxPrimary.style.display = '';
+    mediaRefPreviewModern.style.display = 'none';
 });
 
 // Last result for download
@@ -1762,8 +1766,7 @@ mediaDownloadBtn.addEventListener('click', () => {
     a.click();
 });
 
-// Generate
-// ─── Helper: submit one video/image job and poll until done ──────
+// Generate Request Logic
 async function submitAndPoll(payload) {
     const submitRes = await fetch(`${API_BASE}/api/media/generate`, {
         method: 'POST',
@@ -1788,7 +1791,6 @@ async function submitAndPoll(payload) {
     throw new Error('Generation timed out');
 }
 
-// ─── Helper: extract last frame from video URL as base64 data URL ─
 function extractLastFrame(videoUrl) {
     return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -1796,157 +1798,139 @@ function extractLastFrame(videoUrl) {
         video.preload = 'auto';
         video.muted = true;
         video.src = videoUrl;
-
-        video.addEventListener('loadedmetadata', () => {
-            // Seek to near the end
-            video.currentTime = Math.max(0, video.duration - 0.1);
-        });
-
+        video.addEventListener('loadedmetadata', () => video.currentTime = Math.max(0, video.duration - 0.1));
         video.addEventListener('seeked', () => {
             try {
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
+                canvas.getContext('2d').drawImage(video, 0, 0);
                 resolve(canvas.toDataURL('image/png'));
-            } catch (err) {
-                reject(new Error('Could not extract last frame: ' + err.message));
-            }
+            } catch (err) { reject(new Error('Could not extract frame: ' + err.message)); }
         });
-
-        video.addEventListener('error', () => reject(new Error('Failed to load video for frame extraction')));
+        video.addEventListener('error', () => reject(new Error('Failed to load video')));
         video.load();
     });
 }
 
-mediaForm.addEventListener('submit', async (e) => {
+mediaFormModern.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const prompt = document.getElementById('mediaPrompt').value.trim();
+    const prompt = mediaPromptModern.value.trim();
     if (!prompt) return;
 
-    const model = mediaModelInput.value;
-    const aspectRatio = document.getElementById('mediaAspect').value;
-    const duration = document.getElementById('mediaDuration').value;
-    const resolution = document.getElementById('mediaResolution').value;
-    const totalDuration = parseInt(document.getElementById('mediaTotalDuration').value) || 0;
-    const isVideo = currentMediaMode.includes('video');
-    const needsRef = currentMediaMode === 'image-to-image' || currentMediaMode === 'image-to-video';
+    let modelId = modModel.value;
+    const aspectRatio = document.getElementById('modAspect').value;
+    const duration = document.getElementById('modDuration').value;
+    const totalDuration = parseInt(document.getElementById('modTotalDuration').value) || 0;
+    const hasAudio = modAudio.value === 'true';
+    const negativePrompt = mediaNegativePromptModern.value.trim();
 
-    if (needsRef && !mediaRefDataUrl) {
-        showToast('Please upload a reference image', 'error');
-        return;
+    const isVideo = currentMediaCategory === 'video';
+    // Dynamically decide if to use image-to-* model ID based on upload
+    const computedMode = isVideo
+        ? (mediaRefDataUrl ? 'image-to-video' : 'text-to-video')
+        : (mediaRefDataUrl ? 'image-to-image' : 'text-to-image');
+
+    // If they provided an image, we must ensure we use the image-to-* version of the model if applicable
+    if (mediaRefDataUrl && isVideo) {
+        const i2vModels = MEDIA_MODELS['image-to-video'] || [];
+        const base = modelId.split('/').slice(0, -1).join('/'); // 'fal-ai/kling-video/v3/pro'
+        modelId = i2vModels.find(m => m.id.startsWith(base))?.id || i2vModels[0]?.id || modelId;
     }
 
-    // Calculate number of segments
     const clipLen = parseInt(duration) || 5;
     const totalSegments = (isVideo && totalDuration > 0) ? Math.ceil(totalDuration / clipLen) : 1;
 
-    // UI: loading
-    mediaGenerateBtn.disabled = true;
-    mediaGenerateBtn.querySelector('.btn-text').style.display = 'none';
-    mediaGenerateBtn.querySelector('.btn-loader').style.display = 'inline-flex';
+    // UI Feedback
+    mediaGenerateBtnModern.disabled = true;
+    mediaGenerateBtnModern.querySelector('.btn-text').style.display = 'none';
+    mediaGenerateBtnModern.querySelector('.btn-loader').style.display = 'inline-flex';
     mediaEmpty.style.display = 'none';
     mediaResult.style.display = 'none';
-    mediaProgressContainer.style.display = '';
-    mediaProgressText.textContent = totalSegments > 1
-        ? `Generating segment 1/${totalSegments}…`
-        : 'Submitting to Fal.ai…';
-    mediaProgressFill.style.width = '5%';
+    mediaProgressModern.style.display = '';
+    mediaProgressTextModern.textContent = totalSegments > 1 ? `Generating segment 1/${totalSegments}…` : 'Submitting to Fal.ai…';
+    mediaProgressFillModern.style.width = '10%';
 
     try {
         const segmentUrls = [];
-        let currentRefImage = needsRef ? mediaRefDataUrl : undefined;
-
-        // Find a suitable image-to-video model for continuation segments
-        const i2vModels = MEDIA_MODELS['image-to-video'] || [];
-        // Try to find same-series model for i2v, or fall back to first i2v model
-        const modelBase = model.split('/').slice(0, -1).join('/');
-        const continuationModel = i2vModels.find(m => m.id.startsWith(modelBase))?.id || i2vModels[0]?.id || model;
+        let currentRefImage = mediaRefDataUrl;
 
         for (let seg = 0; seg < totalSegments; seg++) {
             const isFirst = seg === 0;
-            const segPct = (seg / totalSegments) * 100;
+            const segPct = ((seg / totalSegments) * 100) + 10;
 
             if (totalSegments > 1) {
-                mediaProgressText.textContent = `Generating segment ${seg + 1}/${totalSegments}…`;
-                mediaProgressFill.style.width = `${Math.max(5, segPct)}%`;
+                mediaProgressTextModern.textContent = `Generating segment ${seg + 1}/${totalSegments}…`;
+                mediaProgressFillModern.style.width = `${Math.min(95, segPct)}%`;
             }
 
-            // Determine mode and model for this segment
-            let segMode = isFirst ? currentMediaMode : 'image-to-video';
-            let segModel = isFirst ? model : continuationModel;
-            let segRef = isFirst ? currentRefImage : currentRefImage;
+            const segMode = isFirst ? computedMode : 'image-to-video';
+            const segModel = isFirst ? modelId : (MEDIA_MODELS['image-to-video'][0]?.id || modelId);
 
             const payload = {
                 mode: segMode,
                 model: segModel,
-                prompt: isFirst ? prompt : `Continue the scene smoothly: ${prompt}`,
+                prompt: isFirst ? prompt : `Continue perfectly: ${prompt}`,
                 aspectRatio,
                 duration: isVideo ? clipLen : undefined,
-                resolution: isVideo ? parseInt(resolution) : undefined,
-                referenceImage: (segMode === 'image-to-image' || segMode === 'image-to-video') ? segRef : undefined,
+                referenceImage: (segMode === 'image-to-image' || segMode === 'image-to-video') ? currentRefImage : undefined,
             };
+            if (negativePrompt) payload.negativePrompt = negativePrompt;
 
             const result = await submitAndPoll(payload);
             const url = isVideo ? (result.video?.url || result.url) : (result.images?.[0]?.url || result.url);
-
             if (!url) throw new Error(`Segment ${seg + 1} returned no URL`);
+
             segmentUrls.push(url);
 
-            // Extract last frame for next segment
             if (isVideo && seg < totalSegments - 1) {
-                mediaProgressText.textContent = `Extracting last frame from segment ${seg + 1}…`;
+                mediaProgressTextModern.textContent = `Extracting frame for next segment…`;
                 currentRefImage = await extractLastFrame(url);
             }
         }
 
-        mediaProgressFill.style.width = '100%';
-        mediaProgressText.textContent = 'Done!';
+        mediaProgressFillModern.style.width = '100%';
+        mediaProgressTextModern.textContent = 'Done!';
 
-        // Display result(s)
+        // Display results
         lastMediaIsVideo = isVideo;
-
         if (isVideo && segmentUrls.length > 1) {
-            // Show all segments as a playlist
             lastMediaResultUrl = segmentUrls[0];
             mediaResultContent.innerHTML = segmentUrls.map((url, i) => `
                 <div style="margin-bottom:12px;">
                     <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Segment ${i + 1}/${segmentUrls.length}</div>
-                    <video src="${url}" controls ${i === 0 ? 'autoplay' : ''} style="width:100%;border-radius:8px;"></video>
+                    <video src="${url}" controls ${i === 0 ? 'autoplay' : ''} style="width:100%;border-radius:12px;"></video>
                 </div>
             `).join('');
         } else if (isVideo) {
             const url = segmentUrls[0];
             lastMediaResultUrl = url;
-            mediaResultContent.innerHTML = `<video src="${url}" controls autoplay style="width:100%;border-radius:8px;"></video>`;
+            mediaResultContent.innerHTML = `<video src="${url}" controls autoplay loop style="width:100%;border-radius:12px;"></video>`;
         } else {
             const url = segmentUrls[0];
             lastMediaResultUrl = url;
-            mediaResultContent.innerHTML = `<img src="${url}" alt="${prompt}" style="width:100%;border-radius:8px;" />`;
+            mediaResultContent.innerHTML = `<img src="${url}" alt="${prompt}" style="width:100%;border-radius:12px;" />`;
         }
 
         mediaResult.style.display = '';
-        mediaProgressContainer.style.display = 'none';
-        const label = isVideo ? (segmentUrls.length > 1 ? `${segmentUrls.length}-segment video` : 'Video') : 'Image';
-        showToast(`${label} generated!`);
+        mediaProgressModern.style.display = 'none';
 
-        // Save to history
+        // History
         const history = JSON.parse(localStorage.getItem('orbit_media_history') || '[]');
-        history.unshift({ url: segmentUrls[0], prompt: prompt.slice(0, 60), mode: currentMediaMode, model, ts: Date.now(), segments: segmentUrls.length > 1 ? segmentUrls : undefined });
+        history.unshift({ url: segmentUrls[0], prompt: prompt.slice(0, 60), mode: computedMode, model: modelId, ts: Date.now(), segments: segmentUrls.length > 1 ? segmentUrls : undefined });
         if (history.length > 50) history.pop();
         localStorage.setItem('orbit_media_history', JSON.stringify(history));
         renderMediaHistory();
 
     } catch (err) {
-        console.error('Media generation error:', err);
+        console.error('Generation error:', err);
         showToast(err.message || 'Generation failed', 'error');
-        mediaProgressContainer.style.display = 'none';
+        mediaProgressModern.style.display = 'none';
         mediaEmpty.style.display = '';
     } finally {
-        mediaGenerateBtn.disabled = false;
-        mediaGenerateBtn.querySelector('.btn-text').style.display = 'inline';
-        mediaGenerateBtn.querySelector('.btn-loader').style.display = 'none';
+        mediaGenerateBtnModern.disabled = false;
+        mediaGenerateBtnModern.querySelector('.btn-text').style.display = 'inline';
+        mediaGenerateBtnModern.querySelector('.btn-loader').style.display = 'none';
     }
 });
 

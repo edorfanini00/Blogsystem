@@ -664,238 +664,217 @@
           </div>
         </section>
 
-        <!-- Compact Input Panel (bottom) -->
-        <section class="card media-input-panel">
+        <!-- Compact Input Panel (Modern Layout) -->
+        <section class="media-input-modern" id="mediaInputPanelModern">
 
-          <!-- Mode Tabs (left side icons) -->
-          <div class="media-mode-selector">
-            <div class="media-mode-group">
-              <button type="button" class="media-mode-trigger" id="mediaCategoryImages">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-                Images
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              <div class="media-mode-dropdown" id="imageModesDropdown">
-                <div class="media-mode-option active" data-mode="text-to-image">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                  Text to Image
-                </div>
-                <div class="media-mode-option" data-mode="image-to-image">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
-                  </svg>
-                  Image to Image
-                </div>
-              </div>
-            </div>
-            <div class="media-mode-group">
-              <button type="button" class="media-mode-trigger" id="mediaCategoryVideos">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                  <line x1="7" y1="2" x2="7" y2="22" />
-                  <line x1="17" y1="2" x2="17" y2="22" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <line x1="2" y1="7" x2="7" y2="7" />
-                  <line x1="2" y1="17" x2="7" y2="17" />
-                  <line x1="17" y1="7" x2="22" y2="7" />
-                  <line x1="17" y1="17" x2="22" y2="17" />
-                </svg>
-                Videos
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              <div class="media-mode-dropdown" id="videoModesDropdown">
-                <div class="media-mode-option" data-mode="text-to-video">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                  Text to Video
-                </div>
-                <div class="media-mode-option" data-mode="image-to-video">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
-                  </svg>
-                  Image to Video
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="media-active-mode" id="mediaActiveMode">
-            <span id="mediaActiveModeIcon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          <!-- Left side: Icons for Image vs Video vs Audio -->
+          <div class="media-nav-sidebar">
+            <button type="button" class="nav-icon-btn active" id="btnTypeImage" title="Image Generation">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
               </svg>
-            </span>
-            <span id="mediaActiveModeText">Text to Image</span>
+            </button>
+            <button type="button" class="nav-icon-btn" id="btnTypeVideo" title="Video Generation">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                <line x1="7" y1="2" x2="7" y2="22" />
+                <line x1="17" y1="2" x2="17" y2="22" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <line x1="2" y1="7" x2="7" y2="7" />
+                <line x1="2" y1="17" x2="7" y2="17" />
+                <line x1="17" y1="7" x2="22" y2="7" />
+                <line x1="17" y1="17" x2="22" y2="17" />
+              </svg>
+            </button>
+            <button type="button" class="nav-icon-btn disabled" id="btnTypeAudio"
+              title="Audio Generation (Coming Soon)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                <path
+                  d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+              </svg>
+            </button>
           </div>
 
-          <!-- Reference Image (for image-to-image and image-to-video) -->
-          <div class="form-group" id="mediaRefGroup" style="display:none;">
-            <div class="file-upload-area" id="mediaRefUploadArea" style="padding:12px;">
-              <input type="file" id="mediaRefInput" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
-              <div class="file-upload-prompt" id="mediaRefPromptEl" style="gap:6px;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          <!-- Main Input Form Area -->
+          <form id="mediaFormModern" class="media-form-modern">
+
+            <!-- Top: Image Upload Row -->
+            <div class="media-top-upload-row">
+              <div class="media-upload-box" id="mediaUploadBoxPrimary">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                   <circle cx="8.5" cy="8.5" r="1.5" />
                   <polyline points="21 15 16 10 5 21" />
                 </svg>
-                <span>Drop reference image or <strong>click to browse</strong></span>
+                <div class="plus-badge">+</div>
               </div>
-              <div id="mediaRefPreview" style="display:none;">
-                <img id="mediaRefImg" style="max-width:100%;max-height:120px;border-radius:8px;" />
-                <button type="button" class="btn-small-outline" id="mediaRefClear" style="margin-top:6px;">✕
-                  Remove</button>
+              <svg class="exchange-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 3 21 3 21 8" />
+                <line x1="4" y1="14" x2="21" y2="3" />
+                <polyline points="8 21 3 21 3 16" />
+                <line x1="20" y1="10" x2="3" y2="21" />
+              </svg>
+              <!-- Second image box (visual only placeholder for now) -->
+              <div class="media-upload-box inactive">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <div class="plus-badge">+</div>
+              </div>
+
+              <!-- Hidden file input & Preview -->
+              <input type="file" id="mediaRefInputModern" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+              <div class="media-preview-box" id="mediaRefPreviewModern" style="display:none;">
+                <img id="mediaRefImgModern" />
+                <button type="button" class="remove-btn" id="mediaRefClearModern">✕</button>
               </div>
             </div>
-          </div>
 
-          <form id="mediaForm">
-            <!-- Prompt -->
-            <div class="media-prompt-row">
-              <div class="input-wrapper" style="flex:1;">
-                <textarea id="mediaPrompt" rows="2" placeholder="Describe what you want to generate…" required
-                  style="resize:none;"></textarea>
-              </div>
-              <button type="submit" class="media-generate-btn" id="mediaGenerateBtn">
-                <span class="btn-text">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
-                  </svg>
-                </span>
-                <span class="btn-loader" style="display:none"><span class="spinner"></span></span>
-              </button>
+            <!-- Middle: Prompt Area -->
+            <div class="media-prompt-area">
+              <textarea id="mediaPromptModern" rows="1" placeholder="Describe the image you want to create"
+                required></textarea>
             </div>
 
-            <!-- Settings Pills Bar -->
-            <div class="media-pills-bar">
-              <!-- Model pill -->
-              <div class="media-pill" style="position:relative;">
-                <div class="custom-select-wrapper" id="mediaModelWrapper">
-                  <div class="custom-select-trigger media-pill-trigger" id="mediaModelTrigger">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <circle cx="12" cy="12" r="3" />
+            <!-- Progress -->
+            <div id="mediaProgressModern" style="display:none; margin-bottom: 12px; padding: 0 12px;">
+              <div class="progress-bar-track"
+                style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                <div class="progress-bar-fill" id="mediaProgressFillModern"
+                  style="width:0%; background: linear-gradient(90deg, #f97316, #ea580c); height: 100%;"></div>
+              </div>
+              <div id="mediaProgressTextModern"
+                style="font-size:0.75rem; color: rgba(255,255,255,0.6); margin-top: 6px;">Submitting to Fal.ai...</div>
+            </div>
+
+            <!-- Negative Prompt Input (hidden by default) -->
+            <div class="media-negative-input-row" id="mediaNegativeRow" style="display:none;">
+              <input type="text" id="mediaNegativePromptModern" placeholder="Negative prompt (e.g. blur, distort...)" />
+            </div>
+
+            <!-- Bottom: Settings Pills -->
+            <div class="media-bottom-toolbar">
+              <div class="media-pills-scroll">
+
+                <!-- Model -->
+                <div class="modern-pill-wrapper" id="modModelWrapper">
+                  <div class="modern-pill" id="modModelTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5Z" />
+                      <path d="M2 17l10 5 10-5" />
+                      <path d="M2 12l10 5 10-5" />
                     </svg>
-                    <span id="mediaModelText">Kling 3.0</span>
+                    <span id="modModelText">Kling 3.0</span>
                   </div>
-                  <div class="custom-select-options" id="mediaModelOptions">
+                  <div class="modern-pill-options" id="modModelOptions">
                     <!-- Populated via JS -->
                   </div>
                 </div>
-                <input type="hidden" id="mediaModel" required>
-              </div>
 
-              <!-- Aspect Ratio pill -->
-              <div class="media-pill" style="position:relative;">
-                <div class="custom-select-wrapper" id="mediaAspectWrapper">
-                  <div class="custom-select-trigger media-pill-trigger" id="mediaAspectTrigger">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="2" y="4" width="20" height="16" rx="2" />
+                <!-- Aspect Ratio -->
+                <div class="modern-pill-wrapper" id="modAspectWrapper">
+                  <div class="modern-pill" id="modAspectTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
                     </svg>
-                    <span id="mediaAspectText">16:9</span>
+                    <span id="modAspectText">16:9</span>
                   </div>
-                  <div class="custom-select-options" id="mediaAspectOptions">
+                  <div class="modern-pill-options" id="modAspectOptions">
                     <div class="custom-option selected" data-value="16:9">16:9</div>
                     <div class="custom-option" data-value="9:16">9:16</div>
                     <div class="custom-option" data-value="1:1">1:1</div>
                   </div>
                 </div>
-                <input type="hidden" id="mediaAspect" value="16:9">
-              </div>
 
-              <!-- Duration pill (video only) -->
-              <div class="media-pill" id="mediaDurationGroup" style="display:none; position:relative;">
-                <div class="custom-select-wrapper" id="mediaDurationWrapper">
-                  <div class="custom-select-trigger media-pill-trigger" id="mediaDurationTrigger">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <!-- Audio Toggle (Video Only) -->
+                <div class="modern-pill-wrapper" id="modAudioWrapper" style="display:none;">
+                  <div class="modern-pill" id="modAudioTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    </svg>
+                    <span id="modAudioText">Audio</span>
+                  </div>
+                </div>
+
+                <!-- Duration (Video Only) -->
+                <div class="modern-pill-wrapper" id="modDurationWrapper" style="display:none;">
+                  <div class="modern-pill" id="modDurationTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <circle cx="12" cy="12" r="10" />
                       <polyline points="12 6 12 12 16 14" />
                     </svg>
-                    <span id="mediaDurationText">5 sec</span>
+                    <span id="modDurationText">5 sec</span>
                   </div>
-                  <div class="custom-select-options" id="mediaDurationOptions">
+                  <div class="modern-pill-options" id="modDurationOptions">
                     <div class="custom-option selected" data-value="5">5 sec</div>
                     <div class="custom-option" data-value="10">10 sec</div>
                     <div class="custom-option" data-value="15">15 sec</div>
                   </div>
                 </div>
-                <input type="hidden" id="mediaDuration" value="5">
-              </div>
 
-              <!-- Total Duration pill (video chaining) -->
-              <div class="media-pill" id="mediaTotalDurationGroup" style="display:none; position:relative;">
-                <div class="custom-select-wrapper" id="mediaTotalDurationWrapper">
-                  <div class="custom-select-trigger media-pill-trigger" id="mediaTotalDurationTrigger">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <!-- Total Duration/Chaining (Video Only) -->
+                <div class="modern-pill-wrapper" id="modTotalDurationWrapper" style="display:none;">
+                  <div class="modern-pill" id="modTotalDurationTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
                       <line x1="1" y1="1" x2="23" y2="23" />
                     </svg>
-                    <span id="mediaTotalDurationText">Single</span>
+                    <span id="modTotalDurationText">Single clip</span>
                   </div>
-                  <div class="custom-select-options" id="mediaTotalDurationOptions">
+                  <div class="modern-pill-options" id="modTotalDurationOptions">
                     <div class="custom-option selected" data-value="0">Single clip</div>
                     <div class="custom-option" data-value="30">30s (2 clips)</div>
                     <div class="custom-option" data-value="45">45s (3 clips)</div>
                     <div class="custom-option" data-value="60">60s (4 clips)</div>
                   </div>
                 </div>
-                <input type="hidden" id="mediaTotalDuration" value="0">
-              </div>
 
-              <!-- Resolution pill (video only) -->
-              <div class="media-pill" id="mediaResGroup" style="display:none; position:relative;">
-                <div class="custom-select-wrapper" id="mediaResWrapper">
-                  <div class="custom-select-trigger media-pill-trigger" id="mediaResTrigger">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                    </svg>
-                    <span id="mediaResText">1080p</span>
-                  </div>
-                  <div class="custom-select-options" id="mediaResOptions">
-                    <div class="custom-option" data-value="720">720p</div>
-                    <div class="custom-option selected" data-value="1080">1080p</div>
-                  </div>
+                <!-- Pro Tag (Static purely visual) -->
+                <div class="modern-pill" style="pointer-events:none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon
+                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  <span>Pro</span>
                 </div>
-                <input type="hidden" id="mediaResolution" value="1080">
+
+                <!-- Negative Prompt Pill -->
+                <div class="modern-pill" id="modNegativeTrigger">
+                  <span>Negative Prompt</span>
+                </div>
               </div>
+
+              <button type="submit" class="modern-submit-btn" id="mediaGenerateBtnModern">
+                <span class="btn-text">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="5 12 12 5 19 12" />
+                  </svg>
+                </span>
+                <span class="btn-loader" style="display:none"><span class="spinner-orange"
+                    style="width:20px;height:20px;border-width:2px;"></span></span>
+              </button>
             </div>
 
-            <!-- Progress -->
-            <div id="mediaProgressContainer" style="display:none; margin-top: 12px;">
-              <div class="progress-header">
-                <span class="spinner-orange"></span>
-                <span id="mediaProgressText">Submitting…</span>
-              </div>
-              <div class="progress-bar-track">
-                <div class="progress-bar-fill" id="mediaProgressFill"
-                  style="width:0%; background: var(--accent-primary);"></div>
-              </div>
-            </div>
+            <!-- Hidden Inputs for JS -->
+            <input type="hidden" id="modModel" value="fal-ai/flux/schnell">
+            <input type="hidden" id="modAspect" value="16:9">
+            <input type="hidden" id="modDuration" value="5">
+            <input type="hidden" id="modTotalDuration" value="0">
+            <input type="hidden" id="modAudio" value="false">
           </form>
         </section>
 
