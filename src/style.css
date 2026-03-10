@@ -2486,17 +2486,15 @@ body {
 .media-gen-floating-panel {
   position: relative;
   display: flex;
-  background: #1e1e1e;
-  /* Dark fallback */
-  background: rgba(28, 28, 28, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(36, 36, 36, 0.7);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 28px;
   padding: 16px 20px;
   gap: 16px;
   margin-bottom: 32px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* Left: Vertical Type Pills */
@@ -2788,22 +2786,22 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #e0f2fe 0%, #bad5e8 100%);
+  background: #FF8300;
   border: none;
-  color: #0f172a;
+  color: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 14px rgba(255, 131, 0, 0.3);
   flex-shrink: 0;
 }
 
 .media-gen-submit-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-  background: #fff;
+  box-shadow: 0 6px 20px rgba(255, 131, 0, 0.5);
+  background: #ff9833;
 }
 
 .media-gen-submit-btn:disabled {
