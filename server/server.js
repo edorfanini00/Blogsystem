@@ -1625,11 +1625,15 @@ app.post('/api/media/generate', async (req, res) => {
         // Build the input payload
         const input = { prompt };
 
-        // Aspect ratio + image size
+        // Aspect ratio
         if (aspectRatio) {
             input.aspect_ratio = aspectRatio;
+        }
+
+        // Image size (only for image modes, not video)
+        if (!mode?.includes('video') && aspectRatio) {
             const [w, h] = aspectRatio.split(':').map(Number);
-            const baseSize = resolution === '720' ? 720 : 1080;
+            const baseSize = 1080;
             if (w > h) {
                 input.image_size = { width: baseSize, height: Math.round(baseSize * h / w) };
             } else if (h > w) {
@@ -1639,16 +1643,17 @@ app.post('/api/media/generate', async (req, res) => {
             }
         }
 
-        // Video settings
-        if (mode?.includes('video')) {
-            if (duration) input.duration = `${duration}s`;
-            if (resolution) input.resolution = `${resolution}p`;
+        // Video settings — duration is a string number (e.g. "5"), no suffix
+        if (mode?.includes('video') && duration) {
+            input.duration = String(duration).replace(/[^0-9]/g, '');
         }
 
         // Reference image for i2i / i2v
         if (referenceImage && (mode === 'image-to-image' || mode === 'image-to-video')) {
             input.image_url = referenceImage;
         }
+
+        console.log(`   Payload keys: ${Object.keys(input).join(', ')}`);
 
         // Submit to fal.ai queue
         const queueRes = await fetch(`https://queue.fal.run/${model}`, {
@@ -1662,7 +1667,7 @@ app.post('/api/media/generate', async (req, res) => {
 
         if (!queueRes.ok) {
             const errText = await queueRes.text();
-            console.error(`Fal.ai queue error: ${queueRes.status} ${errText.slice(0, 300)}`);
+            console.error(`Fal.ai queue error: ${queueRes.status} ${errText.slice(0, 500)}`);
             return res.status(queueRes.status).json({ error: `Fal.ai: ${errText.slice(0, 200)}` });
         }
 

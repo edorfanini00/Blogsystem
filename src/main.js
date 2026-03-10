@@ -1771,8 +1771,10 @@ async function submitAndPoll(payload) {
         body: JSON.stringify(payload),
     });
     if (!submitRes.ok) {
-        const err = await submitRes.json();
-        throw new Error(err.error || 'Generation failed');
+        const errText = await submitRes.text();
+        let msg = 'Generation failed';
+        try { msg = JSON.parse(errText).error || msg; } catch { msg = errText.slice(0, 200) || msg; }
+        throw new Error(msg);
     }
     const { requestId, modelUsed } = await submitRes.json();
 
