@@ -2486,15 +2486,18 @@ body {
 .media-gen-floating-panel {
   position: relative;
   display: flex;
-  background: rgba(20, 20, 20, 0.4);
+  background: rgba(20, 20, 20, 0.15);
+  /* Much more transparent */
   backdrop-filter: saturate(180%) blur(40px);
   -webkit-backdrop-filter: saturate(180%) blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  /* Slightly more visible border to define the shape */
   border-radius: 28px;
   padding: 16px 20px;
   gap: 16px;
   margin-bottom: 32px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  /* Lighter outer shadow, stronger inner highlight */
 }
 
 /* Left: Vertical Type Pills */
