@@ -444,18 +444,18 @@ STRICT OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
 2. Wrap the entire blog in: <div style="max-width:780px;margin:0 auto;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#333;line-height:1.8;font-size:17px;">
 
 3. HEADING STYLES:
-   - H1 (title): <h1 style="color:#ea580c;font-size:2.4em;font-weight:800;line-height:1.2;margin-bottom:24px;">
-   - H2 (sections): <h2 style="color:#ea580c;font-size:1.8em;font-weight:700;margin-top:56px;margin-bottom:20px;">
-   - H3 (sub-sections): <h3 style="font-size:1.3em;font-weight:700;color:#1a1a1a;margin-top:40px;margin-bottom:16px;padding-left:16px;border-left:4px solid #ea580c;">
+   - H1 (title): <h1 style="color:#FF8300;font-size:2.4em;font-weight:800;line-height:1.2;margin-bottom:24px;">
+   - H2 (sections): <h2 style="color:#FF8300;font-size:1.8em;font-weight:700;margin-top:56px;margin-bottom:20px;">
+   - H3 (sub-sections): <h3 style="font-size:1.3em;font-weight:700;color:#1a1a1a;margin-top:40px;margin-bottom:16px;padding-left:16px;border-left:4px solid #FF8300;">
 
 4. BODY TEXT: <p style="margin-bottom:20px;">
 
 5. SPECIAL CALLOUT BADGES (use these throughout):
-   - <span style="display:inline-block;background:#ea580c;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Result:</span>
-   - <span style="display:inline-block;background:#ea580c;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Pro tip:</span>
-   - <span style="display:inline-block;background:#ea580c;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Case in point:</span>
+   - <span style="display:inline-block;background:#FF8300;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Result:</span>
+   - <span style="display:inline-block;background:#FF8300;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Pro tip:</span>
+   - <span style="display:inline-block;background:#FF8300;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Case in point:</span>
 
-6. BENEFIT LABELS: <strong style="color:#ea580c;">Label text:</strong> followed by text
+6. BENEFIT LABELS: <strong style="color:#FF8300;">Label text:</strong> followed by text
 
 7. LISTS:
    - <ul style="margin-bottom:24px;padding-left:28px;"> with <li style="margin-bottom:8px;">
@@ -463,9 +463,9 @@ STRICT OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
 
 8. IMAGES: Insert the provided images using full <img> tags with the URLs provided above. Place one image after each major H2 heading.
 
-9. BLOCKQUOTES: <blockquote style="border-left:4px solid #ea580c;background:#fff7ed;padding:16px 24px;margin:24px 0;font-style:italic;color:#92400e;">
+9. BLOCKQUOTES: <blockquote style="border-left:4px solid #FF8300;background:#fff7ed;padding:16px 24px;margin:24px 0;font-style:italic;color:#92400e;">
 
-10. CTA SECTION at the end: <div style="margin-top:56px;padding-top:32px;border-top:2px solid #ea580c;"> with an orange H2 heading inside.
+10. CTA SECTION at the end: <div style="margin-top:56px;padding-top:32px;border-top:2px solid #FF8300;"> with an orange H2 heading inside.
 
 11. HORIZONTAL RULES between major sections: <hr style="border:none;height:1px;background:#e5e5e5;margin:48px 0;">
 
