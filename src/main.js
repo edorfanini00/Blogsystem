@@ -2106,10 +2106,11 @@ async function pollMediaStatus(requestId, inferredMode, modelId) {
                     handleMediaSuccess(data.result, inferredMode);
                     return;
                 } else if (data.status === 'FAILED') {
-                    throw new Error(data.error || 'Generation failed');
-                } else if (data.status === 'IN_PROGRESS') {
-                    // still polling
-                    mediaProgressText.textContent = `Generating (attempt ${attempt + 1})...`;
+                    throw new Error(data.error || 'Generation failed on Fal.ai');
+                } else if (data.status === 'IN_PROGRESS' || data.status === 'IN_QUEUE') {
+                    // IN_QUEUE = still waiting in line, IN_PROGRESS = actively running
+                    const label = data.status === 'IN_QUEUE' ? 'In queue' : 'Generating';
+                    mediaProgressText.textContent = `${label} (attempt ${attempt + 1})...`;
                     mediaProgressFill.style.width = `${Math.min(95, 10 + attempt * 2)}%`;
                 }
             } else {

@@ -1816,6 +1816,7 @@ app.get('/api/media/status/:requestId', async (req, res) => {
         const model = req.query.model;
         if (!model) return res.status(400).json({ error: 'Model query param required' });
 
+        // Check status
         const statusRes = await fetch(`https://queue.fal.run/${model}/requests/${requestId}/status`, {
             headers: { 'Authorization': `Key ${falKey}` },
         });
@@ -1826,17 +1827,19 @@ app.get('/api/media/status/:requestId', async (req, res) => {
             return res.status(statusRes.status).json({ error: `Status check failed: ${errText.slice(0, 100)}` });
         }
 
-        const statusRawText = await statusRes.text();
         let statusData;
         try {
-            statusData = JSON.parse(statusRawText);
+            statusData = await statusRes.json();
         } catch (e) {
-            console.error(`Fal.ai non-JSON status response: ${statusRawText.slice(0, 200)}`);
             return res.status(500).json({ error: 'Invalid status response format' });
         }
 
+        console.log(`   Status poll for ${requestId}: ${statusData.status}`);
+
         if (statusData.status === 'COMPLETED') {
-            const resultRes = await fetch(`https://queue.fal.run/${model}/requests/${requestId}`, {
+            // Fetch the actual result from response_url (or the standard result URL)
+            const resultUrl = statusData.response_url || `https://queue.fal.run/${model}/requests/${requestId}`;
+            const resultRes = await fetch(resultUrl, {
                 headers: { 'Authorization': `Key ${falKey}` },
             });
 
@@ -1845,24 +1848,29 @@ app.get('/api/media/status/:requestId', async (req, res) => {
                 return res.status(resultRes.status).json({ error: `Result fetch failed: ${resErr.slice(0, 100)}` });
             }
 
-            const resultRaw = await resultRes.text();
             let result;
             try {
-                result = JSON.parse(resultRaw);
+                result = await resultRes.json();
             } catch (e) {
-                console.error(`Fal.ai non-JSON result response: ${resultRaw.slice(0, 200)}`);
                 return res.status(500).json({ error: 'Invalid result format' });
             }
 
+            console.log(`   Result keys: ${Object.keys(result).join(', ')}`);
             return res.json({ status: 'COMPLETED', result });
         }
 
+        if (statusData.status === 'FAILED') {
+            return res.json({ status: 'FAILED', error: statusData.error || 'Generation failed on Fal.ai' });
+        }
+
+        // IN_QUEUE or IN_PROGRESS — still waiting
         res.json({ status: statusData.status || 'IN_QUEUE' });
     } catch (err) {
         console.error('Media status error:', err);
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // ═══════════════════════════════════════════════════════════════════
 // ─── REDDIT OAUTH & AGENTS ───────────────────────────────────────
