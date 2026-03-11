@@ -1799,7 +1799,7 @@ app.post('/api/media/generate', async (req, res) => {
         }
 
         console.log(`   Queued: ${queueData.request_id || 'unknown'}`);
-        res.json({ requestId: queueData.request_id, modelUsed: model });
+        res.json({ success: true, requestId: queueData.request_id, modelUsed: model });
     } catch (err) {
         console.error('Media generate error:', err);
         res.status(500).json({ error: err.message });

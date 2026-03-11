@@ -2094,7 +2094,7 @@ async function pollMediaStatus(requestId, inferredMode, modelId) {
     for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-            const statusRes = await fetch(`/api/media/status/${requestId}?model=${encodeURIComponent(modelId)}`);
+            const statusRes = await fetch(`${API_BASE}/api/media/status/${requestId}?model=${encodeURIComponent(modelId)}`);
 
             const contentType = statusRes.headers.get("content-type");
             if (contentType && contentType.indexOf("application/json") !== -1) {
