@@ -10,7 +10,7 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
-import { generateClientTokenFromReadWriteToken } from '@vercel/blob';
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
 const require = createRequire(import.meta.url);
 let pdfParse;
 try { pdfParse = require('pdf-parse'); } catch { pdfParse = null; }
