@@ -2012,12 +2012,12 @@ async function handleMediaGeneration(e) {
 
             if (!tokenRes.ok) throw new Error('Failed to get secure upload token');
 
-            const { clientToken } = await tokenRes.json();
+            const { clientToken, pathname } = await tokenRes.json();
             if (!clientToken) throw new Error('Server returned empty Blob token. Please verify Vercel Blob is connected.');
 
             mediaProgressText.textContent = 'Transferring file to cloud...';
-            // Setting multipart to true completely bypasses the 4.5MB edge limit.
-            const blob = await put(`orbit-media/${Date.now()}-${file.name}`, file, {
+            // Use the exact pathname the server embedded in the token to avoid mismatch errors.
+            const blob = await put(pathname, file, {
                 access: 'public',
                 token: clientToken,
                 multipart: true,

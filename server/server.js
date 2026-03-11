@@ -1672,14 +1672,14 @@ app.post('/api/media/upload-token', async (req, res) => {
             return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is missing' });
         }
 
+        const pathname = `orbit-media/${Date.now()}-${filename}`;
         const token = await generateClientTokenFromReadWriteToken({
             token: process.env.BLOB_READ_WRITE_TOKEN,
-            pathname: `orbit-media/${Date.now()}-${filename}`,
+            pathname,
             maximumSizeInBytes: 50 * 1024 * 1024, // 50MB
-            // Not setting onUploadCompleted because we just need the clientToken to perform the upload immediately.
         });
 
-        res.json({ clientToken: token });
+        res.json({ clientToken: token, pathname });
     } catch (e) {
         console.error('Blob Token Error:', e);
         res.status(500).json({ error: 'Failed to generate upload token', details: e.message });
