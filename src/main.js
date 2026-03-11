@@ -2016,9 +2016,11 @@ async function handleMediaGeneration(e) {
             if (!clientToken) throw new Error('Server returned empty Blob token. Please verify Vercel Blob is connected.');
 
             mediaProgressText.textContent = 'Transferring file to cloud...';
+            // Setting multipart to true completely bypasses the 4.5MB edge limit.
             const blob = await put(`orbit-media/${Date.now()}-${file.name}`, file, {
                 access: 'public',
                 token: clientToken,
+                multipart: true,
             });
 
             requestData.referenceImageUrl = blob.url;
