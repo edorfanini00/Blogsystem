@@ -4377,7 +4377,8 @@ setTimeout(function initOnePager() {
         var h = '<div class="op-page" style="width:100%;min-height:700px;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
         h += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
         if (img) h += '<img src="' + img + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
-        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2rem;font-weight:800;font-style:italic;color:#7c3aed;margin-bottom:8px;line-height:1.2;">' + heading + '</div>';
+        if (title) h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;color:#1e293b;margin-bottom:8px;line-height:1.15;letter-spacing:-0.02em;">' + title + '</div>';
+        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:800;font-style:italic;color:#7c3aed;margin-bottom:8px;line-height:1.2;">' + heading + '</div>';
         if (subtitle) h += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + subtitle + '</div>';
         if (desc) h += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + desc + '</div>';
         h += '<div style="display:grid;grid-template-columns:' + gc + ';gap:20px;column-gap:' + gap + ';">' + bHtml + '</div>';
@@ -4385,10 +4386,19 @@ setTimeout(function initOnePager() {
         h += '</div>';
 
         if (previewFrame) previewFrame.innerHTML = h;
-        if (previewContainer) previewContainer.style.display = '';
+        if (previewContainer) previewContainer.style.display = 'block';
         if (emptyState) emptyState.style.display = 'none';
-        if (previewActions) previewActions.style.display = '';
-        console.log('✅ Preview rendered:', title);
+        if (previewActions) previewActions.style.display = 'flex';
+
+        // Auto-scroll to the preview so the user can see the result
+        var previewSection = previewContainer || previewFrame;
+        if (previewSection) {
+            setTimeout(function() {
+                previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        console.log('✅ Preview rendered:', title, '| previewFrame:', !!previewFrame, '| previewContainer:', !!previewContainer, '| previewActions:', !!previewActions);
     }
 
     var _opGenerating = false;
