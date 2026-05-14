@@ -2434,7 +2434,7 @@
                       for (var b = 0; b < bullets.length; b++) {
                         bHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;"><div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[b] + '</div></div>';
                       }
-                      var pageHtml = '<div style="width:100%;min-height:700px;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
+                      var pageHtml = '<div style="width:100%;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
                       pageHtml += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
                       if (data.headerImage) pageHtml += '<img src="' + data.headerImage + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;" />';
                       if (data.title) pageHtml += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;color:#1e293b;margin-bottom:8px;line-height:1.15;">' + data.title + '</div>';
@@ -2465,14 +2465,29 @@
                         dlBtn.onclick = function() {
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
-                          var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
+                          var pageEl = previewFrame.querySelector('div[style]') || previewFrame.firstElementChild || previewFrame;
+
+                          // Clone and render at exact letter-page dimensions
+                          var clone = pageEl.cloneNode(true);
+                          clone.style.width = '8.5in';
+                          clone.style.minHeight = '11in';
+                          clone.style.padding = '0.6in 0.7in';
+                          clone.style.boxSizing = 'border-box';
+                          clone.style.position = 'fixed';
+                          clone.style.left = '-9999px';
+                          clone.style.top = '0';
+                          clone.style.zIndex = '-1';
+                          document.body.appendChild(clone);
+
                           html2pdf().set({
                             margin: 0,
                             filename: (data.title || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
                             image: { type: 'jpeg', quality: 0.98 },
-                            html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+                            html2canvas: { scale: 2, useCORS: true, allowTaint: true, width: clone.offsetWidth, height: clone.offsetHeight },
                             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-                          }).from(pageEl).save().then(function() {
+                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+                          }).from(clone).save().then(function() {
+                            document.body.removeChild(clone);
                             dlBtn.disabled = false;
                             dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF';
                           });

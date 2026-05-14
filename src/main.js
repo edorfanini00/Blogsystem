@@ -4378,7 +4378,7 @@ setTimeout(function initOnePager() {
         var gc = opColumns === 1 ? '1fr' : opColumns === 3 ? '1fr 1fr 1fr' : '1fr 1fr';
         var gap = opColumns === 3 ? '32px' : '48px';
 
-        var h = '<div class="op-page" style="width:100%;min-height:700px;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
+        var h = '<div class="op-page" style="width:100%;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
         h += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
         if (img) h += '<img src="' + img + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
         if (title) h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;color:#1e293b;margin-bottom:8px;line-height:1.15;letter-spacing:-0.02em;">' + title + '</div>';
@@ -4498,22 +4498,38 @@ setTimeout(function initOnePager() {
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
             if (!previewFrame) return;
-            var pageEl = previewFrame.querySelector('.op-page');
+            var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild;
             if (!pageEl) { if (typeof showToast === 'function') showToast('Generate first', 'error'); return; }
             downloadBtn.disabled = true;
             var orig = downloadBtn.innerHTML;
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
+
+            // Clone the element and render at exact letter-page dimensions
+            var clone = pageEl.cloneNode(true);
+            clone.style.width = '8.5in';
+            clone.style.minHeight = '11in';
+            clone.style.padding = '0.6in 0.7in';
+            clone.style.boxSizing = 'border-box';
+            clone.style.position = 'fixed';
+            clone.style.left = '-9999px';
+            clone.style.top = '0';
+            clone.style.zIndex = '-1';
+            document.body.appendChild(clone);
+
             html2pdf().set({
-                margin: 0, filename: fname,
+                margin: 0,
+                filename: fname,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+                html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, width: clone.offsetWidth, height: clone.offsetHeight },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-            }).from(pageEl).save().then(function() {
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+            }).from(clone).save().then(function() {
                 if (typeof showToast === 'function') showToast('PDF downloaded!');
             }).catch(function(e) {
                 console.error('PDF err:', e);
             }).finally(function() {
+                document.body.removeChild(clone);
                 downloadBtn.disabled = false;
                 downloadBtn.innerHTML = orig;
             });
