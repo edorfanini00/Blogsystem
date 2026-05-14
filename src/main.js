@@ -4388,14 +4388,25 @@ function initAccountConnections() {
         console.log('✅ Preview rendered:', title);
     }
 
+    var _opGenerating = false;
+
     function doGenerate() {
         console.log('📄 Generate clicked');
+
+        // Guard against double-invocation (inline onclick + addEventListener, or rapid clicks)
+        if (_opGenerating) {
+            console.log('⚠ One Pager generation already in progress, skipping');
+            return;
+        }
+
         var descEl = document.getElementById('opDescription');
         var description = descEl ? descEl.value.trim() : '';
         if (!description) {
             if (typeof showToast === 'function') showToast('Please describe your product or service', 'error');
             return;
         }
+
+        _opGenerating = true;
 
         var btnText = generateBtn.querySelector('.btn-text');
         var btnLoader = generateBtn.querySelector('.btn-loader');
@@ -4450,6 +4461,7 @@ function initAccountConnections() {
             if (typeof showToast === 'function') showToast('Failed: ' + err.message, 'error');
         })
         .finally(function() {
+            _opGenerating = false;
             var bt = generateBtn.querySelector('.btn-text');
             var bl = generateBtn.querySelector('.btn-loader');
             if (bt) bt.style.display = '';
@@ -4459,7 +4471,11 @@ function initAccountConnections() {
         });
     }
 
-    generateBtn.addEventListener('click', doGenerate);
+    generateBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        doGenerate();
+    });
     window._generateOnePager = doGenerate;
 
     if (downloadBtn) {
