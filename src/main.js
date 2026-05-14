@@ -4399,7 +4399,7 @@ setTimeout(function initOnePager() {
 
         h += '<div style="padding:32px 48px 28px;">';
         if (tags) h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:14px;">' + tags + '</div>';
-        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#0f172a;">' + headlineHtml + '</div>';
+        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#7c3aed;">' + headlineHtml + '</div>';
         if (subtitle) h += '<div style="font-size:0.85rem;line-height:1.7;color:#475569;margin-bottom:24px;max-width:90%;">' + subtitle + '</div>';
         if (img) h += '<img src="' + img + '" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:24px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
 
@@ -4421,7 +4421,7 @@ setTimeout(function initOnePager() {
             h += '<div style="margin-bottom:24px;">';
             h += '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px;">';
             h += '<span style="font-size:0.75rem;font-weight:800;color:#ea580c;">' + secNum + '</span>';
-            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;line-height:1.25;color:#0f172a;">' + (sec.title || '') + '</div></div>';
+            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#7c3aed;">' + (sec.title || '') + '</div></div>';
 
             if (sec.type === 'checklist' && sec.items) {
                 h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 28px;margin-bottom:12px;">';
@@ -4611,16 +4611,16 @@ setTimeout(function initOnePager() {
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-            // Clone the element and render at exact letter-page dimensions
+            // Clone the element and render at exact letter-page portrait dimensions
             var clone = pageEl.cloneNode(true);
             clone.style.width = '8.5in';
             clone.style.minHeight = '11in';
-            clone.style.padding = '0.6in 0.7in';
             clone.style.boxSizing = 'border-box';
             clone.style.position = 'fixed';
             clone.style.left = '-9999px';
             clone.style.top = '0';
             clone.style.zIndex = '-1';
+            clone.style.overflow = 'visible';
             document.body.appendChild(clone);
 
             html2pdf().set({

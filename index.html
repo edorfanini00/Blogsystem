@@ -2434,27 +2434,26 @@
                         headlineHtml = headline.replace(accentWord, '<em style="color:#c2410c;font-style:italic;">' + accentWord + '</em>');
                       }
                       function boldify(t) { return (t||'').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); }
-                      var F = 'font-family:"Source Serif 4",Georgia,"Times New Roman",serif;';
-                      var S = 'font-family:Inter,-apple-system,sans-serif;';
+                      var BG = 'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);';
+                      var logo = 'https://ik.imagekit.io/kusosheutk/A-color.png';
 
-                      var ph = '<div class="op-page" style="width:100%;' + S + 'background:#faf7f2;color:#1a1a1a;">';
-                      // Header bar
-                      ph += '<div style="display:flex;justify-content:space-between;align-items:center;padding:28px 48px;border-bottom:1px solid #e5ddd3;">';
-                      ph += '<div style="font-size:0.8rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;">' + (data.companyProduct || 'CELERITECH') + '</div>';
-                      if (data.briefFor) ph += '<div style="font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">' + data.briefFor + '</div>';
+                      var ph = '<div class="op-page" style="width:100%;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;">';
+                      ph += '<div style="display:flex;justify-content:space-between;align-items:center;padding:24px 48px;border-bottom:1px solid rgba(0,0,0,0.06);">';
+                      ph += '<div style="display:flex;align-items:center;gap:12px;"><img src="' + logo + '" alt="Celeritech" style="height:36px;" crossorigin="anonymous" />';
+                      ph += '<span style="font-size:0.75rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#1e293b;">' + (data.companyProduct || 'CELERITECH') + '</span></div>';
+                      if (data.briefFor) ph += '<div style="font-size:0.65rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;">' + data.briefFor + '</div>';
                       ph += '</div>';
-                      ph += '<div style="padding:36px 48px 32px;">';
-                      if (data.tags) ph += '<div style="font-size:0.65rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:16px;">' + data.tags + '</div>';
-                      ph += '<div style="' + F + 'font-size:2.4rem;font-weight:900;line-height:1.1;margin-bottom:16px;letter-spacing:-0.02em;">' + headlineHtml + '</div>';
-                      if (data.subtitle) ph += '<div style="font-size:0.85rem;line-height:1.7;color:#44403c;margin-bottom:28px;max-width:90%;">' + data.subtitle + '</div>';
-                      // Stats
+                      ph += '<div style="padding:32px 48px 28px;">';
+                      if (data.tags) ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:14px;">' + data.tags + '</div>';
+                      ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#7c3aed;">' + headlineHtml + '</div>';
+                      if (data.subtitle) ph += '<div style="font-size:0.85rem;line-height:1.7;color:#475569;margin-bottom:24px;max-width:90%;">' + data.subtitle + '</div>';
                       var stats = data.stats || [];
                       if (stats.length) {
-                        ph += '<div style="display:flex;gap:0;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid #e5ddd3;">';
+                        ph += '<div style="display:flex;gap:0;margin-bottom:32px;padding:20px 0;border-top:1px solid rgba(0,0,0,0.06);border-bottom:1px solid rgba(0,0,0,0.06);">';
                         for (var si = 0; si < stats.length; si++) {
-                          ph += '<div style="flex:1;' + (si > 0 ? 'padding-left:32px;border-left:1px solid #e5ddd3;' : '') + '">';
-                          ph += '<div style="' + F + 'font-size:1.8rem;font-weight:900;color:#c2410c;line-height:1.1;margin-bottom:4px;">' + (stats[si].value||'') + '</div>';
-                          ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">' + (stats[si].label||'') + '</div></div>';
+                          ph += '<div style="flex:1;text-align:center;' + (si > 0 ? 'border-left:1px solid rgba(0,0,0,0.06);' : '') + '">';
+                          ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.8rem;font-weight:900;color:#ea580c;line-height:1.1;margin-bottom:4px;">' + (stats[si].value||'') + '</div>';
+                          ph += '<div style="font-size:0.55rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">' + (stats[si].label||'') + '</div></div>';
                         }
                         ph += '</div>';
                       }
@@ -2464,7 +2463,7 @@
                         var sec = secs[si2];
                         ph += '<div style="margin-bottom:24px;"><div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">';
                         ph += '<span style="font-size:0.8rem;font-weight:700;color:#ea580c;">' + (sec.number||'0'+(si2+1)) + '</span>';
-                        ph += '<div style="' + F + 'font-size:1.3rem;font-weight:800;line-height:1.25;">' + (sec.title||'') + '</div></div>';
+                        ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#7c3aed;">' + (sec.title||'') + '</div></div>';
                         if (sec.type === 'checklist' && sec.items) {
                           ph += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;margin-bottom:12px;">';
                           for (var ci = 0; ci < sec.items.length; ci++) {
