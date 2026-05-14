@@ -2964,59 +2964,71 @@ app.post('/api/onepager/generate', async (req, res) => {
             max_tokens: 4096,
             messages: [{
                 role: 'user',
-                content: `You are an elite B2B marketing copywriter and document designer. Create a premium editorial one-pager based on this description:
+                content: `You are an elite B2B marketing copywriter and document designer. Your job is to take the user's EXACT input text and transform it into a premium editorial one-pager.
 
-"${description}"
+IMPORTANT: You must extract and USE the specific information from the user's text below. Do NOT invent features, metrics, or details that aren't mentioned or strongly implied. Your job is to ORGANIZE and PRESENT their content beautifully, not to make things up.
+
+USER'S INPUT TEXT:
+"""
+${description}
+"""
+
+INSTRUCTIONS:
+1. Read the input carefully. Extract: product/service name, target audience, key features, metrics/numbers, pain points, and any specific claims.
+2. Use THEIR words, THEIR product name, THEIR features. Rephrase for clarity and punch, but stay faithful to what they actually wrote.
+3. If they mention specific numbers (e.g. "10 days", "50%", "24/7"), use those exact numbers in the stats section.
+4. If they don't mention specific numbers, derive reasonable ones from context (e.g. if they say "fast implementation" → "< 2 weeks").
+5. The headline should capture the CORE message of their text, not a generic marketing tagline.
 
 Return ONLY a JSON object with this exact structure:
 {
-  "companyProduct": "CELERITECH · [PRODUCT NAME IN CAPS]",
-  "briefFor": "A BRIEF FOR [TARGET AUDIENCE IN CAPS]",
-  "tags": "[CATEGORY] · ONE PAGE · THREE MINUTES",
-  "headline": "A bold, provocative headline that challenges the reader (8-14 words). Make it feel editorial, not salesy.",
-  "accentWord": "One powerful word from the headline to emphasize in orange italic (the word that carries the emotional punch)",
-  "subtitle": "A 2-3 sentence paragraph expanding on the headline. Specific, concrete, mentioning timeframes or metrics.",
+  "companyProduct": "CELERITECH · [EXACT PRODUCT NAME FROM THE TEXT, IN CAPS]",
+  "briefFor": "A BRIEF FOR [TARGET AUDIENCE MENTIONED IN THE TEXT, IN CAPS]",
+  "tags": "[PRODUCT CATEGORY] · ONE PAGE · THREE MINUTES",
+  "headline": "A bold headline derived from the user's core message (8-14 words). Use their language, make it editorial.",
+  "accentWord": "One powerful word from the headline to emphasize (must appear exactly in headline)",
+  "subtitle": "A 2-3 sentence paragraph using details from the user's text. Mention their specific features, timeframes, or metrics.",
   "stats": [
-    { "value": "10 days", "label": "READY TO RUN" },
-    { "value": "100%", "label": "MOBILE, BARCODE-DRIVEN" },
-    { "value": "< 1 hr", "label": "FULL LOT TRACE, DOCK TO DELIVERY" }
+    { "value": "[Number from their text or derived]", "label": "[WHAT IT MEANS, CAPS]" },
+    { "value": "[Second metric]", "label": "[LABEL]" },
+    { "value": "[Third metric]", "label": "[LABEL]" }
   ],
   "sections": [
     {
       "number": "01",
-      "title": "A bold numbered section title that's a statement, not a question",
+      "title": "A section title using concepts from the user's text",
       "type": "checklist",
-      "items": ["Checklist item 1 — specific and concrete", "Item 2", "Item 3", "Item 4", "Item 5"],
-      "callout": "A provocative one-liner with a bold conclusion. **Bold the key phrase.**"
+      "items": ["Feature/capability 1 from their text", "Feature 2", "Feature 3", "Feature 4", "Feature 5"],
+      "callout": "A provocative one-liner based on their key value proposition. **Bold the key phrase.**"
     },
     {
       "number": "02",
-      "title": "What changes when [specific transformation happens]",
+      "title": "What changes when [transformation they describe] happens",
       "type": "comparison",
       "items": [
-        { "before": "Current pain point described concretely", "after": "The better way, specific to this product" },
-        { "before": "Another pain", "after": "Another solution" },
-        { "before": "Third pain", "after": "Third solution" },
-        { "before": "Fourth pain", "after": "Fourth solution" }
+        { "before": "Pain point from their text", "after": "Solution they describe" },
+        { "before": "Second pain", "after": "Their solution" },
+        { "before": "Third pain", "after": "Their solution" },
+        { "before": "Fourth pain", "after": "Their solution" }
       ]
     }
   ],
   "darkBanner": {
-    "headline": "A bold one-line manifesto. One scanner. One source of truth.",
-    "tags": ["Workflow 1", "Workflow 2", "Workflow 3", "Workflow 4", "Workflow 5", "Workflow 6"]
+    "headline": "A manifesto line using their core value proposition",
+    "tags": ["Workflow/feature 1 from text", "Feature 2", "Feature 3", "Feature 4", "Feature 5", "Feature 6"]
   },
   "testimonials": [
     {
-      "quote": "A compelling customer testimonial (1-2 sentences, feels real and specific)",
-      "name": "Full Name",
-      "title": "Title, Company Name"
+      "quote": "A realistic testimonial that reflects the benefits described in the text (1-2 sentences)",
+      "name": "A realistic full name",
+      "title": "Relevant title, Relevant company type"
     }
   ],
   "cta": {
-    "headline": "Start with the part that's hurting most.",
-    "description": "A 1-2 sentence description of next steps. Low-friction, no-pressure.",
+    "headline": "Start with the part of [their problem space] that's hurting most.",
+    "description": "A 1-2 sentence low-friction next step, referencing their specific offering.",
     "options": [
-      { "label": "OPTION 1 — FASTEST", "text": "Reply to this message with **one word**: [relevant keywords separated by ·]" },
+      { "label": "OPTION 1 — FASTEST", "text": "Reply with **one word**: [keywords from their features separated by ·]" },
       { "label": "OPTION 2 — 15 MINUTES", "text": "Reply with a time that works this week. 15-minute conversation — **no pitch.**" }
     ]
   },
@@ -3028,15 +3040,17 @@ Return ONLY a JSON object with this exact structure:
 }
 
 CRITICAL RULES:
-- Generate EXACTLY 3 stats with big impressive numbers/metrics
-- The headline must be provocative and editorial, NOT generic marketing speak
+- USE THE USER'S EXACT PRODUCT NAME — do not rename or rebrand it
+- USE THE USER'S EXACT TARGET AUDIENCE — do not change who they're targeting
+- EXTRACT features and capabilities from their text — do not invent ones they didn't mention
+- If the user mentions specific numbers/metrics, use them EXACTLY in the stats
+- Generate EXACTLY 3 stats (extract from text or derive logically)
 - accentWord must be a SINGLE word that appears EXACTLY in the headline
-- Checklist section (type: "checklist") needs exactly 5 items
-- Comparison section (type: "comparison") needs exactly 4 before/after pairs
-- Dark banner needs 6-8 workflow/feature tags
-- Make ONE testimonial that sounds authentic (use a realistic name and company)
-- CTA options should be low-friction (no "book a demo")
-- Write like a strategist, not a marketer. Every word should earn its place.
+- Checklist items should come directly from features mentioned in the text
+- Comparison before/after should reflect the problems and solutions they describe
+- Dark banner tags should list actual workflows/features from the text
+- The testimonial should reflect the specific benefits they describe
+- Write like a strategist, not a marketer. Stay faithful to their content.
 - Return ONLY valid JSON, no markdown fences, no comments`,
             }],
         });
