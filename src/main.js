@@ -4290,6 +4290,7 @@ function initAccountConnections() {
     });
 }
 
+
 // ═══════════════════════════════════════════════════════════════════
 // ─── ONE PAGER MODULE ───────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
@@ -4297,153 +4298,105 @@ function initAccountConnections() {
 (function initOnePager() {
     console.log('🔧 One Pager module initializing…');
 
-    const form = document.getElementById('onepagerForm');
-    const previewFrame = document.getElementById('opPreviewFrame');
-    const previewContainer = document.getElementById('opPreviewContainer');
-    const previewActions = document.getElementById('opPreviewActions');
-    const emptyState = document.getElementById('opEmpty');
-    const downloadBtn = document.getElementById('opDownloadPdfBtn');
-    const generateBtn = document.getElementById('opGenerateBtn');
-    const progressContainer = document.getElementById('opProgressContainer');
-    const progressFill = document.getElementById('opProgressFill');
-    const loadingText = document.getElementById('opLoadingText');
+    var previewFrame = document.getElementById('opPreviewFrame');
+    var previewContainer = document.getElementById('opPreviewContainer');
+    var previewActions = document.getElementById('opPreviewActions');
+    var emptyState = document.getElementById('opEmpty');
+    var downloadBtn = document.getElementById('opDownloadPdfBtn');
+    var generateBtn = document.getElementById('opGenerateBtn');
+    var progressContainer = document.getElementById('opProgressContainer');
+    var progressFill = document.getElementById('opProgressFill');
+    var loadingTextEl = document.getElementById('opLoadingText');
 
-    if (!form) {
-        console.warn('⚠ One Pager form not found, skipping init');
+    if (!generateBtn) {
+        console.warn('⚠ One Pager button not found');
         return;
     }
+    console.log('✅ One Pager elements found');
 
-    console.log('✅ One Pager module elements found');
+    var opColumns = 2;
+    var opWithImage = false;
+    var lastGeneratedTitle = 'one-pager';
 
-    // ─── State ──────────────────────────────────────
-    let opColumns = 2;
-    let opWithImage = false;
-    let lastGeneratedTitle = 'one-pager';
-
-    // ─── Column Buttons ─────────────────────────────
-    const colBtns = document.querySelectorAll('.op-col-btn');
-    console.log(`   Found ${colBtns.length} column buttons`);
-    colBtns.forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            colBtns.forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            opColumns = parseInt(btn.getAttribute('data-cols'));
-            console.log('📐 Columns set to:', opColumns);
-        });
-    });
-
-    // ─── Image Toggle Buttons ───────────────────────
-    const imgBtns = document.querySelectorAll('.op-img-btn');
-    console.log(`   Found ${imgBtns.length} image toggle buttons`);
-    imgBtns.forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            imgBtns.forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            opWithImage = btn.getAttribute('data-img') === 'yes';
-            console.log('🖼️ Image toggle:', opWithImage ? 'AI Image' : 'No Image');
-        });
-    });
-
-    // ─── Orange Arrow SVG ───────────────────────────
-    function orangeArrowSvg() {
-        return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    // Column buttons
+    var colBtns = document.querySelectorAll('.op-col-btn');
+    for (var ci = 0; ci < colBtns.length; ci++) {
+        (function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                for (var j = 0; j < colBtns.length; j++) colBtns[j].classList.remove('active');
+                btn.classList.add('active');
+                opColumns = parseInt(btn.getAttribute('data-cols'));
+                console.log('📐 Columns:', opColumns);
+            });
+        })(colBtns[ci]);
     }
 
-    // ─── Render Preview from API Data ────────────────
-    function renderOnePager(data) {
+    // Image toggle buttons
+    var imgBtns = document.querySelectorAll('.op-img-btn');
+    for (var ii = 0; ii < imgBtns.length; ii++) {
+        (function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                for (var j = 0; j < imgBtns.length; j++) imgBtns[j].classList.remove('active');
+                btn.classList.add('active');
+                opWithImage = btn.getAttribute('data-img') === 'yes';
+                console.log('🖼️ Image:', opWithImage);
+            });
+        })(imgBtns[ii]);
+    }
+
+    function arrowSvg() {
+        return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+
+    function renderPreview(data) {
         var title = data.title || '';
         var subtitle = data.subtitle || '';
-        var sectionHeading = data.sectionHeading || 'Key Features';
+        var heading = data.sectionHeading || 'Key Features';
         var bullets = data.bullets || [];
-        var description = data.description || '';
+        var desc = data.description || '';
         var footer = data.footer || '';
-        var headerImage = data.headerImage || null;
-        var logoUrl = 'https://ik.imagekit.io/kusosheutk/A-color.png';
-
+        var img = data.headerImage || null;
+        var logo = 'https://ik.imagekit.io/kusosheutk/A-color.png';
         lastGeneratedTitle = title || 'one-pager';
 
-        // Build bullet HTML
-        var bulletHtml = '';
+        var bHtml = '';
         for (var i = 0; i < bullets.length; i++) {
-            bulletHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;">' +
-                '<div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">' + orangeArrowSvg() + '</div>' +
-                '<div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[i] + '</div>' +
-                '</div>';
+            bHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;"><div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">' + arrowSvg() + '</div><div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[i] + '</div></div>';
         }
 
-        // Grid columns
-        var gridCols = opColumns === 1 ? '1fr' : opColumns === 3 ? '1fr 1fr 1fr' : '1fr 1fr';
-        var colGap = opColumns === 3 ? '32px' : '48px';
+        var gc = opColumns === 1 ? '1fr' : opColumns === 3 ? '1fr 1fr 1fr' : '1fr 1fr';
+        var gap = opColumns === 3 ? '32px' : '48px';
 
-        var html = '<div class="op-page" style="' +
-            'width:100%;min-height:700px;padding:48px 56px;position:relative;overflow:hidden;' +
-            'font-family:Inter,-apple-system,sans-serif;' +
-            'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),' +
-            'radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),' +
-            'radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),' +
-            'linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
+        var h = '<div class="op-page" style="width:100%;min-height:700px;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
+        h += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
+        if (img) h += '<img src="' + img + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
+        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2rem;font-weight:800;font-style:italic;color:#7c3aed;margin-bottom:8px;line-height:1.2;">' + heading + '</div>';
+        if (subtitle) h += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + subtitle + '</div>';
+        if (desc) h += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + desc + '</div>';
+        h += '<div style="display:grid;grid-template-columns:' + gc + ';gap:20px;column-gap:' + gap + ';">' + bHtml + '</div>';
+        if (footer) h += '<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">' + footer + '</div>';
+        h += '</div>';
 
-        // Logo
-        html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">' +
-            '<img src="' + logoUrl + '" alt="Celeritech" style="height:48px;width:auto;object-fit:contain;" crossorigin="anonymous" />' +
-            '</div>';
-
-        // Header image
-        if (headerImage) {
-            html += '<img src="' + headerImage + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
-        }
-
-        // Section title
-        html += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2rem;font-weight:800;font-style:italic;color:#7c3aed;letter-spacing:-0.02em;margin-bottom:8px;line-height:1.2;">' + sectionHeading + '</div>';
-
-        // Subtitle
-        if (subtitle) {
-            html += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + subtitle + '</div>';
-        }
-
-        // Description
-        if (description) {
-            html += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + description + '</div>';
-        }
-
-        // Bullets grid
-        html += '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:20px;column-gap:' + colGap + ';">' + bulletHtml + '</div>';
-
-        // Footer
-        if (footer) {
-            html += '<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">' + footer + '</div>';
-        }
-
-        html += '</div>';
-
-        previewFrame.innerHTML = html;
-        previewContainer.style.display = '';
+        if (previewFrame) previewFrame.innerHTML = h;
+        if (previewContainer) previewContainer.style.display = '';
         if (emptyState) emptyState.style.display = 'none';
         if (previewActions) previewActions.style.display = '';
-
-        console.log('✅ One pager rendered:', title);
+        console.log('✅ Preview rendered:', title);
     }
 
-    // ─── Form Submit ────────────────────────────────
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        console.log('📄 One Pager form submitted');
-
+    function doGenerate() {
+        console.log('📄 Generate clicked');
         var descEl = document.getElementById('opDescription');
         var description = descEl ? descEl.value.trim() : '';
         if (!description) {
-            showToast('Please describe your product or service', 'error');
+            if (typeof showToast === 'function') showToast('Please describe your product or service', 'error');
             return;
         }
 
-        console.log('   Description:', description.substring(0, 80) + '…');
-        console.log('   Columns:', opColumns, '| Image:', opWithImage);
-
-        // UI: show loading
         var btnText = generateBtn.querySelector('.btn-text');
         var btnLoader = generateBtn.querySelector('.btn-loader');
         if (btnText) btnText.style.display = 'none';
@@ -4452,105 +4405,84 @@ function initAccountConnections() {
         if (progressContainer) {
             progressContainer.style.display = '';
             if (progressFill) progressFill.style.width = '0%';
-            if (loadingText) loadingText.textContent = 'Starting generation…';
+            if (loadingTextEl) loadingTextEl.textContent = 'Starting generation…';
         }
 
-        // Call API
-        fetch(API_BASE + '/api/onepager/generate', {
+        var apiUrl = (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/onepager/generate';
+        console.log('   Fetching:', apiUrl);
+
+        fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                description: description,
-                withImage: opWithImage,
-                columns: opColumns,
-            }),
+            body: JSON.stringify({ description: description, withImage: opWithImage, columns: opColumns }),
         })
         .then(function(res) {
-            if (!res.ok) throw new Error('Server error: ' + res.status);
-            console.log('   SSE stream started');
+            if (!res.ok) throw new Error('Server ' + res.status);
             var reader = res.body.getReader();
             var decoder = new TextDecoder();
             var buffer = '';
-
-            function readChunk() {
-                return reader.read().then(function(result) {
-                    if (result.done) {
-                        console.log('   SSE stream ended');
-                        return;
-                    }
-                    buffer += decoder.decode(result.value, { stream: true });
+            function pump() {
+                return reader.read().then(function(r) {
+                    if (r.done) return;
+                    buffer += decoder.decode(r.value, { stream: true });
                     var lines = buffer.split('\n');
                     buffer = lines.pop() || '';
-
                     for (var i = 0; i < lines.length; i++) {
-                        var line = lines[i];
-                        if (line.indexOf('data: ') !== 0) continue;
+                        if (lines[i].indexOf('data: ') !== 0) continue;
                         try {
-                            var data = JSON.parse(line.slice(6));
-                            if (data.type === 'progress') {
-                                var pct = Math.round((data.step / data.total) * 100);
+                            var d = JSON.parse(lines[i].slice(6));
+                            if (d.type === 'progress') {
+                                var pct = Math.round((d.step / d.total) * 100);
                                 if (progressFill) progressFill.style.width = pct + '%';
-                                if (loadingText) loadingText.textContent = data.message;
-                                console.log('   Progress:', pct + '%', data.message);
+                                if (loadingTextEl) loadingTextEl.textContent = d.message;
                             }
-                            if (data.type === 'result') {
-                                renderOnePager(data);
-                                showToast('One pager generated!');
-                            }
-                            if (data.type === 'error') {
-                                showToast(data.error || 'Generation failed', 'error');
-                            }
-                        } catch (parseErr) {
-                            console.warn('SSE parse skip:', parseErr.message);
-                        }
+                            if (d.type === 'result') { renderPreview(d); if (typeof showToast === 'function') showToast('One pager generated!'); }
+                            if (d.type === 'error') { if (typeof showToast === 'function') showToast(d.error, 'error'); }
+                        } catch (pe) { /* skip */ }
                     }
-                    return readChunk();
+                    return pump();
                 });
             }
-
-            return readChunk();
+            return pump();
         })
         .catch(function(err) {
-            console.error('❌ One-pager generation error:', err);
-            showToast('Generation failed: ' + err.message, 'error');
+            console.error('Generate error:', err);
+            if (typeof showToast === 'function') showToast('Failed: ' + err.message, 'error');
         })
         .finally(function() {
-            if (btnText) btnText.style.display = '';
-            if (btnLoader) btnLoader.style.display = 'none';
+            var bt = generateBtn.querySelector('.btn-text');
+            var bl = generateBtn.querySelector('.btn-loader');
+            if (bt) bt.style.display = '';
+            if (bl) bl.style.display = 'none';
             generateBtn.disabled = false;
             if (progressContainer) progressContainer.style.display = 'none';
         });
-    });
+    }
 
-    // ─── Download PDF ───────────────────────────────
+    generateBtn.addEventListener('click', doGenerate);
+    window._generateOnePager = doGenerate;
+
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
+            if (!previewFrame) return;
             var pageEl = previewFrame.querySelector('.op-page');
-            if (!pageEl) {
-                showToast('Generate a preview first', 'error');
-                return;
-            }
-
+            if (!pageEl) { if (typeof showToast === 'function') showToast('Generate first', 'error'); return; }
             downloadBtn.disabled = true;
-            var origText = downloadBtn.innerHTML;
+            var orig = downloadBtn.innerHTML;
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
-
-            var filename = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
-
+            var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
             html2pdf().set({
-                margin: 0,
-                filename: filename,
+                margin: 0, filename: fname,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
             }).from(pageEl).save().then(function() {
-                showToast('PDF downloaded!');
-            }).catch(function(err) {
-                console.error('PDF error:', err);
-                showToast('PDF failed: ' + err.message, 'error');
+                if (typeof showToast === 'function') showToast('PDF downloaded!');
+            }).catch(function(e) {
+                console.error('PDF err:', e);
             }).finally(function() {
                 downloadBtn.disabled = false;
-                downloadBtn.innerHTML = origText;
+                downloadBtn.innerHTML = orig;
             });
         });
     }

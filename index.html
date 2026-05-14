@@ -1845,14 +1845,13 @@
 
         <!-- Input Section -->
         <section class="card" style="margin-bottom: 24px;">
-          <form id="onepagerForm" style="display:flex; flex-direction:column; gap:20px;">
+          <div id="onepagerForm" style="display:flex; flex-direction:column; gap:20px;">
 
             <div class="form-group">
               <label for="opDescription">Describe your product, service, or topic</label>
               <div class="input-wrapper">
                 <textarea id="opDescription" rows="5"
-                  placeholder="e.g. SAP Business One is a flexible ERP solution for small and midsize businesses. It integrates financials, sales, procurement, inventory, and customer management into one platform. Key benefits include AI-powered automation, flexible deployment options, and industry-specific scalability…"
-                  required></textarea>
+                  placeholder="e.g. SAP Business One is a flexible ERP solution for small and midsize businesses. It integrates financials, sales, procurement, inventory, and customer management into one platform. Key benefits include AI-powered automation, flexible deployment options, and industry-specific scalability…"></textarea>
               </div>
             </div>
 
@@ -1874,7 +1873,7 @@
                 </div>
               </div>
               <div style="flex:0 0 auto;">
-                <button type="submit" class="btn-primary" id="opGenerateBtn" style="margin:0; padding:14px 32px;">
+                <button type="button" class="btn-primary" id="opGenerateBtn" onclick="window._generateOnePager && window._generateOnePager()" style="margin:0; padding:14px 32px;">
                   <span class="btn-text">✨ Generate One Pager</span>
                   <span class="btn-loader" style="display:none;">
                     <span class="spinner"></span>
@@ -1895,7 +1894,7 @@
               </div>
             </div>
 
-          </form>
+          </div>
         </section>
 
         <!-- Preview Section -->
