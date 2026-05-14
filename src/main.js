@@ -4295,7 +4295,10 @@ function initAccountConnections() {
 // ─── ONE PAGER MODULE ───────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 
-(function initOnePager() {
+// Use setTimeout to ensure this runs AFTER all other module code,
+// even if an earlier line throws a runtime error during execution.
+setTimeout(function initOnePager() {
+  try {
     console.log('🔧 One Pager module initializing…');
 
     var previewFrame = document.getElementById('opPreviewFrame');
@@ -4504,4 +4507,7 @@ function initAccountConnections() {
     }
 
     console.log('✅ One Pager module ready');
-})();
+  } catch (initErr) {
+    console.error('❌ One Pager module init error:', initErr);
+  }
+}, 0);

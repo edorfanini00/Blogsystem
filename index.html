@@ -1873,7 +1873,7 @@
                 </div>
               </div>
               <div style="flex:0 0 auto;">
-                <button type="button" class="btn-primary" id="opGenerateBtn" style="margin:0; padding:14px 32px;">
+                <button type="button" class="btn-primary" id="opGenerateBtn" onclick="window._generateOnePager && window._generateOnePager()" style="margin:0; padding:14px 32px;">
                   <span class="btn-text">✨ Generate One Pager</span>
                   <span class="btn-loader" style="display:none;">
                     <span class="spinner"></span>
@@ -2339,6 +2339,115 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
   <script type="module" src="/src/main.js"></script>
+
+  <!-- Standalone fallback for One Pager (runs outside module system) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Wait 2s for main.js module to load and set window._generateOnePager
+      setTimeout(function() {
+        if (window._generateOnePager) {
+          console.log('✅ One Pager: main.js handler active');
+          return; // main.js already set it up, nothing to do
+        }
+
+        console.warn('⚠ One Pager: main.js handler NOT found, using standalone fallback');
+
+        // Standalone fallback implementation
+        var _generating = false;
+        window._generateOnePager = function() {
+          if (_generating) return;
+
+          var descEl = document.getElementById('opDescription');
+          var description = descEl ? descEl.value.trim() : '';
+          if (!description) {
+            alert('Please describe your product or service');
+            return;
+          }
+
+          _generating = true;
+          var btn = document.getElementById('opGenerateBtn');
+          var btnText = btn ? btn.querySelector('.btn-text') : null;
+          var btnLoader = btn ? btn.querySelector('.btn-loader') : null;
+          if (btnText) btnText.style.display = 'none';
+          if (btnLoader) btnLoader.style.display = '';
+          if (btn) btn.disabled = true;
+
+          var progressContainer = document.getElementById('opProgressContainer');
+          var progressFill = document.getElementById('opProgressFill');
+          var loadingTextEl = document.getElementById('opLoadingText');
+          if (progressContainer) {
+            progressContainer.style.display = '';
+            if (progressFill) progressFill.style.width = '0%';
+            if (loadingTextEl) loadingTextEl.textContent = 'Starting generation…';
+          }
+
+          var apiUrl = '/api/onepager/generate';
+          console.log('📄 Fallback: fetching', apiUrl);
+
+          fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: description, withImage: false, columns: 2 }),
+          })
+          .then(function(res) {
+            if (!res.ok) throw new Error('Server ' + res.status);
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            function pump() {
+              return reader.read().then(function(r) {
+                if (r.done) return;
+                buffer += decoder.decode(r.value, { stream: true });
+                var lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                  if (lines[i].indexOf('data: ') !== 0) continue;
+                  try {
+                    var d = JSON.parse(lines[i].slice(6));
+                    if (d.type === 'progress') {
+                      var pct = Math.round((d.step / d.total) * 100);
+                      if (progressFill) progressFill.style.width = pct + '%';
+                      if (loadingTextEl) loadingTextEl.textContent = d.message;
+                    }
+                    if (d.type === 'result') {
+                      console.log('✅ Fallback: result received');
+                      alert('One pager generated! (Note: main.js module did not load, showing raw result)');
+                    }
+                    if (d.type === 'error') {
+                      alert('Error: ' + d.error);
+                    }
+                  } catch (pe) { /* skip */ }
+                }
+                return pump();
+              });
+            }
+            return pump();
+          })
+          .catch(function(err) {
+            console.error('Fallback generate error:', err);
+            alert('Failed: ' + err.message);
+          })
+          .finally(function() {
+            _generating = false;
+            if (btnText) btnText.style.display = '';
+            if (btnLoader) btnLoader.style.display = 'none';
+            if (btn) btn.disabled = false;
+            if (progressContainer) progressContainer.style.display = 'none';
+          });
+        };
+
+        // Also wire up the button click in case onclick attribute was stripped by build
+        var btn = document.getElementById('opGenerateBtn');
+        if (btn) {
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window._generateOnePager) window._generateOnePager();
+          });
+        }
+      }, 2000);
+    });
+  </script>
 </body>
 
 </html>
