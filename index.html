@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700;1,900&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
   <script type="module">
@@ -2426,38 +2426,117 @@
                     }
                     if (d.type === 'result') {
                       console.log('✅ Fallback: result received', d);
-                      // Render the preview using the same template as main.js
                       var data = d;
-                      var logo = 'https://ik.imagekit.io/kusosheutk/A-color.png';
-                      var bHtml = '';
-                      var bullets = data.bullets || [];
-                      for (var b = 0; b < bullets.length; b++) {
-                        bHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;"><div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[b] + '</div></div>';
+                      var headline = data.headline || data.title || '';
+                      var accentWord = data.accentWord || '';
+                      var headlineHtml = headline;
+                      if (accentWord && headline.indexOf(accentWord) >= 0) {
+                        headlineHtml = headline.replace(accentWord, '<em style="color:#c2410c;font-style:italic;">' + accentWord + '</em>');
                       }
-                      var pageHtml = '<div style="width:100%;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
-                      pageHtml += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
-                      if (data.headerImage) pageHtml += '<img src="' + data.headerImage + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;" />';
-                      if (data.title) pageHtml += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;color:#1e293b;margin-bottom:8px;line-height:1.15;">' + data.title + '</div>';
-                      pageHtml += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:800;font-style:italic;color:#7c3aed;margin-bottom:8px;line-height:1.2;">' + (data.sectionHeading || 'Key Features') + '</div>';
-                      if (data.subtitle) pageHtml += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + data.subtitle + '</div>';
-                      if (data.description) pageHtml += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + data.description + '</div>';
-                      pageHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;column-gap:48px;">' + bHtml + '</div>';
-                      if (data.footer) pageHtml += '<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">' + data.footer + '</div>';
-                      pageHtml += '</div>';
+                      function boldify(t) { return (t||'').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); }
+                      var F = 'font-family:"Source Serif 4",Georgia,"Times New Roman",serif;';
+                      var S = 'font-family:Inter,-apple-system,sans-serif;';
+
+                      var ph = '<div class="op-page" style="width:100%;' + S + 'background:#faf7f2;color:#1a1a1a;">';
+                      // Header bar
+                      ph += '<div style="display:flex;justify-content:space-between;align-items:center;padding:28px 48px;border-bottom:1px solid #e5ddd3;">';
+                      ph += '<div style="font-size:0.8rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;">' + (data.companyProduct || 'CELERITECH') + '</div>';
+                      if (data.briefFor) ph += '<div style="font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">' + data.briefFor + '</div>';
+                      ph += '</div>';
+                      ph += '<div style="padding:36px 48px 32px;">';
+                      if (data.tags) ph += '<div style="font-size:0.65rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:16px;">' + data.tags + '</div>';
+                      ph += '<div style="' + F + 'font-size:2.4rem;font-weight:900;line-height:1.1;margin-bottom:16px;letter-spacing:-0.02em;">' + headlineHtml + '</div>';
+                      if (data.subtitle) ph += '<div style="font-size:0.85rem;line-height:1.7;color:#44403c;margin-bottom:28px;max-width:90%;">' + data.subtitle + '</div>';
+                      // Stats
+                      var stats = data.stats || [];
+                      if (stats.length) {
+                        ph += '<div style="display:flex;gap:0;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid #e5ddd3;">';
+                        for (var si = 0; si < stats.length; si++) {
+                          ph += '<div style="flex:1;' + (si > 0 ? 'padding-left:32px;border-left:1px solid #e5ddd3;' : '') + '">';
+                          ph += '<div style="' + F + 'font-size:1.8rem;font-weight:900;color:#c2410c;line-height:1.1;margin-bottom:4px;">' + (stats[si].value||'') + '</div>';
+                          ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">' + (stats[si].label||'') + '</div></div>';
+                        }
+                        ph += '</div>';
+                      }
+                      // Sections
+                      var secs = data.sections || [];
+                      for (var si2 = 0; si2 < secs.length; si2++) {
+                        var sec = secs[si2];
+                        ph += '<div style="margin-bottom:24px;"><div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">';
+                        ph += '<span style="font-size:0.8rem;font-weight:700;color:#ea580c;">' + (sec.number||'0'+(si2+1)) + '</span>';
+                        ph += '<div style="' + F + 'font-size:1.3rem;font-weight:800;line-height:1.25;">' + (sec.title||'') + '</div></div>';
+                        if (sec.type === 'checklist' && sec.items) {
+                          ph += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;margin-bottom:12px;">';
+                          for (var ci = 0; ci < sec.items.length; ci++) {
+                            ph += '<div style="display:flex;align-items:flex-start;gap:10px;font-size:0.78rem;color:#44403c;line-height:1.5;">';
+                            ph += '<div style="flex-shrink:0;width:16px;height:16px;border:1.5px solid #a8a29e;border-radius:2px;margin-top:2px;"></div>';
+                            ph += '<span>' + sec.items[ci] + '</span></div>';
+                          }
+                          ph += '</div>';
+                          if (sec.callout) {
+                            ph += '<div style="display:flex;gap:12px;margin-top:12px;"><div style="width:3px;background:#ea580c;border-radius:2px;flex-shrink:0;"></div>';
+                            ph += '<div style="font-size:0.78rem;color:#44403c;line-height:1.6;">' + boldify(sec.callout) + '</div></div>';
+                          }
+                        } else if (sec.type === 'comparison' && sec.items) {
+                          ph += '<div style="border-top:1px solid #d6d3d1;">';
+                          ph += '<div style="display:grid;grid-template-columns:1fr 32px 1fr;padding:10px 0;border-bottom:1px solid #e7e5e4;">';
+                          ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">WHERE YOU ARE NOW</div><div></div>';
+                          ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">WHERE YOU\'D BE</div></div>';
+                          for (var ri = 0; ri < sec.items.length; ri++) {
+                            var row = sec.items[ri];
+                            ph += '<div style="display:grid;grid-template-columns:1fr 32px 1fr;padding:14px 0;border-bottom:1px solid #f5f0eb;align-items:center;">';
+                            ph += '<div style="font-size:0.78rem;color:#78716c;line-height:1.5;">' + (row.before||'') + '</div>';
+                            ph += '<div style="display:flex;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+                            ph += '<div style="font-size:0.78rem;color:#1a1a1a;font-weight:600;line-height:1.5;">' + (row.after||'') + '</div></div>';
+                          }
+                          ph += '</div>';
+                        }
+                        ph += '</div>';
+                      }
+                      // Dark banner
+                      var db = data.darkBanner || {};
+                      if (db.headline) {
+                        ph += '<div style="background:#292524;border-radius:10px;padding:28px 32px;margin:28px 0;color:#fafaf9;">';
+                        ph += '<div style="' + F + 'font-size:1.2rem;font-weight:800;line-height:1.3;margin-bottom:12px;">' + db.headline + '</div>';
+                        if (db.tags) { ph += '<div style="display:flex;flex-wrap:wrap;gap:6px 16px;">'; for (var ti=0;ti<db.tags.length;ti++) ph += '<span style="font-size:0.7rem;color:#d6d3d1;">' + db.tags[ti] + (ti<db.tags.length-1?' ·':'') + '</span>'; ph += '</div>'; }
+                        ph += '</div>';
+                      }
+                      // Testimonials
+                      var tq = data.testimonials || [];
+                      for (var qi=0;qi<tq.length;qi++) {
+                        ph += '<div style="border-left:3px solid #ea580c;padding:20px 24px;margin:20px 0;background:#f5f0eb;border-radius:0 8px 8px 0;">';
+                        ph += '<div style="' + F + 'font-size:1rem;font-style:italic;font-weight:600;line-height:1.6;color:#292524;margin-bottom:8px;">"' + (tq[qi].quote||'') + '"</div>';
+                        ph += '<div style="font-size:0.75rem;color:#78716c;"><strong style="color:#1a1a1a;">' + (tq[qi].name||'') + '</strong> · ' + (tq[qi].title||'') + '</div></div>';
+                      }
+                      // CTA
+                      var cta = data.cta || {};
+                      if (cta.headline) {
+                        ph += '<div style="background:#292524;border-radius:10px;padding:28px 32px;margin:24px 0;color:#fafaf9;">';
+                        ph += '<div style="' + F + 'font-size:1.3rem;font-weight:800;line-height:1.25;margin-bottom:10px;">' + cta.headline + '</div>';
+                        if (cta.description) ph += '<div style="font-size:0.8rem;color:#d6d3d1;line-height:1.6;margin-bottom:20px;">' + cta.description + '</div>';
+                        if (cta.options) { ph += '<div style="display:flex;gap:16px;">'; for (var oi=0;oi<cta.options.length;oi++) { var opt=cta.options[oi]; ph += '<div style="flex:1;background:'+(oi===0?'#faf7f2':'#3a3533')+';border-radius:8px;padding:16px 20px;"><div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;color:#ea580c;margin-bottom:8px;">'+( opt.label||'')+'</div><div style="font-size:0.78rem;color:'+(oi===0?'#1a1a1a':'#d6d3d1')+';line-height:1.5;">'+boldify(opt.text||'')+'</div></div>'; } ph += '</div>'; }
+                        ph += '</div>';
+                      }
+                      // Contact
+                      var ct = data.contact || {};
+                      if (ct.email||ct.phone||ct.website) {
+                        ph += '<div style="display:flex;gap:24px;padding:20px 0 8px;font-size:0.72rem;color:#78716c;">';
+                        if (ct.email) ph += '<span>✉ '+ct.email+'</span>';
+                        if (ct.phone) ph += '<span>☎ '+ct.phone+'</span>';
+                        if (ct.website) ph += '<span>↗ '+ct.website+'</span>';
+                        ph += '</div>';
+                      }
+                      ph += '</div></div>';
 
                       var previewFrame = document.getElementById('opPreviewFrame');
                       var previewContainer = document.getElementById('opPreviewContainer');
                       var emptyState = document.getElementById('opEmpty');
                       var previewActs = document.getElementById('opPreviewActions');
-                      if (previewFrame) previewFrame.innerHTML = pageHtml;
+                      if (previewFrame) previewFrame.innerHTML = ph;
                       if (previewContainer) previewContainer.style.display = 'block';
                       if (emptyState) emptyState.style.display = 'none';
                       if (previewActs) previewActs.style.display = 'flex';
-
-                      // Auto-scroll to preview
-                      if (previewContainer) {
-                        setTimeout(function() { previewContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
-                      }
+                      if (previewContainer) setTimeout(function() { previewContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
 
                       // Wire up download button
                       var dlBtn = document.getElementById('opDownloadPdfBtn');
@@ -2465,23 +2544,19 @@
                         dlBtn.onclick = function() {
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
-                          var pageEl = previewFrame.querySelector('div[style]') || previewFrame.firstElementChild || previewFrame;
-
-                          // Clone and render at exact letter-page dimensions
+                          var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
                           var clone = pageEl.cloneNode(true);
                           clone.style.width = '8.5in';
                           clone.style.minHeight = '11in';
-                          clone.style.padding = '0.6in 0.7in';
+                          clone.style.padding = '0';
                           clone.style.boxSizing = 'border-box';
                           clone.style.position = 'fixed';
                           clone.style.left = '-9999px';
                           clone.style.top = '0';
-                          clone.style.zIndex = '-1';
                           document.body.appendChild(clone);
-
                           html2pdf().set({
                             margin: 0,
-                            filename: (data.title || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
+                            filename: (headline || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
                             image: { type: 'jpeg', quality: 0.98 },
                             html2canvas: { scale: 2, useCORS: true, allowTaint: true, width: clone.offsetWidth, height: clone.offsetHeight },
                             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },

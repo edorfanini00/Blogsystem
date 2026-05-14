@@ -4356,53 +4356,191 @@ setTimeout(function initOnePager() {
     }
 
     function arrowSvg() {
-        return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+
+    function boldify(text) {
+        if (!text) return '';
+        return text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     }
 
     function renderPreview(data) {
-        var title = data.title || '';
-        var subtitle = data.subtitle || '';
-        var heading = data.sectionHeading || 'Key Features';
-        var bullets = data.bullets || [];
-        var desc = data.description || '';
-        var footer = data.footer || '';
-        var img = data.headerImage || null;
-        var logo = 'https://ik.imagekit.io/kusosheutk/A-color.png';
-        lastGeneratedTitle = title || 'one-pager';
+        var d = data || {};
+        var companyProduct = d.companyProduct || 'CELERITECH';
+        var briefFor = d.briefFor || '';
+        var tags = d.tags || '';
+        var headline = d.headline || d.title || '';
+        var accentWord = d.accentWord || '';
+        var subtitle = d.subtitle || '';
+        var stats = d.stats || [];
+        var sections = d.sections || [];
+        var darkBanner = d.darkBanner || {};
+        var testimonials = d.testimonials || [];
+        var cta = d.cta || {};
+        var contact = d.contact || {};
+        var img = d.headerImage || null;
+        lastGeneratedTitle = headline || 'one-pager';
 
-        var bHtml = '';
-        for (var i = 0; i < bullets.length; i++) {
-            bHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;"><div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">' + arrowSvg() + '</div><div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[i] + '</div></div>';
+        // Process headline with accent word
+        var headlineHtml = headline;
+        if (accentWord && headline.indexOf(accentWord) >= 0) {
+            headlineHtml = headline.replace(accentWord, '<em style="color:#c2410c;font-style:italic;">' + accentWord + '</em>');
         }
 
-        var gc = opColumns === 1 ? '1fr' : opColumns === 3 ? '1fr 1fr 1fr' : '1fr 1fr';
-        var gap = opColumns === 3 ? '32px' : '48px';
+        var F = 'font-family:"Source Serif 4",Georgia,"Times New Roman",serif;';
+        var S = 'font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;';
 
-        var h = '<div class="op-page" style="width:100%;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
-        h += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
-        if (img) h += '<img src="' + img + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
-        if (title) h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;color:#1e293b;margin-bottom:8px;line-height:1.15;letter-spacing:-0.02em;">' + title + '</div>';
-        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:800;font-style:italic;color:#7c3aed;margin-bottom:8px;line-height:1.2;">' + heading + '</div>';
-        if (subtitle) h += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + subtitle + '</div>';
-        if (desc) h += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + desc + '</div>';
-        h += '<div style="display:grid;grid-template-columns:' + gc + ';gap:20px;column-gap:' + gap + ';">' + bHtml + '</div>';
-        if (footer) h += '<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">' + footer + '</div>';
+        var h = '<div class="op-page" style="width:100%;' + S + 'background:#faf7f2;color:#1a1a1a;">';
+
+        // ─── HEADER BAR ───
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:28px 48px;border-bottom:1px solid #e5ddd3;">';
+        h += '<div style="font-size:0.8rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#1a1a1a;">' + companyProduct + '</div>';
+        if (briefFor) h += '<div style="font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">' + briefFor + '</div>';
         h += '</div>';
+
+        // ─── MAIN CONTENT ───
+        h += '<div style="padding:36px 48px 32px;">';
+
+        // Tags
+        if (tags) h += '<div style="font-size:0.65rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:16px;">' + tags + '</div>';
+
+        // Headline
+        h += '<div style="' + F + 'font-size:2.4rem;font-weight:900;line-height:1.1;margin-bottom:16px;letter-spacing:-0.02em;color:#1a1a1a;">' + headlineHtml + '</div>';
+
+        // Subtitle
+        if (subtitle) h += '<div style="font-size:0.85rem;line-height:1.7;color:#44403c;margin-bottom:28px;max-width:90%;">' + subtitle + '</div>';
+
+        // Header image
+        if (img) h += '<img src="' + img + '" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:28px;" />';
+
+        // ─── STATS ROW ───
+        if (stats.length > 0) {
+            h += '<div style="display:flex;gap:0;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid #e5ddd3;">';
+            for (var si = 0; si < stats.length; si++) {
+                var stat = stats[si];
+                h += '<div style="flex:1;' + (si > 0 ? 'padding-left:32px;border-left:1px solid #e5ddd3;' : '') + '">';
+                h += '<div style="' + F + 'font-size:1.8rem;font-weight:900;color:#c2410c;line-height:1.1;margin-bottom:4px;">' + (stat.value || '') + '</div>';
+                h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">' + (stat.label || '') + '</div>';
+                h += '</div>';
+            }
+            h += '</div>';
+        }
+
+        // ─── SECTIONS ───
+        for (var si2 = 0; si2 < sections.length; si2++) {
+            var sec = sections[si2];
+            var secNum = sec.number || String(si2 + 1).padStart(2, '0');
+            var secTitle = sec.title || '';
+
+            // Section header
+            h += '<div style="margin-bottom:24px;">';
+            h += '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">';
+            h += '<span style="font-size:0.8rem;font-weight:700;color:#ea580c;letter-spacing:0.05em;">' + secNum + '</span>';
+            h += '<div style="' + F + 'font-size:1.3rem;font-weight:800;line-height:1.25;color:#1a1a1a;">' + secTitle + '</div>';
+            h += '</div>';
+
+            if (sec.type === 'checklist' && sec.items) {
+                // Checklist in two columns
+                h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;margin-bottom:12px;">';
+                for (var ci = 0; ci < sec.items.length; ci++) {
+                    h += '<div style="display:flex;align-items:flex-start;gap:10px;font-size:0.78rem;color:#44403c;line-height:1.5;">';
+                    h += '<div style="flex-shrink:0;width:16px;height:16px;border:1.5px solid #a8a29e;border-radius:2px;margin-top:2px;"></div>';
+                    h += '<span>' + sec.items[ci] + '</span></div>';
+                }
+                h += '</div>';
+
+                // Callout
+                if (sec.callout) {
+                    h += '<div style="display:flex;align-items:stretch;gap:12px;margin-top:12px;margin-bottom:8px;">';
+                    h += '<div style="width:3px;background:#ea580c;border-radius:2px;flex-shrink:0;"></div>';
+                    h += '<div style="font-size:0.78rem;color:#44403c;line-height:1.6;">' + boldify(sec.callout) + '</div>';
+                    h += '</div>';
+                }
+            } else if (sec.type === 'comparison' && sec.items) {
+                // Comparison table
+                h += '<div style="border-top:1px solid #d6d3d1;">';
+                h += '<div style="display:grid;grid-template-columns:1fr 32px 1fr;gap:0;padding:10px 0;border-bottom:1px solid #e7e5e4;">';
+                h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">WHERE YOU ARE NOW</div>';
+                h += '<div></div>';
+                h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#78716c;">WHERE YOU\'D BE</div>';
+                h += '</div>';
+                for (var ri = 0; ri < sec.items.length; ri++) {
+                    var row = sec.items[ri];
+                    h += '<div style="display:grid;grid-template-columns:1fr 32px 1fr;gap:0;padding:14px 0;border-bottom:1px solid #f5f0eb;align-items:center;">';
+                    h += '<div style="font-size:0.78rem;color:#78716c;line-height:1.5;">' + (row.before || '') + '</div>';
+                    h += '<div style="display:flex;justify-content:center;">' + arrowSvg() + '</div>';
+                    h += '<div style="font-size:0.78rem;color:#1a1a1a;font-weight:600;line-height:1.5;">' + (row.after || '') + '</div>';
+                    h += '</div>';
+                }
+                h += '</div>';
+            }
+            h += '</div>';
+        }
+
+        // ─── DARK BANNER ───
+        if (darkBanner.headline || (darkBanner.tags && darkBanner.tags.length)) {
+            h += '<div style="background:#292524;border-radius:10px;padding:28px 32px;margin:28px 0;color:#fafaf9;">';
+            if (darkBanner.headline) h += '<div style="' + F + 'font-size:1.2rem;font-weight:800;line-height:1.3;margin-bottom:12px;color:#fafaf9;">' + darkBanner.headline + '</div>';
+            if (darkBanner.tags && darkBanner.tags.length) {
+                h += '<div style="display:flex;flex-wrap:wrap;gap:6px 16px;">';
+                for (var ti = 0; ti < darkBanner.tags.length; ti++) {
+                    h += '<span style="font-size:0.7rem;color:#d6d3d1;">' + darkBanner.tags[ti] + (ti < darkBanner.tags.length - 1 ? ' ·' : '') + '</span>';
+                }
+                h += '</div>';
+            }
+            h += '</div>';
+        }
+
+        // ─── TESTIMONIALS ───
+        for (var qi = 0; qi < testimonials.length; qi++) {
+            var t = testimonials[qi];
+            h += '<div style="border-left:3px solid #ea580c;padding:20px 24px;margin:20px 0;background:#f5f0eb;border-radius:0 8px 8px 0;">';
+            h += '<div style="' + F + 'font-size:1rem;font-style:italic;font-weight:600;line-height:1.6;color:#292524;margin-bottom:8px;">"' + (t.quote || '') + '"</div>';
+            h += '<div style="font-size:0.75rem;color:#78716c;"><strong style="color:#1a1a1a;">' + (t.name || '') + '</strong> · ' + (t.title || '') + '</div>';
+            h += '</div>';
+        }
+
+        // ─── CTA SECTION ───
+        if (cta.headline) {
+            h += '<div style="background:#292524;border-radius:10px;padding:28px 32px;margin:24px 0;color:#fafaf9;">';
+            h += '<div style="' + F + 'font-size:1.3rem;font-weight:800;line-height:1.25;margin-bottom:10px;color:#fafaf9;">' + cta.headline + '</div>';
+            if (cta.description) h += '<div style="font-size:0.8rem;color:#d6d3d1;line-height:1.6;margin-bottom:20px;">' + cta.description + '</div>';
+            if (cta.options && cta.options.length) {
+                h += '<div style="display:flex;gap:16px;">';
+                for (var oi = 0; oi < cta.options.length; oi++) {
+                    var opt = cta.options[oi];
+                    h += '<div style="flex:1;background:' + (oi === 0 ? '#faf7f2' : '#3a3533') + ';border-radius:8px;padding:16px 20px;">';
+                    h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;color:' + (oi === 0 ? '#ea580c' : '#ea580c') + ';margin-bottom:8px;">' + (opt.label || '') + '</div>';
+                    h += '<div style="font-size:0.78rem;color:' + (oi === 0 ? '#1a1a1a' : '#d6d3d1') + ';line-height:1.5;">' + boldify(opt.text || '') + '</div>';
+                    h += '</div>';
+                }
+                h += '</div>';
+            }
+            h += '</div>';
+        }
+
+        // ─── CONTACT FOOTER ───
+        if (contact.email || contact.phone || contact.website) {
+            h += '<div style="display:flex;gap:24px;padding:20px 0 8px;font-size:0.72rem;color:#78716c;">';
+            if (contact.email) h += '<span>✉ ' + contact.email + '</span>';
+            if (contact.phone) h += '<span>☎ ' + contact.phone + '</span>';
+            if (contact.website) h += '<span>↗ ' + contact.website + '</span>';
+            h += '</div>';
+        }
+
+        h += '</div>'; // close main content
+        h += '</div>'; // close op-page
 
         if (previewFrame) previewFrame.innerHTML = h;
         if (previewContainer) previewContainer.style.display = 'block';
         if (emptyState) emptyState.style.display = 'none';
         if (previewActions) previewActions.style.display = 'flex';
 
-        // Auto-scroll to the preview so the user can see the result
         var previewSection = previewContainer || previewFrame;
         if (previewSection) {
-            setTimeout(function() {
-                previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
+            setTimeout(function() { previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
         }
-
-        console.log('✅ Preview rendered:', title, '| previewFrame:', !!previewFrame, '| previewContainer:', !!previewContainer, '| previewActions:', !!previewActions);
+        console.log('✅ Preview rendered:', headline);
     }
 
     var _opGenerating = false;

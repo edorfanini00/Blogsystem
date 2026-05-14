@@ -2956,35 +2956,88 @@ app.post('/api/onepager/generate', async (req, res) => {
 
         const totalSteps = withImage ? 3 : 2;
 
-        // Step 1: Use Claude to generate the one-pager content
-        send({ type: 'progress', step: 1, total: totalSteps, message: 'Generating one-pager content with AI…' });
+        // Step 1: Use Claude to generate the premium one-pager content
+        send({ type: 'progress', step: 1, total: totalSteps, message: 'Crafting premium one-pager with AI…' });
 
         const contentResponse = await callClaude({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 2048,
+            max_tokens: 4096,
             messages: [{
                 role: 'user',
-                content: `Based on this description, generate content for a marketing one-pager document:
+                content: `You are an elite B2B marketing copywriter and document designer. Create a premium editorial one-pager based on this description:
 
 "${description}"
 
-Return ONLY a JSON object with these fields:
+Return ONLY a JSON object with this exact structure:
 {
-  "title": "Main page title (short, punchy, 5-10 words)",
-  "subtitle": "Subtitle/tagline (one line)",
-  "sectionHeading": "Section heading for the bullet points (e.g. 'Key Features', 'Why Choose Us', 'Table of Contents', 'What We Offer')",
-  "bullets": ["Bullet point 1", "Bullet point 2", ...],
-  "description": "A brief 1-2 sentence overview paragraph",
-  "footer": "Footer text (e.g. website URL, email, phone)"
+  "companyProduct": "CELERITECH · [PRODUCT NAME IN CAPS]",
+  "briefFor": "A BRIEF FOR [TARGET AUDIENCE IN CAPS]",
+  "tags": "[CATEGORY] · ONE PAGE · THREE MINUTES",
+  "headline": "A bold, provocative headline that challenges the reader (8-14 words). Make it feel editorial, not salesy.",
+  "accentWord": "One powerful word from the headline to emphasize in orange italic (the word that carries the emotional punch)",
+  "subtitle": "A 2-3 sentence paragraph expanding on the headline. Specific, concrete, mentioning timeframes or metrics.",
+  "stats": [
+    { "value": "10 days", "label": "READY TO RUN" },
+    { "value": "100%", "label": "MOBILE, BARCODE-DRIVEN" },
+    { "value": "< 1 hr", "label": "FULL LOT TRACE, DOCK TO DELIVERY" }
+  ],
+  "sections": [
+    {
+      "number": "01",
+      "title": "A bold numbered section title that's a statement, not a question",
+      "type": "checklist",
+      "items": ["Checklist item 1 — specific and concrete", "Item 2", "Item 3", "Item 4", "Item 5"],
+      "callout": "A provocative one-liner with a bold conclusion. **Bold the key phrase.**"
+    },
+    {
+      "number": "02",
+      "title": "What changes when [specific transformation happens]",
+      "type": "comparison",
+      "items": [
+        { "before": "Current pain point described concretely", "after": "The better way, specific to this product" },
+        { "before": "Another pain", "after": "Another solution" },
+        { "before": "Third pain", "after": "Third solution" },
+        { "before": "Fourth pain", "after": "Fourth solution" }
+      ]
+    }
+  ],
+  "darkBanner": {
+    "headline": "A bold one-line manifesto. One scanner. One source of truth.",
+    "tags": ["Workflow 1", "Workflow 2", "Workflow 3", "Workflow 4", "Workflow 5", "Workflow 6"]
+  },
+  "testimonials": [
+    {
+      "quote": "A compelling customer testimonial (1-2 sentences, feels real and specific)",
+      "name": "Full Name",
+      "title": "Title, Company Name"
+    }
+  ],
+  "cta": {
+    "headline": "Start with the part that's hurting most.",
+    "description": "A 1-2 sentence description of next steps. Low-friction, no-pressure.",
+    "options": [
+      { "label": "OPTION 1 — FASTEST", "text": "Reply to this message with **one word**: [relevant keywords separated by ·]" },
+      { "label": "OPTION 2 — 15 MINUTES", "text": "Reply with a time that works this week. 15-minute conversation — **no pitch.**" }
+    ]
+  },
+  "contact": {
+    "email": "info@celeritech.com",
+    "phone": "+1 (786) 331-1281",
+    "website": "celeritech.biz"
+  }
 }
 
-Rules:
-- Generate 8-12 compelling bullet points
-- Make bullets concise but descriptive (5-15 words each)
-- The title should be bold and marketing-focused
-- The section heading should match the content theme
-- The footer should be professional
-- Return ONLY the JSON, no markdown, no code fences`,
+CRITICAL RULES:
+- Generate EXACTLY 3 stats with big impressive numbers/metrics
+- The headline must be provocative and editorial, NOT generic marketing speak
+- accentWord must be a SINGLE word that appears EXACTLY in the headline
+- Checklist section (type: "checklist") needs exactly 5 items
+- Comparison section (type: "comparison") needs exactly 4 before/after pairs
+- Dark banner needs 6-8 workflow/feature tags
+- Make ONE testimonial that sounds authentic (use a realistic name and company)
+- CTA options should be low-friction (no "book a demo")
+- Write like a strategist, not a marketer. Every word should earn its place.
+- Return ONLY valid JSON, no markdown fences, no comments`,
             }],
         });
 
@@ -3000,14 +3053,14 @@ Rules:
             return;
         }
 
-        console.log(`📄 One-pager content generated: "${content.title}" (${content.bullets?.length || 0} bullets)`);
+        console.log(`📄 One-pager content generated: "${content.headline}" (${content.sections?.length || 0} sections)`);
 
         // Step 2: Generate header image if requested
         let headerImageDataUrl = null;
         if (withImage) {
             send({ type: 'progress', step: 2, total: totalSteps, message: 'Generating header image…' });
 
-            const imgPrompt = `Professional marketing banner for "${content.title}". Clean, modern, corporate design with subtle gradients. Premium stock photo quality. Wide aspect ratio. No text, no logos, no watermarks.`;
+            const imgPrompt = `Professional marketing banner for "${content.headline}". Clean, modern, corporate design with subtle gradients. Premium stock photo quality. Wide aspect ratio. No text, no logos, no watermarks.`;
             const img = await generateImageWithGemini(imgPrompt);
             if (img && img.buffer) {
                 headerImageDataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
@@ -3022,14 +3075,8 @@ Rules:
 
         send({
             type: 'result',
-            title: content.title || '',
-            subtitle: content.subtitle || '',
-            sectionHeading: content.sectionHeading || 'Key Features',
-            bullets: content.bullets || [],
-            description: content.description || '',
-            footer: content.footer || '',
+            ...content,
             headerImage: headerImageDataUrl,
-            columns: columns || 2,
         });
 
         console.log('✅ One-pager generation complete');
