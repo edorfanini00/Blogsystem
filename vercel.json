@@ -1,0 +1,30 @@
+{
+    "functions": {
+        "api/index.js": {
+            "includeFiles": "server/**",
+            "maxDuration": 300
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "/api/index.js"
+        },
+        {
+            "source": "/login",
+            "destination": "/login.html"
+        },
+        {
+            "source": "/signup",
+            "destination": "/signup.html"
+        },
+        {
+            "source": "/privacy-policy",
+            "destination": "/privacy-policy.html"
+        },
+        {
+            "source": "/data-deletion",
+            "destination": "/data-deletion.html"
+        }
+    ]
+}

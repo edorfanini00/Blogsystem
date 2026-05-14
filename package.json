@@ -1,0 +1,37 @@
+{
+  "name": "blog-studio",
+  "version": "1.0.0",
+  "description": "AI-powered blog generation dashboard with WordPress integration",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/server.js",
+    "client": "vite",
+    "build": "vite build",
+    "start": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@upstash/redis": "^1.36.4",
+    "@vercel/blob": "^2.3.1",
+    "@vercel/kv": "^3.0.0",
+    "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ioredis": "^5.10.0",
+    "marked": "^15.0.6",
+    "multer": "^2.1.0",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^8.0.1",
+    "openai": "^6.25.0",
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "vite": "^6.1.0"
+  }
+}

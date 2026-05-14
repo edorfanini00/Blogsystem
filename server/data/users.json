@@ -1,0 +1,37 @@
+[
+  {
+    "id": "1772569619771",
+    "name": "Test User",
+    "email": "admin@example.com",
+    "password": "$2b$10$Z4ab4Ul/5BxXJZbrdncns.2f47DNRBKNuwYuTdY5oGdenHluWHHkm",
+    "createdAt": "2026-03-03T20:26:59.771Z"
+  },
+  {
+    "id": "1772569993244",
+    "name": "Edoardo Orfanini",
+    "email": "edoardo.orfanini@celeritech.biz",
+    "password": "$2b$10$r6yEB31f9N/4cqx3nJom6.3dOMXl0l7k3d1StKs0HLGDNztVg.pW.",
+    "createdAt": "2026-03-03T20:33:13.244Z"
+  },
+  {
+    "id": "1772661429444",
+    "name": "Test User",
+    "email": "test@test.com",
+    "password": "$2b$10$xEByz/cL4VNqLfKkbiLpyOZR7CaRbtMAXBOr2lDyAUYvbap5NRmkG",
+    "createdAt": "2026-03-04T21:57:09.444Z"
+  },
+  {
+    "id": "1772661541798",
+    "name": "Edoardo Orfanini",
+    "email": "edoardo.orfanini@ceritech.biz",
+    "password": "$2b$10$B5fGhim4l.YnCy1c5AnN/OPl5TEvg7lboPPjNwFJWDUrYKFR/SvLW",
+    "createdAt": "2026-03-04T21:59:01.798Z"
+  },
+  {
+    "id": "1774368523542",
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "$2b$10$R2aAHaAVa5L1o7P3MTs9p.WVHE1YIEl0ZaFRsCXMzxRA489FwAhHS",
+    "createdAt": "2026-03-24T16:08:43.542Z"
+  }
+]

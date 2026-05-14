@@ -1,0 +1,2947 @@
+import express from 'express';
+import cors from 'cors';
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import nodemailer from 'nodemailer';
+import multer from 'multer';
+import bcrypt from 'bcryptjs';
+import { createRequire } from 'module';
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
+const require = createRequire(import.meta.url);
+let pdfParse;
+try { pdfParse = require('pdf-parse'); } catch { pdfParse = null; }
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const isVercel = !!process.env.VERCEL;
+
+if (!isVercel) {
+    dotenv.config({ path: join(__dirname, '.env') });
+}
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+
+// ─── Multer for file uploads ────────────────────────────────────
+const uploadsDir = isVercel ? '/tmp/uploads' : join(__dirname, 'uploads');
+if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
+const upload = multer({ dest: uploadsDir, limits: { fileSize: 10 * 1024 * 1024 } });
+
+// ─── File Upload Endpoint ───────────────────────────────────────
+app.post('/api/upload', upload.array('files', 10), async (req, res) => {
+    try {
+        const results = [];
+        for (const file of req.files) {
+            let text = '';
+            try {
+                const buf = readFileSync(file.path);
+                if (file.originalname.toLowerCase().endsWith('.pdf')) {
+                    const pdf = await pdfParse(buf);
+                    text = pdf.text;
+                } else {
+                    text = buf.toString('utf-8');
+                }
+            } catch {
+                text = `[Could not parse: ${file.originalname}, ${(file.size / 1024).toFixed(1)} KB]`;
+            }
+            results.push({ name: file.originalname, size: file.size, text: text.slice(0, 50000) });
+        }
+        res.json({ files: results });
+    } catch (err) {
+        console.error('Upload error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Email Configuration (Gmail SMTP) ───────────────────────────
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+
+if (!EMAIL_USER || !EMAIL_PASSWORD) {
+    console.warn('⚠️  EMAIL_USER or EMAIL_PASSWORD not set in .env — email sending will be disabled.');
+    console.warn('   To enable: add EMAIL_USER=your@gmail.com and EMAIL_PASSWORD=your_app_password to server/.env');
+    console.warn('   Generate an App Password at: https://myaccount.google.com/apppasswords');
+}
+
+// Create a reusable transporter (only if credentials exist)
+let emailTransporter = null;
+let transporterVerified = false;
+
+if (EMAIL_USER && EMAIL_PASSWORD) {
+    emailTransporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+            user: EMAIL_USER,
+            pass: EMAIL_PASSWORD,
+        },
+    });
+
+    // Verify on startup (non-blocking)
+    emailTransporter.verify()
+        .then(() => {
+            transporterVerified = true;
+            console.log('✅ Email transporter verified — Gmail SMTP ready');
+        })
+        .catch(err => {
+            console.error('❌ Email transporter verification failed:', err.message);
+            console.error('   Check your EMAIL_USER and EMAIL_PASSWORD in .env');
+            console.error('   Make sure you are using a Gmail App Password, NOT your regular password.');
+        });
+}
+
+app.post('/api/send-email', async (req, res) => {
+    const { subject, htmlContent, textContent, recipientEmail } = req.body;
+    const to = recipientEmail || 'Karla@kromaticos.com';
+
+    // --- Guard: no credentials configured ---
+    if (!emailTransporter) {
+        console.error('📧 Email send attempted but no credentials configured');
+        return res.status(503).json({
+            error: 'Email not configured. Add EMAIL_USER and EMAIL_PASSWORD to server/.env',
+        });
+    }
+
+    try {
+        const info = await emailTransporter.sendMail({
+            from: `"Celeritech Orbit" <${EMAIL_USER}>`,
+            to,
+            subject: subject || 'New Ad Creative from Celeritech Orbit',
+            text: textContent,
+            html: htmlContent || `<pre style="font-family:sans-serif;white-space:pre-wrap;">${textContent}</pre>`,
+        });
+
+        console.log(`📧 Email sent to ${to} (messageId: ${info.messageId})`);
+        res.json({ success: true, to, messageId: info.messageId });
+    } catch (err) {
+        console.error('❌ Email send error:', err);
+
+        // Provide a user-friendly error message
+        let userMessage = err.message;
+        if (err.code === 'EAUTH') {
+            userMessage = 'Authentication failed. Make sure EMAIL_PASSWORD is a Gmail App Password (not your regular password). Generate one at https://myaccount.google.com/apppasswords';
+        } else if (err.code === 'ESOCKET' || err.code === 'ECONNECTION') {
+            userMessage = 'Could not connect to Gmail SMTP server. Check your internet connection.';
+        }
+
+        res.status(500).json({ error: userMessage });
+    }
+});
+
+const PORT = process.env.PORT || 3001;
+
+// ─── Data Persistence ────────────────────────────────────────────
+const dataDir = isVercel ? '/tmp/data' : join(__dirname, 'data');
+if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+}
+
+// Ensure users.json exists
+const usersFile = join(dataDir, 'users.json');
+if (!existsSync(usersFile)) {
+    writeFileSync(usersFile, JSON.stringify([]));
+    console.log('Created users.json file.');
+}
+
+// ─── Redis via ioredis (uses REDIS_URL directly) ────────────────
+import Redis from 'ioredis';
+
+const REDIS_URL = process.env.KV_URL || process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL;
+const useKV = !!REDIS_URL;
+let redis = null;
+
+function getRedis() {
+    if (!redis && REDIS_URL) {
+        redis = new Redis(REDIS_URL, {
+            maxRetriesPerRequest: 1,
+            connectTimeout: 5000,
+            commandTimeout: 5000,
+            lazyConnect: true,
+            tls: REDIS_URL.startsWith('rediss://') ? {} : undefined,
+        });
+        redis.on('error', (err) => console.error('Redis error:', err.message));
+    }
+    return redis;
+}
+
+if (useKV) {
+    console.log('✅ Redis configured via REDIS_URL');
+} else if (!isVercel) {
+    console.log('ℹ️  Redis not configured — using local users.json');
+} else {
+    console.error('❌ No REDIS_URL found.');
+}
+
+// ─── User Storage (Redis on Vercel, local JSON fallback) ────────
+async function getUsers() {
+    if (useKV) {
+        const r = getRedis();
+        await r.connect().catch(() => { });
+        const data = await r.get('orbit_users');
+        return data ? JSON.parse(data) : [];
+    }
+    try {
+        return JSON.parse(readFileSync(usersFile, 'utf-8'));
+    } catch { return []; }
+}
+
+async function saveUsers(users) {
+    if (useKV) {
+        const r = getRedis();
+        await r.connect().catch(() => { });
+        await r.set('orbit_users', JSON.stringify(users));
+    } else {
+        writeFileSync(usersFile, JSON.stringify(users, null, 2));
+    }
+}
+
+async function redisSet(key, value) {
+    const r = getRedis();
+    await r.connect().catch(() => { });
+    await r.set(key, JSON.stringify(value));
+}
+
+// ─── Redis Connection Test ──────────────────────────────────────
+app.get('/api/test-redis', async (req, res) => {
+    if (!useKV) {
+        return res.json({
+            ok: false, error: 'No REDIS_URL env var found', envVars: {
+                REDIS_URL: !!process.env.REDIS_URL,
+                KV_URL: !!process.env.KV_URL,
+            }
+        });
+    }
+    try {
+        const r = getRedis();
+        await r.connect().catch(() => { });
+        const pong = await r.ping();
+        res.json({ ok: true, ping: pong });
+    } catch (err) {
+        res.json({ ok: false, error: err.message });
+    }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: 'Name, email, and password are required' });
+        }
+
+        let users = await getUsers();
+
+        if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+            return res.status(400).json({ error: 'User with this email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = {
+            id: Date.now().toString(),
+            name,
+            email: email.toLowerCase(),
+            password: hashedPassword,
+            createdAt: new Date().toISOString()
+        };
+
+        users.push(newUser);
+        await saveUsers(users);
+
+        // Delete password from response
+        const { password: _, ...userWithoutPassword } = newUser;
+        res.json({ success: true, user: userWithoutPassword });
+
+    } catch (err) {
+        console.error('Registration error:', err);
+        res.status(500).json({ error: err.message || 'Server error during registration' });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
+
+        const users = await getUsers();
+
+        const user = users.find(u => u.email === email.toLowerCase());
+
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        const validPassword = await bcrypt.compare(password, user.password);
+
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ success: true, user: userWithoutPassword });
+
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: err.message || 'Server error during login' });
+    }
+});
+
+// ─── Clients ─────────────────────────────────────────────────────
+const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY || 'placeholder',
+});
+
+// ─── Claude Retry Wrapper (handles 529 overloaded + 429 rate limit) ──
+async function callClaude(params, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await anthropic.messages.create(params);
+        } catch (err) {
+            const status = err?.status || err?.error?.status || 0;
+            const isRetryable = status === 529 || status === 429 || (err.message && err.message.includes('overloaded'));
+            if (isRetryable && attempt < maxRetries) {
+                const delay = Math.min(15000 * Math.pow(2, attempt - 1), 60000); // 15s, 30s, 60s
+                console.warn(`⚠ Claude ${status || 'overloaded'} — retry ${attempt}/${maxRetries} in ${delay / 1000}s…`);
+                await new Promise(r => setTimeout(r, delay));
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+
+// OpenRouter client (for image generation)
+const openrouter = new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY || 'placeholder',
+    baseURL: 'https://openrouter.ai/api/v1',
+});
+
+// Perplexity client
+const perplexity = new OpenAI({
+    apiKey: process.env.PERPLEXITY_API_KEY || 'placeholder',
+    baseURL: 'https://api.perplexity.ai',
+});
+
+// ─── Perplexity Research ─────────────────────────────────────────
+async function runPerplexityResearch(keywords, description, customization = {}) {
+    const apiKey = process.env.PERPLEXITY_API_KEY;
+    if (!apiKey || apiKey === 'your_perplexity_api_key') {
+        console.warn('⚠ Perplexity API key not set, skipping research');
+        return null;
+    }
+
+    try {
+        console.log('🔍 Running Perplexity deep SEO/GEO research…');
+
+        const response = await perplexity.chat.completions.create({
+            model: 'sonar',
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are an elite SEO strategist, audience researcher, and Generative Engine Optimization (GEO) specialist. Your job is to produce a comprehensive research brief that will inform the creation of highly targeted, search-dominating blog content.
+
+Your research must cover ALL of these areas:
+
+## 1. TARGET AUDIENCE DEEP DIVE
+- WHO is the exact target segment (job titles, company sizes, industries, demographics)
+- What SPECIFIC PAIN POINTS they express in their own words on Reddit, X/Twitter, forums
+- What LANGUAGE, PHRASES, and JARGON they use when discussing this problem
+- What QUESTIONS they commonly ask (these become H2/H3 headings)
+- What OBJECTIONS or SKEPTICISMS they have about existing solutions
+- What EMOTIONAL triggers drive their decisions
+
+## 2. SEO KEYWORD RESEARCH
+- Primary keyword (high volume, moderate competition)
+- 5-10 secondary/long-tail keywords
+- LSI (Latent Semantic Indexing) keywords — related terms search engines associate with this topic
+- Question-based keywords ("how to…", "what is…", "why does…")
+- Competitor keywords — what top-ranking articles target
+- Search intent classification for each keyword (informational, navigational, transactional, commercial)
+
+## 3. COMPETITOR CONTENT ANALYSIS
+- What are the top 5 articles currently ranking for this topic?
+- What do they cover well? What do they MISS?
+- What content gaps can we exploit?
+- Average word count of top-ranking content
+- What headings/structure do top articles use?
+
+## 4. GEO (GENERATIVE ENGINE OPTIMIZATION)
+- What entities, brands, and authoritative sources should be mentioned to be cited by AI engines (ChatGPT, Perplexity, Google AI Overview)?
+- What statistics and data points make content citation-worthy?
+- What structured claims with evidence would AI engines extract as answers?
+- What "definitive statements" should the article make to be selected as an AI-generated answer?
+
+## 5. CONTENT STRUCTURE RECOMMENDATIONS
+- Recommended H1 title (with primary keyword, under 60 chars)
+- Recommended meta description (with primary keyword, under 155 chars)
+- Suggested H2/H3 outline based on search intent and questions found
+- Internal linking opportunities
+- Recommended schema markup type (Article, HowTo, FAQ, etc.)
+
+Format as a structured research brief with clear sections and bullet points. Include specific examples from Reddit/X posts where possible.`
+                },
+                {
+                    role: 'user',
+                    content: `Do comprehensive SEO and audience research for this blog topic: "${keywords}"
+Additional context: ${description}
+Target audience: ${customization.target || 'General'}
+Product/service type: ${customization.product || 'General'}
+Trend focus: ${customization.trends || 'None'}
+Desired tone: ${customization.tone || 'Professional'}
+
+Scan Reddit posts, X/Twitter discussions, Quora, industry forums, and top-ranking Google results.
+Identify the exact search terms people use, the questions they ask, the pain points they express.
+Analyze what the top 5 competing articles do well and what content gaps exist.
+Provide specific LSI keywords, long-tail variations, and question-based keywords.
+Include GEO optimization recommendations — what makes content get cited by AI engines.
+Focus specifically on the ${customization.target || 'general'} audience and ${customization.product || 'general'} industry.
+Be extremely specific and actionable.`
+                }
+            ],
+            max_tokens: 4000,
+        });
+
+        const research = response.choices?.[0]?.message?.content;
+        if (research) {
+            console.log('✅ Perplexity SEO/GEO research complete');
+            return research;
+        }
+        return null;
+    } catch (err) {
+        console.error('Perplexity error:', err.message);
+        return null;
+    }
+}
+
+// ─── Claude System Prompt ────────────────────────────────────────
+function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls, customization = {}) {
+    const researchBlock = researchInsights
+        ? `\n\n═══ RESEARCH BRIEF (all research has already been completed for you — use it directly) ═══\n${researchInsights}\n═══ END RESEARCH BRIEF ═══\n\nYOU MUST USE THE RESEARCH ABOVE — do NOT guess, invent stats, or do your own research. Everything you need is in the brief above. Specifically:\n- Use the EXACT primary keyword in H1, first paragraph, and throughout\n- Work ALL secondary/long-tail keywords naturally into H2s, H3s, and body text\n- Use LSI keywords throughout to build topical authority\n- Turn question-based keywords into H2/H3 headings\n- Mirror the exact language, phrases, and jargon from the audience research\n- Address the specific objections and pain points found in forums and Reddit\n- Fill the content gaps identified in competitor analysis\n- Include the specific statistics, data points, and authoritative sources from the research for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n- Reference the named entities, brands, and tools mentioned in the research\n`
+        : '';
+
+    // Build image injection instructions
+    let imageBlock = '';
+    if (imageUrls && imageUrls.length > 0) {
+        imageBlock = `\n\nIMAGES AVAILABLE — INSERT THESE IN THE HTML:
+You have ${imageUrls.length} images available. Insert them above or below the relevant section headings using full <img> tags.
+Use these EXACT URLs:
+${imageUrls.map((img, i) => `Image ${i + 1}: ${img.url} (alt: "${img.alt}")`).join('\n')}
+
+Place them naturally throughout the article — one after each major H2 section heading.
+Use this format: <img src="FULL_URL_HERE" alt="descriptive alt text" style="width:100%;height:auto;margin:32px 0;display:block;" />\n`;
+    }
+
+    return `You are a professional blog writer and world-class SEO copywriter. You have a completed research brief with real data, keywords, audience insights, and competitor analysis. Your job is to USE that research to write a stunning, fully styled HTML blog post optimized for WordPress.
+
+Do NOT make up statistics or data — everything you need is in the research brief provided below.
+
+TOPIC: ${keywords}
+CONTEXT: ${description}
+TARGET WORD COUNT: ${wordCount} words
+TARGET AUDIENCE: ${customization.target || 'General'}
+PRODUCT/SERVICE: ${customization.product || 'General'}
+TRENDS FOCUS: ${customization.trends || 'None'}
+TONE: ${customization.tone || 'Professional'}
+
+CONTENT CUSTOMIZATION RULES:
+- Write specifically for the ${customization.target || 'general'} audience — use their language, address their pain points, reference their world
+- Frame all examples and use cases around the ${customization.product || 'general'} industry
+- ${customization.trends && customization.trends !== 'None' ? `Weave in the "${customization.trends}" trend throughout — show how it impacts the topic and what readers should do about it` : 'Focus on evergreen, timeless advice'}
+- Maintain a ${customization.tone || 'professional'} tone throughout the entire article
+${researchBlock}${imageBlock}
+STRICT OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
+
+1. Output ONLY valid, clean HTML — no markdown, no escape characters, no control characters, no code fences.
+2. Wrap the entire blog in: <div style="max-width:780px;margin:0 auto;padding:40px 20px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#333;line-height:1.8;font-size:17px;">
+
+3. HEADING STYLES:
+   - H1 (title): <h1 style="font-family:'Montserrat',sans-serif;color:#FF8300;font-size:2.4em;font-weight:800;line-height:1.2;margin-bottom:24px;">
+   - H2 (sections): <h2 style="font-family:'Montserrat',sans-serif;color:#FF8300;font-size:1.8em;font-weight:700;margin-top:56px;margin-bottom:20px;">
+   - H3 (sub-sections): <h3 style="font-family:'Montserrat',sans-serif;font-size:1.3em;font-weight:700;color:#1a1a1a;margin-top:40px;margin-bottom:16px;padding-left:16px;border-left:4px solid #FF8300;">
+
+4. BODY TEXT: <p style="font-family:'Inter',sans-serif;margin-bottom:20px;">
+
+5. SPECIAL CALLOUT BADGES (use these throughout):
+   - <span style="display:inline-block;background:#FF8300;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Result:</span>
+   - <span style="display:inline-block;background:#FF8300;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Pro tip:</span>
+   - <span style="display:inline-block;background:#FF8300;color:#fff;font-size:0.8em;font-weight:700;padding:2px 10px;border-radius:20px;margin-right:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.03em;">Case in point:</span>
+
+6. BENEFIT LABELS: <strong style="color:#FF8300;">Label text:</strong> followed by text
+
+7. LISTS:
+   - <ul style="margin-bottom:24px;padding-left:28px;"> with <li style="margin-bottom:8px;">
+   - <ol> for numbered sequences
+
+8. IMAGES: Insert the provided images using full <img> tags with the URLs provided above. Place one image after each major H2 heading.
+
+9. BLOCKQUOTES: <blockquote style="border-left:4px solid #FF8300;background:#fff7ed;padding:16px 24px;margin:24px 0;font-style:italic;color:#92400e;">
+
+10. CTA SECTION at the end: <div style="margin-top:56px;padding-top:32px;border-top:2px solid #FF8300;"> with an orange H2 heading inside.
+
+11. HORIZONTAL RULES between major sections: <hr style="border:none;height:1px;background:#e5e5e5;margin:48px 0;">
+
+CONTENT OBJECTIVES:
+- Start with a strong, curiosity-driven H1 headline
+- Write an introduction that hooks the reader by addressing their pain points
+- Structure the post as a journey using storytelling patterns
+- Include real examples, data, and demonstrations
+- Write for the skeptical reader — justify every claim
+- End with a clear CTA section that feels earned
+- Make the tone conversational, confident, and human
+
+SEO META — Include these as HTML comments at the very top BEFORE the blog div:
+<!-- SEO_TITLE: Your 60-char title here -->
+<!-- META_DESC: Your 155-char meta description here -->
+<!-- SEO_KEYWORDS: keyword1, keyword2, keyword3 -->
+
+Preserve all apostrophes, quotes, em dashes, and punctuation properly. No Unicode junk. Make it STUNNING.`;
+}
+
+// ─── Gemini Nano Banana Image Generation ─────────────────────────
+async function generateImageWithGemini(prompt) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'placeholder') {
+        console.warn('⚠ Gemini API key not set, skipping image generation');
+        return null;
+    }
+
+    const models = [
+        'gemini-2.5-flash-image',
+        'gemini-3.1-flash-image-preview',
+        'gemini-3-pro-image-preview',
+    ];
+
+    const TIMEOUT_MS = 60000; // 60-second timeout per model attempt
+
+    for (const model of models) {
+        try {
+            console.log(`   Trying Gemini model: ${model}`);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey,
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: `Generate a professional, photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.` }],
+                    }],
+                    generationConfig: {
+                        responseModalities: ['IMAGE', 'TEXT'],
+                    },
+                }),
+                signal: controller.signal,
+            });
+
+            clearTimeout(timer);
+
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error(`   Gemini ${model} HTTP ${response.status}: ${errText.slice(0, 300)}`);
+                continue;
+            }
+
+            const data = await response.json();
+            const parts = data.candidates?.[0]?.content?.parts;
+            if (!parts) {
+                console.log(`   Gemini ${model} returned no parts`);
+                continue;
+            }
+
+            for (const part of parts) {
+                if (part.inlineData?.data && part.inlineData?.mimeType) {
+                    console.log(`   ✅ Got image from Gemini ${model} (${part.inlineData.mimeType}, ${part.inlineData.data.length} chars base64)`);
+                    return {
+                        buffer: Buffer.from(part.inlineData.data, 'base64'),
+                        mimeType: part.inlineData.mimeType,
+                        alt: prompt,
+                    };
+                }
+            }
+
+            console.log(`   Gemini ${model} returned no image data in parts`);
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                console.error(`   ⏱ Gemini ${model} timed out after ${TIMEOUT_MS / 1000}s — skipping`);
+            } else {
+                console.error(`   Gemini ${model} error: ${err.message}`);
+            }
+        }
+    }
+
+    console.warn('⚠ All Gemini models failed — returning null (blog will generate without this image)');
+    return null;
+}
+
+// ─── Upload Image to WordPress Media Library ─────────────────────
+async function uploadImageToWordPress(imageData, altText, filename) {
+    const wpUrl = process.env.WORDPRESS_URL;
+    const wpUser = process.env.WORDPRESS_USERNAME;
+    const wpPass = process.env.WORDPRESS_APP_PASSWORD;
+
+    if (!wpUrl || !wpUser || !wpPass) return null;
+
+    try {
+        let buffer;
+        let contentType = 'image/png';
+
+        if (imageData.buffer) {
+            buffer = imageData.buffer;
+            contentType = imageData.mimeType || 'image/png';
+        } else if (imageData.url) {
+            const imgResponse = await fetch(imageData.url);
+            if (!imgResponse.ok) throw new Error('Failed to download image');
+            const imgArrayBuffer = await imgResponse.arrayBuffer();
+            buffer = Buffer.from(imgArrayBuffer);
+            contentType = imgResponse.headers.get('content-type') || 'image/png';
+        } else {
+            return null;
+        }
+
+        const credentials = Buffer.from(`${wpUser}:${wpPass}`).toString('base64');
+        const slug = filename || `blog-image-${Date.now()}`;
+        const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png';
+
+        const wpRes = await fetch(`${wpUrl}/wp-json/wp/v2/media`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Basic ${credentials}`,
+                'Content-Type': contentType,
+                'Content-Disposition': `attachment; filename="${slug}.${ext}"`,
+            },
+            body: buffer,
+        });
+
+        if (!wpRes.ok) {
+            const errText = await wpRes.text();
+            console.error(`WP media upload error: ${errText}`);
+            return null;
+        }
+
+        const media = await wpRes.json();
+        console.log(`📸 Image uploaded to WordPress: ${media.source_url}`);
+
+        return {
+            id: media.id,
+            url: media.source_url,
+            alt: altText,
+        };
+    } catch (err) {
+        console.error('WP image upload error:', err.message);
+        return null;
+    }
+}
+
+// ─── Parse SEO meta from HTML content ────────────────────────────
+function parseSeoMeta(content) {
+    const seoTitle = content.match(/<!--\s*SEO_TITLE:\s*(.+?)\s*-->/)?.[1] || '';
+    const metaDesc = content.match(/<!--\s*META_DESC:\s*(.+?)\s*-->/)?.[1] || '';
+    const seoKeywords = content.match(/<!--\s*SEO_KEYWORDS:\s*(.+?)\s*-->/)?.[1]?.split(',').map(k => k.trim()) || [];
+    return { seoTitle, metaDesc, seoKeywords };
+}
+
+// ─── POST /api/generate (SSE progress streaming) ────────────────
+app.post('/api/generate', async (req, res) => {
+    // Set up SSE headers
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+    });
+
+    function sendProgress(step, total, message) {
+        res.write(`data: ${JSON.stringify({ type: 'progress', step, total, message })}\n\n`);
+    }
+
+    function sendResult(data) {
+        res.write(`data: ${JSON.stringify({ type: 'result', ...data })}\n\n`);
+        res.end();
+    }
+
+    function sendError(error) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
+        res.end();
+    }
+
+    try {
+        const { keywords, description, wordCount, target, product, trends, tone, language } = req.body;
+        const parsedImageCount = parseInt(req.body.imageCount);
+        const imageCount = Math.min(Math.max(isNaN(parsedImageCount) ? 3 : parsedImageCount, 0), 5);
+        // Steps: research(1) + write(2) + [analyze + N images if N>0] + insert + SEO + [Spanish] + blogReady
+        const hasImages = imageCount > 0;
+        const hasSpanish = (language === 'both' || language === 'spanish');
+        // insertStep: the step # for "Inserting images". With images: 4+imageCount. Without: 3.
+        const insertStep = hasImages ? (4 + imageCount) : 3;
+        const TOTAL_STEPS = insertStep + 1 + (hasSpanish ? 1 : 0) + 1; // +1 SEO, +1 spanish?, +1 blogReady
+
+        if (!keywords || !description || !wordCount) {
+            return sendError('Missing required fields: keywords, description, wordCount');
+        }
+
+        // Map tone dropdown value to readable label
+        const toneLabels = { professional: 'Professional', conversational: 'Conversational', authoritative: 'Authoritative & Expert', friendly: 'Friendly & Approachable', bold: 'Bold & Provocative', educational: 'Educational / Tutorial', storytelling: 'Storytelling / Narrative', data_driven: 'Data-Driven & Analytical' };
+
+        const customization = {
+            target: target || '',
+            product: product || '',
+            trends: trends || '',
+            tone: toneLabels[tone] || tone || 'Professional',
+        };
+
+        console.log(`\n🚀 Generating blog: "${keywords}" (~${wordCount} words) [${customization.target} | ${customization.tone} | lang: ${language || 'english'}]`);
+
+        // Step 1: Perplexity research
+        sendProgress(1, TOTAL_STEPS, 'Researching target audience & SEO keywords…');
+        const researchInsights = await runPerplexityResearch(keywords, description, customization);
+        if (researchInsights) {
+            console.log(`📊 Research insights received (${researchInsights.length} chars)`);
+        }
+
+        // Step 2: Write blog first (no images)
+        sendProgress(2, TOTAL_STEPS, 'Writing SEO-optimized blog with Claude…');
+        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization);
+
+        const message = await callClaude({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8192,
+            messages: [
+                {
+                    role: 'user',
+                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}.${language === 'spanish' ? ' IMPORTANT: Write the ENTIRE blog in Spanish. All headings, body text, callout badges, CTA — everything must be in Spanish.' : ' IMPORTANT: Write the ENTIRE blog in ENGLISH. Even if the topic, keywords, or description are provided in another language (e.g. Spanish), you MUST write the blog entirely in English. All headings, body text, callout badges, CTA — everything must be in English.'} Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
+                },
+            ],
+            system: systemPrompt,
+        });
+
+        let htmlContent = message.content[0].text;
+        htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+        // Step 3: Analyze blog sections and create image prompts
+        if (imageCount > 0) {
+            sendProgress(3, TOTAL_STEPS, 'Analyzing blog sections for image generation…');
+        }
+
+        // Extract H2 headings from the blog
+        const h2Matches = [...htmlContent.matchAll(/<h2[^>]*>(.*?)<\/h2>/gi)];
+        const sectionTitles = h2Matches.map(m => m[1].replace(/<[^>]+>/g, '').trim());
+
+        let imagePrompts = [];
+        if (imageCount > 0 && sectionTitles.length >= imageCount) {
+            // Use Claude to create context-specific prompts from the actual blog sections
+            try {
+                const promptGenResponse = await callClaude({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1024,
+                    messages: [{
+                        role: 'user',
+                        content: `Below are the H2 section headings from a blog about "${keywords}" for ${customization.target || 'business professionals'} in the ${customization.product || 'general'} space:
+
+${sectionTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Create exactly ${imageCount} image generation prompts — one for each of the first ${imageCount} sections. Each prompt must be a highly detailed, photorealistic image description that visually represents that specific section's content. 
+
+Rules:
+- Each prompt must be unique and specific to its section
+- Describe the scene, lighting, composition, subjects, and setting
+- No text, logos, or watermarks in the images
+- Professional, editorial quality
+- Each prompt should be 1-2 sentences max
+
+Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prompt 1", "prompt 2"]`,
+                    }],
+                });
+
+                try {
+                    const raw = promptGenResponse.content[0].text.trim();
+                    imagePrompts = JSON.parse(raw);
+                    // Ensure we don't exceed requested count
+                    imagePrompts = imagePrompts.slice(0, imageCount);
+                } catch {
+                    console.log('Could not parse image prompts JSON, using fallback');
+                }
+            } catch (err) {
+                console.error('Image prompt generation error:', err.message);
+            }
+        }
+
+        // Fallback prompts if Claude analysis failed or too few sections
+        if (imageCount > 0 && imagePrompts.length < imageCount) {
+            const topicContext = `${keywords}${customization.product ? ' for ' + customization.product : ''}`;
+            const fallbacks = [
+                `Ultra-realistic hero image for a blog about "${topicContext}". Wide-angle cinematic composition. Modern, sleek environment with dramatic lighting. No text, no watermarks. Editorial quality.`,
+                `Close-up photograph showing tools, technology, or concepts related to "${keywords}" that ${customization.target || 'professionals'} use. Shallow depth of field, studio-quality. No text, no logos.`,
+                `Diverse ${customization.target || 'professionals'} working with ${customization.product || 'modern solutions'} related to "${keywords}". Natural lighting, authentic energy. No text or watermarks.`,
+                `Aerial or overhead view of a workspace related to "${keywords}". Clean, organized layout with modern technology. Bright, natural lighting. No text.`,
+                `Abstract visualization of innovation and progress in "${keywords}". Dynamic composition with depth and dimension. Professional editorial quality. No text.`,
+            ];
+            imagePrompts = fallbacks.slice(0, imageCount);
+        }
+
+        // Step 4-6: Generate images with Gemini
+        const uploadedImages = [];
+        const hasWpCredentials = process.env.WORDPRESS_URL && process.env.WORDPRESS_USERNAME && process.env.WORDPRESS_APP_PASSWORD;
+
+        for (let i = 0; i < imagePrompts.length; i++) {
+            sendProgress(4 + i, TOTAL_STEPS, `Generating image ${i + 1} of ${imagePrompts.length} for section: "${sectionTitles[i] || 'blog'}"…`);
+            console.log(`🎨 Image ${i + 1}/${imagePrompts.length}: "${imagePrompts[i].slice(0, 80)}…"`);
+            const img = await generateImageWithGemini(imagePrompts[i]);
+            if (img) {
+                if (hasWpCredentials) {
+                    console.log(`📤 Uploading image ${i + 1} to WordPress…`);
+                    const wpImage = await uploadImageToWordPress(img, imagePrompts[i], `blog-${Date.now()}-${i}`);
+                    if (wpImage) {
+                        uploadedImages.push(wpImage);
+                        continue;
+                    }
+                }
+                // If no WP or upload failed, create a data URL
+                if (img.buffer) {
+                    const dataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
+                    uploadedImages.push({ url: dataUrl, alt: img.alt });
+                } else if (img.url) {
+                    uploadedImages.push({ url: img.url, alt: img.alt });
+                }
+            }
+        }
+
+        console.log(`✅ ${uploadedImages.length} images generated`);
+
+        // Step after images: Inject images into blog HTML after H2 headings
+        sendProgress(insertStep, TOTAL_STEPS, 'Inserting images into blog…');
+        if (uploadedImages.length > 0 && h2Matches.length > 0) {
+            // Work backwards so insertion doesn't shift positions
+            const insertionPoints = [];
+            for (let i = 0; i < Math.min(uploadedImages.length, h2Matches.length); i++) {
+                const h2End = h2Matches[i].index + h2Matches[i][0].length;
+                insertionPoints.push({ position: h2End, image: uploadedImages[i], sectionTitle: sectionTitles[i] });
+            }
+            // Insert backwards
+            for (let i = insertionPoints.length - 1; i >= 0; i--) {
+                const { position, image, sectionTitle } = insertionPoints[i];
+                const imgTag = `\n<img src="${image.url}" alt="${sectionTitle || image.alt}" style="width:100%;height:auto;margin:32px 0 24px;display:block;border-radius:12px;" />\n`;
+                htmlContent = htmlContent.slice(0, position) + imgTag + htmlContent.slice(position);
+            }
+            console.log(`🖼 Injected ${insertionPoints.length} images into blog HTML`);
+        }
+
+        // SEO step
+        sendProgress(insertStep + 1, TOTAL_STEPS, 'Extracting SEO metadata…');
+        const seo = parseSeoMeta(htmlContent);
+        console.log(`📝 SEO Title: ${seo.seoTitle}`);
+
+        const titleMatch = htmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
+        const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : seo.seoTitle || keywords;
+
+        // Spanish translation step (if language is 'both')
+        let spanishHtmlContent = null;
+        let spanishTitle = null;
+
+        if (language === 'both') {
+            sendProgress(insertStep + 2, TOTAL_STEPS, 'Translating blog to Spanish…');
+            console.log('🌐 Translating blog to Spanish…');
+
+            try {
+                const translationResponse = await callClaude({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 8192,
+                    messages: [{
+                        role: 'user',
+                        content: `Translate the following HTML blog post to Spanish.
+
+The blog content below may be in English or possibly already partially in another language. Regardless of the input language:
+- Your output MUST be 100% in Spanish
+- ALL visible text content must be in Spanish (headings, paragraphs, list items, blockquotes, CTA text, button text, callout badges)
+
+CRITICAL RULES:
+- DO NOT change any HTML tags, attributes, styles, class names, or structure
+- DO NOT change any image URLs or image alt attributes
+- DO NOT change any inline CSS styles
+- Keep all <!-- SEO comments --> but translate their content to Spanish
+- The translation must be natural, fluent Spanish — not word-for-word translation
+- Maintain the same tone and energy as the original
+- Output ONLY the translated HTML, nothing else
+
+Here is the HTML to translate:
+
+${htmlContent}`,
+                    }],
+                });
+
+                spanishHtmlContent = translationResponse.content[0].text;
+                spanishHtmlContent = spanishHtmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+                // Extract Spanish title
+                const spanishTitleMatch = spanishHtmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
+                spanishTitle = spanishTitleMatch ? spanishTitleMatch[1].replace(/<[^>]+>/g, '') : `[ES] ${title}`;
+
+                console.log(`✅ Spanish translation complete: "${spanishTitle}"`);
+            } catch (transErr) {
+                console.error('❌ Spanish translation error:', transErr.message);
+                // Continue without Spanish — don't fail the whole request
+            }
+        }
+
+        // Final step: Done
+        sendProgress(TOTAL_STEPS, TOTAL_STEPS, 'Blog ready!');
+        console.log(`✅ Blog generated: "${title}"`);
+
+        sendResult({
+            title,
+            content: htmlContent,
+            htmlContent,
+            metaTitle: seo.seoTitle,
+            metaDescription: seo.metaDesc,
+            seoKeywords: seo.seoKeywords,
+            images: uploadedImages,
+            featuredMediaId: uploadedImages[0]?.id || null,
+            spanishHtmlContent,
+            spanishTitle,
+        });
+    } catch (err) {
+        console.error('❌ Generation error:', err);
+        sendError(err.message || 'Blog generation failed');
+    }
+});
+
+// ─── POST /api/publish ───────────────────────────────────────────
+app.post('/api/publish', async (req, res) => {
+    try {
+        const { title, htmlContent, featuredMediaId } = req.body;
+
+        const wpUrl = process.env.WORDPRESS_URL;
+        const wpUser = process.env.WORDPRESS_USERNAME;
+        const wpPass = process.env.WORDPRESS_APP_PASSWORD;
+
+        console.log(`📤 Publish request — WP URL: ${wpUrl ? wpUrl.slice(0, 30) + '…' : 'NOT SET'}, User: ${wpUser ? '✓ set' : 'NOT SET'}, Pass: ${wpPass ? '✓ set' : 'NOT SET'}`);
+
+        if (!wpUrl || !wpUser || !wpPass) {
+            return res.status(400).json({ error: `WordPress credentials not configured. URL: ${!!wpUrl}, User: ${!!wpUser}, Pass: ${!!wpPass}` });
+        }
+
+        const credentials = Buffer.from(`${wpUser}:${wpPass}`).toString('base64');
+
+        const postData = {
+            title,
+            content: htmlContent,
+            status: 'draft',
+        };
+
+        if (featuredMediaId) {
+            postData.featured_media = featuredMediaId;
+        }
+
+        const wpRes = await fetch(`${wpUrl}/wp-json/wp/v2/posts`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Basic ${credentials}`,
+            },
+            body: JSON.stringify(postData),
+        });
+
+        if (!wpRes.ok) {
+            const errorText = await wpRes.text();
+            throw new Error(`WordPress API error (${wpRes.status}): ${errorText}`);
+        }
+
+        const post = await wpRes.json();
+
+        console.log(`📤 Draft published to WordPress: ${post.link}`);
+
+        res.json({
+            postId: post.id,
+            editUrl: `${wpUrl}/wp-admin/post.php?post=${post.id}&action=edit`,
+            viewUrl: post.link,
+        });
+    } catch (err) {
+        console.error('❌ Publish error:', err);
+        res.status(500).json({ error: err.message || 'WordPress publishing failed' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── BLOG HISTORY — Storage & CRUD ───────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const BLOGS_FILE = isVercel ? '/tmp/blogs.json' : join(__dirname, 'blogs.json');
+
+function loadBlogs() {
+    if (!existsSync(BLOGS_FILE)) return [];
+    try { return JSON.parse(readFileSync(BLOGS_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveBlogs(blogs) {
+    writeFileSync(BLOGS_FILE, JSON.stringify(blogs, null, 2), 'utf-8');
+}
+
+// ─── POST /api/blogs — Save a generated blog ───────────────────
+app.post('/api/blogs', (req, res) => {
+    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount, userName, spanishHtml, spanishTitle } = req.body;
+    const blogs = loadBlogs();
+    const blog = {
+        id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+        userName: userName || 'Unknown',
+        title: title || seoTitle || 'Untitled Blog',
+        html: html || '',
+        markdown: markdown || '',
+        seoTitle: seoTitle || '',
+        seoDescription: seoDescription || '',
+        seoKeywords: seoKeywords || [],
+        keywords: keywords || '',
+        description: description || '',
+        wordCount: wordCount || 0,
+        spanishHtml: spanishHtml || null,
+        spanishTitle: spanishTitle || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        published: false,
+    };
+    blogs.unshift(blog);
+    saveBlogs(blogs);
+    console.log(`📝 Blog saved: "${blog.title}" (${blog.id})`);
+    res.json(blog);
+});
+
+// ─── GET /api/blogs — List all blogs ────────────────────────────
+app.get('/api/blogs', (req, res) => {
+    res.json(loadBlogs());
+});
+
+// ─── GET /api/blogs/:id — Get a single blog ────────────────────
+app.get('/api/blogs/:id', (req, res) => {
+    const blogs = loadBlogs();
+    const blog = blogs.find(b => b.id === req.params.id);
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    res.json(blog);
+});
+
+// ─── PUT /api/blogs/:id — Update a blog ────────────────────────
+app.put('/api/blogs/:id', (req, res) => {
+    const blogs = loadBlogs();
+    const idx = blogs.findIndex(b => b.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Blog not found' });
+    const { html, markdown, title, seoTitle, seoDescription, published } = req.body;
+    if (html !== undefined) blogs[idx].html = html;
+    if (markdown !== undefined) blogs[idx].markdown = markdown;
+    if (title !== undefined) blogs[idx].title = title;
+    if (seoTitle !== undefined) blogs[idx].seoTitle = seoTitle;
+    if (seoDescription !== undefined) blogs[idx].seoDescription = seoDescription;
+    if (published !== undefined) blogs[idx].published = published;
+    blogs[idx].updatedAt = new Date().toISOString();
+    saveBlogs(blogs);
+    res.json(blogs[idx]);
+});
+
+// ─── DELETE /api/blogs/:id — Delete a blog ─────────────────────
+app.delete('/api/blogs/:id', (req, res) => {
+    const blogs = loadBlogs();
+    const filtered = blogs.filter(b => b.id !== req.params.id);
+    saveBlogs(filtered);
+    res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── POSTS GENERATOR — Ad Research & Generation ─────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const ADS_FILE = isVercel ? '/tmp/ads.json' : join(__dirname, 'ads.json');
+
+function loadAds() {
+    if (!existsSync(ADS_FILE)) return [];
+    try { return JSON.parse(readFileSync(ADS_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveAds(ads) {
+    writeFileSync(ADS_FILE, JSON.stringify(ads, null, 2), 'utf-8');
+}
+
+// ─── CRUD endpoints ─────────────────────────────────────────────
+app.get('/api/ads', (req, res) => res.json(loadAds()));
+
+app.get('/api/ads/:id', (req, res) => {
+    const ad = loadAds().find(a => a.id === req.params.id);
+    if (!ad) return res.status(404).json({ error: 'Not found' });
+    res.json(ad);
+});
+
+app.delete('/api/ads/:id', (req, res) => {
+    const ads = loadAds().filter(a => a.id !== req.params.id);
+    saveAds(ads);
+    res.json({ success: true });
+});
+
+// ─── POST /api/ads/generate-images (SSE) ────────────────────────
+app.post('/api/ads/generate-images', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    function send(data) { res.write(`data: ${JSON.stringify(data)}\n\n`); }
+
+    try {
+        const { adContent, product, description } = req.body;
+        if (!adContent) { send({ type: 'error', error: 'No ad content provided' }); res.end(); return; }
+
+        // Step 1: Use Claude to create image prompts from the ad content
+        send({ type: 'progress', text: 'Analyzing ad content for image ideas…', pct: 10 });
+
+        let imagePrompts = [];
+        try {
+            const promptRes = await callClaude({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1024,
+                messages: [{
+                    role: 'user',
+                    content: `Below is generated ad/post content for the product "${product || 'a product'}":
+
+${adContent.slice(0, 3000)}
+
+Create exactly 3 image generation prompts for ad visuals that would accompany these posts. Each prompt should describe a unique, eye-catching ad image.
+
+Rules:
+- Each must be a detailed photorealistic image description (scene, lighting, composition, mood)
+- Images should be scroll-stopping social media ad visuals
+- Include the product/brand context naturally
+- No text, logos, or watermarks in the images
+- Professional, premium advertising quality
+- Each prompt should be 2-3 sentences
+
+Return ONLY a JSON array of 3 strings, nothing else. Example: ["prompt 1", "prompt 2", "prompt 3"]`,
+                }],
+            });
+
+            const raw = promptRes.content[0].text.trim();
+            // Try to extract JSON array from the response
+            const jsonMatch = raw.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                imagePrompts = JSON.parse(jsonMatch[0]);
+            }
+        } catch (err) {
+            console.error('Claude prompt generation error:', err.message);
+        }
+
+        // Fallback if Claude didn't return valid prompts
+        if (!Array.isArray(imagePrompts) || imagePrompts.length < 3) {
+            imagePrompts = [
+                `Stunning social media ad visual for "${product || 'a product'}". Premium product photography, vibrant colors, clean composition, professional studio lighting. No text or logos.`,
+                `Lifestyle photograph showing "${product || 'a product'}" in action. Real-world setting, warm natural lighting, authentic feel, aspirational mood. No text or watermarks.`,
+                `Bold, attention-grabbing ad banner concept for "${product || 'a product'}". Dynamic composition, striking colors, modern minimalist style. No text or logos.`,
+            ];
+        }
+
+        console.log(`🎨 Generating ${imagePrompts.length} ad images for "${product}"`);
+
+        // Step 2-4: Generate each image
+        let generated = 0;
+        for (let i = 0; i < imagePrompts.length; i++) {
+            send({ type: 'progress', text: `Generating image ${i + 1} of ${imagePrompts.length}…`, pct: 20 + (i * 25) });
+            console.log(`   Image ${i + 1}: "${imagePrompts[i].slice(0, 60)}…"`);
+
+            const img = await generateImageWithGemini(imagePrompts[i]);
+            if (img && img.buffer) {
+                const dataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
+                send({ type: 'image', dataUrl, prompt: imagePrompts[i].slice(0, 80), index: i });
+                generated++;
+            } else {
+                console.log(`   Image ${i + 1} generation failed`);
+            }
+        }
+
+        send({ type: 'progress', text: 'Done!', pct: 100 });
+        send({ type: 'complete', count: generated });
+        console.log(`✅ Generated ${generated}/${imagePrompts.length} ad images`);
+    } catch (err) {
+        console.error('❌ Ad image generation error:', err);
+        send({ type: 'error', error: err.message || 'Image generation failed' });
+    }
+    res.end();
+});
+
+// ─── POST /api/ads/generate (SSE) ───────────────────────────────
+app.post('/api/ads/generate', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    const {
+        product,
+        description,
+        platforms = {},
+        videoDuration,
+        postCount = 3,
+        ctaGoal = 'book_meeting',
+        userName = 'Unknown',
+    } = req.body;
+
+    try {
+        // ── Stage 1: Perplexity Deep Research ────────────────────────
+        send({ type: 'progress', stage: 'research', pct: 5, text: 'Starting deep customer research…' });
+
+        const researchPrompt = `You are an expert ad researcher. Search Reddit, X/Twitter, forums, review sites, and communities for REAL people discussing "${product}".
+${description ? `Product context: ${description}` : ''}
+
+Find and return:
+1. **Exact phrases and language** real people use to describe their pain points related to this product/industry
+2. **What makes them stop scrolling** — hooks, headlines, and visuals that catch attention in this niche
+3. **Common objections** to buying or switching to a product like this
+4. **Competitors** they currently use and what they complain about
+5. **Emotional triggers** — fears, aspirations, frustrations that resonate deeply
+6. **The "aha moment"** — what convinced people to finally buy/switch
+
+Focus on VERBATIM quotes, slang, and the RAW way customers talk. Not marketing language — REAL people language.
+Return comprehensive research with specific examples and quotes.`;
+
+        send({ type: 'progress', stage: 'research', pct: 10, text: 'Scanning Reddit, X, forums for real customer language…' });
+
+        const researchRes = await fetch('https://api.perplexity.ai/chat/completions', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'sonar-pro',
+                messages: [{ role: 'user', content: researchPrompt }],
+                search_recency_filter: 'month',
+            }),
+        });
+
+        if (!researchRes.ok) {
+            const err = await researchRes.text();
+            throw new Error(`Perplexity research failed: ${err}`);
+        }
+
+        const researchData = await researchRes.json();
+        const research = researchData.choices?.[0]?.message?.content || '';
+
+        send({ type: 'progress', stage: 'research', pct: 40, text: 'Deep research complete. Analyzing customer language…' });
+        send({ type: 'research', content: research });
+
+        // ── Stage 2: Claude Ad Generation ────────────────────────────
+        send({ type: 'progress', stage: 'generation', pct: 45, text: 'Generating ad creatives from research…' });
+
+        // Build platform-specific instructions
+        let platformInstructions = '';
+
+        if (platforms.instagram) {
+            platformInstructions += `
+## 📸 INSTAGRAM POST (STATIC/CAROUSEL CARDS)
+You MUST provide 3 distinct, high-converting ad variations (e.g. A/B/C testing styles: direct response, educational, emotional). 
+For EACH variation, you MUST clearly define:
+1. **VISUAL GRAPHIC TEXT (What goes ON the image itself)**: Write the EXACT headline, subheadline, and callout text to be overlaid on the graphic. Keep it punchy and use exact phrases from the research.
+2. **VISUAL DESIGN DIRECTIVES**: Describe the scene, background color mood, focal point, and text placement.
+3. **POST CAPTION**: Write the accompanying caption (with emojis, spacing) and 10 relevant hashtags.
+Make these 3 variations drastically different to give the user excellent options.
+`;
+        }
+
+        if (platforms.reels) {
+            platformInstructions += `
+## 🎬 INSTAGRAM REELS
+- Vertical video script (9:16) ${videoDuration ? `for ${videoDuration}` : 'for 30 seconds'}
+- Hook in first 2 seconds
+- Scene-by-scene breakdown with B-roll suggestions
+- Trending audio style suggestion
+- Text overlay timing
+- CTA at the end
+`;
+        }
+
+        if (platforms.youtubeShorts) {
+            platformInstructions += `
+## 📺 YOUTUBE SHORTS
+- Vertical script ${videoDuration ? `for ${videoDuration}` : 'for 60 seconds'}
+- Retention hook in first 3 seconds
+- Pattern interrupts to maintain watch time
+- End screen CTA
+- Title and description
+`;
+        }
+
+        if (platforms.linkedin) {
+            platformInstructions += `
+## 💼 LINKEDIN POST
+- Professional tone, longer copy
+- 3 post options (story-based, data-driven, question-based)
+- Carousel idea (5–8 slide outline)
+- CTA for engagement
+`;
+        }
+
+        if (platforms.x) {
+            platformInstructions += `
+## 🐦 X (TWITTER)
+- 3 standalone tweets (≤280 chars each, punchy)
+- 1 thread (5–7 tweets) for deeper engagement
+- Engagement hooks
+`;
+        }
+
+        if (platforms.videoScript) {
+            platformInstructions += `
+## 🎥 FULL VIDEO SCRIPT
+- Duration: ${videoDuration || '60 seconds'}
+- Scene-by-scene breakdown
+- Voiceover/narration script
+- B-roll descriptions for each scene
+- Text overlays and graphics descriptions
+- Background music mood suggestion
+- CTA and end card
+`;
+        }
+
+        const ctaLabels = {
+            book_meeting: 'Book a Meeting / Schedule a Demo',
+            sign_up_free: 'Sign Up for Free / Create Free Account',
+            download: 'Download Now / Get the Guide',
+            learn_more: 'Learn More / See How It Works',
+            get_quote: 'Get a Quote / Request Pricing',
+            buy_now: 'Buy Now / Shop Now',
+            free_trial: 'Start Free Trial / Try It Free',
+            contact_us: 'Contact Us / Get in Touch',
+        };
+        const ctaLabel = ctaLabels[ctaGoal] || 'Book a Meeting';
+
+        const adPrompt = `You are writing ad creative briefs for a design agency. Keep everything SHORT and PUNCHY — no long paragraphs, no walls of text, no excessive emojis. Think like a creative director.
+
+## PRODUCT: ${product}
+${description ? `## PRODUCT INFO: ${description}` : ''}
+
+## RESEARCH INSIGHTS:
+${research}
+
+## CTA GOAL: ${ctaLabel}
+
+---
+
+Generate EXACTLY ${postCount} static ad post(s). Number them Post 1, Post 2, etc.
+
+For EACH post:
+
+### Hook
+One scroll-stopping headline. MAX 5-8 words. Bold. Provocative. Uses their real language.
+
+### Caption
+2-3 sentences max. Direct, punchy. 1-2 emojis max. End with the CTA.
+
+### Key Benefits
+Exactly 4 bullet points. One short line each (5-10 words). No fluff.
+
+### CTA Button Text
+One button label aligned to "${ctaLabel}". Max 4 words.
+
+### Visual Brief
+- **Scene**: What the image shows (1 sentence)
+- **Text Overlay**: Exact words on the image (max 6 words)
+- **Color/Mood**: 3-4 words (e.g. "Dark, bold, orange accents")
+- **Layout**: Where text sits relative to the visual
+
+${platformInstructions || ''}
+
+RULES:
+- No long descriptions. This goes to a design agency — they need briefs, not essays.
+- Hooks must be SHORT. If it's more than 8 words, rewrite it.
+- No emoji spam. Max 1-2 per caption.
+- Each post must have a DIFFERENT angle/hook.
+- Benefits are short bullet points, not sentences.`;
+
+        send({ type: 'progress', stage: 'generation', pct: 50, text: 'Claude is crafting your ads…' });
+
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': process.env.ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 8000,
+                stream: true,
+                messages: [{ role: 'user', content: adPrompt }],
+            }),
+        });
+
+        if (!claudeRes.ok) {
+            const err = await claudeRes.text();
+            throw new Error(`Claude generation failed: ${err}`);
+        }
+
+        let fullContent = '';
+        let pct = 50;
+        const reader = claudeRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const raw = line.slice(6).trim();
+                if (raw === '[DONE]') continue;
+                try {
+                    const evt = JSON.parse(raw);
+                    if (evt.type === 'content_block_delta' && evt.delta?.text) {
+                        fullContent += evt.delta.text;
+                        pct = Math.min(95, pct + 0.3);
+                        send({ type: 'progress', stage: 'generation', pct: Math.round(pct), text: 'Generating ad content…' });
+                        send({ type: 'chunk', content: evt.delta.text });
+                    }
+                } catch { }
+            }
+        }
+
+        send({ type: 'progress', stage: 'done', pct: 100, text: 'Complete!' });
+
+        // Save to ads.json
+        const ad = {
+            id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+            userName,
+            product,
+            description: description || '',
+            platforms,
+            videoDuration: videoDuration || '',
+            research,
+            content: fullContent,
+            createdAt: new Date().toISOString(),
+        };
+        const ads = loadAds();
+        ads.unshift(ad);
+        saveAds(ads);
+
+        send({ type: 'complete', ad });
+        console.log(`📣 Ad generated & saved: "${product}" (${ad.id})`);
+    } catch (err) {
+        console.error('Ad generation error:', err);
+        send({ type: 'error', error: err.message });
+    } finally {
+        res.end();
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── AI SALES — Vapi Outbound Calling ────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+const CALLS_FILE = isVercel ? '/tmp/calls.json' : join(__dirname, 'calls.json');
+const VAPI_BASE = 'https://api.vapi.ai';
+
+// ─── GoHighLevel (GHL) Calendar Integration ─────────────────────
+const GHL_BASE = 'https://services.leadconnectorhq.com';
+const GHL_API_KEY = process.env.GHL_API_KEY || 'pit-688cd5cd-7425-4649-9987-0a15e745d8e4';
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || 't64wu6C9FCzSRv4xNW9p';
+const GHL_CALENDAR_ID = process.env.GHL_CALENDAR_ID || 'YDJNpnn1HV2mjEFoIdci';
+
+function ghlHeaders() {
+    return {
+        Authorization: `Bearer ${GHL_API_KEY}`,
+        'Content-Type': 'application/json',
+        Version: '2021-04-15',
+    };
+}
+
+// Create or find a GHL contact by phone number
+async function ghlFindOrCreateContact(phone, name, email) {
+    // Search for existing contact by phone
+    try {
+        const searchRes = await fetch(`${GHL_BASE}/contacts/search/duplicate?locationId=${GHL_LOCATION_ID}&number=${encodeURIComponent(phone)}`, {
+            headers: ghlHeaders(),
+        });
+        const searchData = await searchRes.json();
+        if (searchData.contact?.id) {
+            console.log(`📇 Found existing GHL contact: ${searchData.contact.id}`);
+            return searchData.contact.id;
+        }
+    } catch (e) {
+        console.warn('GHL contact search failed:', e.message);
+    }
+
+    // Create new contact
+    const contactRes = await fetch(`${GHL_BASE}/contacts/`, {
+        method: 'POST',
+        headers: ghlHeaders(),
+        body: JSON.stringify({
+            locationId: GHL_LOCATION_ID,
+            phone,
+            name: name || undefined,
+            firstName: name ? name.split(' ')[0] : undefined,
+            lastName: name && name.split(' ').length > 1 ? name.split(' ').slice(1).join(' ') : undefined,
+            email: email || undefined,
+            source: 'vapi-phone-call',
+            tags: ['vapi-caller', 'auto-booked'],
+        }),
+    });
+    const contactData = await contactRes.json();
+    console.log(`📇 Created GHL contact: ${contactData.contact?.id}`);
+    return contactData.contact?.id;
+}
+
+// Book an appointment on GHL calendar
+async function ghlBookAppointment(contactId, startTime, title) {
+    const startDate = new Date(startTime);
+    const endDate = new Date(startDate.getTime() + 30 * 60 * 1000); // 30 min slot
+
+    const res = await fetch(`${GHL_BASE}/calendars/events/appointments`, {
+        method: 'POST',
+        headers: ghlHeaders(),
+        body: JSON.stringify({
+            calendarId: GHL_CALENDAR_ID,
+            locationId: GHL_LOCATION_ID,
+            contactId,
+            startTime: startDate.toISOString(),
+            endTime: endDate.toISOString(),
+            title: title || 'Phone Call Booking',
+            appointmentStatus: 'new',
+            toNotify: true,
+        }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        console.error('GHL appointment error:', JSON.stringify(data));
+        throw new Error(data.message || 'Failed to book appointment');
+    }
+    console.log(`📅 GHL appointment booked: ${data.id || data.event?.id}`);
+    return data;
+}
+
+// Get available slots from GHL calendar
+async function ghlGetAvailableSlots(dateStr, daysToSearch = 1) {
+    const startDate = new Date(dateStr);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + daysToSearch);
+
+    // GHL requires Unix timestamps in milliseconds
+    const startMs = startDate.getTime();
+    const endMs = endDate.getTime();
+
+    const params = new URLSearchParams({
+        startDate: String(startMs),
+        endDate: String(endMs),
+        timezone: 'America/New_York',
+    });
+
+    console.log(`📅 Checking slots: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+    const res = await fetch(`${GHL_BASE}/calendars/${GHL_CALENDAR_ID}/free-slots?${params}`, {
+        headers: ghlHeaders(),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+        console.error('GHL slots error:', JSON.stringify(data));
+        return {};
+    }
+
+    // Parse GHL response: { "YYYY-MM-DD": { "slots": ["2026-03-23T09:00:00-04:00", ...] }, traceId: ... }
+    const allSlots = {};
+    for (const [key, val] of Object.entries(data)) {
+        if (key === 'traceId') continue;
+        if (val && Array.isArray(val.slots)) {
+            allSlots[key] = val.slots;
+        }
+    }
+    return allSlots;
+}
+
+// Get slots across multiple days (up to 5) to find alternatives
+async function ghlGetMultiDaySlots(startDateStr, maxDays = 5) {
+    const allSlots = await ghlGetAvailableSlots(startDateStr, maxDays);
+    // Flatten into a single array of { date, time, iso } objects
+    const flat = [];
+    for (const [date, times] of Object.entries(allSlots)) {
+        for (const iso of times) {
+            const dt = new Date(iso);
+            flat.push({
+                date,
+                time: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }),
+                iso,
+                readable: `${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' })} at ${dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })}`,
+            });
+        }
+    }
+    return flat;
+}
+
+// ─── VAPI Webhook for Tool Calls ────────────────────────────────
+app.post('/api/vapi/webhook', async (req, res) => {
+    const { message } = req.body;
+    console.log(`📞 VAPI webhook: type=${message?.type}`);
+
+    if (message?.type === 'tool-calls') {
+        const results = [];
+
+        for (const toolCall of message.toolCallList || []) {
+            const { id: toolCallId, function: fn } = toolCall;
+            const { name, arguments: args } = fn;
+            console.log(`🔧 Tool call: ${name}(${JSON.stringify(args).slice(0, 200)})`);
+
+            try {
+                if (name === 'book_meeting') {
+                    const { caller_name, caller_phone, preferred_date, preferred_time, email } = args;
+
+                    // Parse just the date and hour requested (ignore timezone)
+                    let requestedDateStr = preferred_date || '';
+                    let requestedHour = 10; // default 10am
+                    if (preferred_time) {
+                        const timeParts = preferred_time.match(/(\d{1,2})/);
+                        if (timeParts) requestedHour = parseInt(timeParts[1]);
+                        // Handle PM
+                        if (preferred_time.toLowerCase().includes('pm') && requestedHour < 12) requestedHour += 12;
+                        if (preferred_time.toLowerCase().includes('am') && requestedHour === 12) requestedHour = 0;
+                    }
+
+                    // Determine which date to search from
+                    let searchDate;
+                    if (requestedDateStr && !isNaN(new Date(requestedDateStr).getTime())) {
+                        searchDate = requestedDateStr;
+                    } else {
+                        // Default to tomorrow
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        searchDate = tomorrow.toISOString().split('T')[0];
+                    }
+
+                    console.log(`📅 book_meeting: searching from ${searchDate}, preferred hour: ${requestedHour}:00`);
+
+                    // Get available slots
+                    const allSlots = await ghlGetMultiDaySlots(searchDate, 5);
+
+                    if (allSlots.length === 0) {
+                        results.push({
+                            toolCallId,
+                            result: JSON.stringify({
+                                success: false,
+                                message: 'No available slots found in the next 5 business days. Please suggest the caller reaches out via email or tries again later.',
+                            }),
+                        });
+                        continue;
+                    }
+
+                    // Find the best matching slot by comparing local time
+                    // Extract hour from slot ISO string (e.g. "2026-03-20T10:00:00-04:00" → hour 10)
+                    let bestSlot = null;
+                    let bestDiff = Infinity;
+                    for (const slot of allSlots) {
+                        // Extract date and hour from the ISO string directly
+                        const slotMatch = slot.iso.match(/(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+                        if (!slotMatch) continue;
+                        const [, slotDate, slotHourStr] = slotMatch;
+                        const slotHour = parseInt(slotHourStr);
+
+                        // If we have a specific date, match the date first
+                        if (requestedDateStr && !isNaN(new Date(requestedDateStr).getTime())) {
+                            if (slotDate === requestedDateStr) {
+                                const hourDiff = Math.abs(slotHour - requestedHour);
+                                if (hourDiff < bestDiff) {
+                                    bestDiff = hourDiff;
+                                    bestSlot = slot;
+                                }
+                            }
+                        } else {
+                            // No specific date — find closest hour on any day
+                            const hourDiff = Math.abs(slotHour - requestedHour);
+                            if (hourDiff < bestDiff) {
+                                bestDiff = hourDiff;
+                                bestSlot = slot;
+                            }
+                        }
+                    }
+
+                    // If no slot within 2 hours, offer alternatives
+                    if (!bestSlot || bestDiff > 2) {
+                        const alternatives = allSlots.slice(0, 5).map(s => s.readable);
+                        results.push({
+                            toolCallId,
+                            result: JSON.stringify({
+                                success: false,
+                                message: bestDiff > 2
+                                    ? `The requested time is not available. Here are the closest available slots:`
+                                    : `No slots found near the requested time. Here are available slots:`,
+                                available_slots: alternatives,
+                                instruction: 'Please ask the caller which of these times works for them, then call book_meeting again with the chosen date and time.',
+                            }),
+                        });
+                        continue;
+                    }
+
+                    // Use the exact GHL slot time (already in correct timezone)
+                    const bookingTime = bestSlot.iso;
+
+                    // Create/find contact and book
+                    const contactId = await ghlFindOrCreateContact(
+                        caller_phone || message.call?.customer?.number,
+                        caller_name,
+                        email
+                    );
+
+                    if (!contactId) {
+                        throw new Error('Could not create contact in CRM');
+                    }
+
+                    const appointment = await ghlBookAppointment(
+                        contactId,
+                        bookingTime,
+                        `Demo Call — ${caller_name || 'Phone Inquiry'}`
+                    );
+
+                    results.push({
+                        toolCallId,
+                        result: JSON.stringify({
+                            success: true,
+                            message: `Meeting booked successfully for ${bestSlot.readable}. A confirmation will be sent.`,
+                            appointmentId: appointment.id || appointment.event?.id,
+                        }),
+                    });
+                } else if (name === 'check_availability') {
+                    const { date } = args;
+
+                    // Default to tomorrow if no date given
+                    let checkDate = date;
+                    if (!checkDate) {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        checkDate = tomorrow.toISOString().split('T')[0];
+                    }
+
+                    const allSlots = await ghlGetMultiDaySlots(checkDate, 3);
+
+                    if (allSlots.length > 0) {
+                        results.push({
+                            toolCallId,
+                            result: JSON.stringify({
+                                success: true,
+                                message: `Here are the available time slots:`,
+                                available_slots: allSlots.slice(0, 8).map(s => s.readable),
+                            }),
+                        });
+                    } else {
+                        // Try looking further ahead
+                        const laterDate = new Date(checkDate);
+                        laterDate.setDate(laterDate.getDate() + 3);
+                        const laterSlots = await ghlGetMultiDaySlots(laterDate.toISOString().split('T')[0], 5);
+
+                        results.push({
+                            toolCallId,
+                            result: JSON.stringify({
+                                success: true,
+                                message: laterSlots.length > 0
+                                    ? `No slots on the requested date, but here are upcoming available times:`
+                                    : `No available slots found in the next week. Suggest the caller email us to arrange a meeting.`,
+                                available_slots: laterSlots.slice(0, 6).map(s => s.readable),
+                            }),
+                        });
+                    }
+                } else {
+                    results.push({
+                        toolCallId,
+                        result: JSON.stringify({ error: `Unknown tool: ${name}` }),
+                    });
+                }
+            } catch (err) {
+                console.error(`❌ Tool ${name} error:`, err.message);
+                results.push({
+                    toolCallId,
+                    result: JSON.stringify({ success: false, error: err.message }),
+                });
+            }
+        }
+
+        return res.json({ results });
+    }
+
+    // For other VAPI webhook events (assistant-request, status-update, etc.)
+    res.json({});
+});
+
+async function loadCalls() {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get('orbit_calls');
+            return data ? JSON.parse(data) : [];
+        } catch (err) {
+            console.error('Redis loadCalls error:', err.message);
+            // Fall through to file
+        }
+    }
+    if (!existsSync(CALLS_FILE)) return [];
+    try { return JSON.parse(readFileSync(CALLS_FILE, 'utf-8')); } catch { return []; }
+}
+
+async function saveCalls(calls) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set('orbit_calls', JSON.stringify(calls));
+        } catch (err) {
+            console.error('Redis saveCalls error:', err.message);
+        }
+    }
+    // Always write to file as well (local fallback)
+    try { writeFileSync(CALLS_FILE, JSON.stringify(calls, null, 2), 'utf-8'); } catch { }
+}
+
+function vapiHeaders() {
+    return {
+        Authorization: `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json',
+    };
+}
+
+// ─── POST /api/sales/call — Initiate outbound call ──────────────
+app.post('/api/sales/call', async (req, res) => {
+    try {
+        const { phoneNumber, contactName, company, salesScript } = req.body;
+
+        if (!phoneNumber) {
+            return res.status(400).json({ error: 'Phone number is required' });
+        }
+
+        if (!process.env.VAPI_API_KEY) {
+            return res.status(500).json({ error: 'Vapi API key not configured' });
+        }
+
+        const defaultScript = `You are a friendly, professional sales representative for Celeritech, a company that provides ERP and business technology solutions for food & beverage manufacturers. 
+
+Your goal is to:
+1. Introduce yourself and Celeritech briefly
+2. Ask what ERP or business software they currently use
+3. Understand their biggest pain points with their current system
+4. Gauge their interest level in exploring better solutions
+5. If interested, propose scheduling a demo meeting
+
+Be conversational, not pushy. Ask follow-up questions based on their answers. If they're not interested, be polite and ask if you can follow up in the future. Keep the call under 5 minutes.`;
+
+        const prompt = salesScript || defaultScript;
+
+        // Normalize to E.164 format
+        let normalizedPhone = phoneNumber.replace(/[^\d+]/g, '');
+        if (!normalizedPhone.startsWith('+')) {
+            // If it starts with country code 1 and has 11 digits, just add +
+            if (normalizedPhone.startsWith('1') && normalizedPhone.length === 11) {
+                normalizedPhone = '+' + normalizedPhone;
+            } else {
+                normalizedPhone = '+1' + normalizedPhone;
+            }
+        }
+
+        console.log(`\n📞 Initiating call to ${normalizedPhone} (${contactName || 'Unknown'})`);
+
+        const response = await fetch(`${VAPI_BASE}/call`, {
+            method: 'POST',
+            headers: vapiHeaders(),
+            body: JSON.stringify({
+                phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
+                customer: {
+                    number: normalizedPhone,
+                    name: contactName || undefined,
+                },
+                assistantId: 'ec94ead8-b047-4f64-989d-0c96731fbdc2',
+            }),
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            console.error('Vapi call error:', errBody);
+            // Parse Vapi error for a user-friendly message
+            let userMsg = `Vapi API error: ${response.status}`;
+            try {
+                const parsed = JSON.parse(errBody);
+                if (parsed.message) {
+                    userMsg = Array.isArray(parsed.message) ? parsed.message.join('. ') : parsed.message;
+                }
+            } catch { }
+            throw new Error(userMsg);
+        }
+
+        const callData = await response.json();
+
+        // Vapi may return 200 but the call already failed (e.g. daily limit)
+        if (callData.endedReason) {
+            const reason = callData.endedReason;
+            console.error(`❌ Vapi call failed immediately: ${reason}`);
+            const friendlyErrors = {
+                'call.start.error-vapi-number-outbound-daily-limit': 'Daily outbound call limit reached for this phone number. Try again tomorrow or upgrade your Vapi plan.',
+                'call.start.error-get-transport': 'Failed to connect phone transport. The phone number may be misconfigured in Vapi.',
+                'call.start.error-phone-number-not-found': 'Phone number not found in Vapi. Check VAPI_PHONE_NUMBER_ID in .env.',
+            };
+            const msg = friendlyErrors[reason] || `Call failed: ${reason}`;
+            return res.status(429).json({ error: msg, endedReason: reason });
+        }
+
+        console.log(`✅ Call initiated: ${callData.id}`);
+
+        // Save to local storage
+        const calls = await loadCalls();
+        calls.unshift({
+            id: callData.id,
+            phoneNumber,
+            contactName: contactName || '',
+            company: company || '',
+            status: 'in_progress',
+            startedAt: new Date().toISOString(),
+            duration: null,
+            recordingUrl: null,
+            transcript: null,
+            analysis: null,
+        });
+        await saveCalls(calls);
+
+        res.json({ callId: callData.id, status: 'in_progress' });
+    } catch (err) {
+        console.error('❌ Call initiation error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/sales/calls — List all calls ──────────────────────
+app.get('/api/sales/calls', async (req, res) => {
+    res.json(await loadCalls());
+});
+
+// ─── DELETE /api/sales/call/:id — Delete a call ─────────────────
+app.delete('/api/sales/call/:id', async (req, res) => {
+    const calls = await loadCalls();
+    const filtered = calls.filter(c => c.id !== req.params.id);
+    await saveCalls(filtered);
+    res.json({ success: true });
+});
+
+// ─── GET /api/sales/call/:id — Poll call status + auto-analyze ──
+app.get('/api/sales/call/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Fetch from Vapi
+        const response = await fetch(`${VAPI_BASE}/call/${id}`, {
+            headers: vapiHeaders(),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Vapi error: ${response.status}`);
+        }
+
+        const vapiCall = await response.json();
+
+        // Debug: log key fields from VAPI response
+        console.log(`📡 VAPI call ${id}: status=${vapiCall.status}, endedReason=${vapiCall.endedReason || 'N/A'}, hasArtifact=${!!vapiCall.artifact}, hasRecording=${!!(vapiCall.recordingUrl || vapiCall.artifact?.recordingUrl)}, hasTranscript=${!!(vapiCall.transcript || vapiCall.artifact?.transcript || vapiCall.artifact?.messages)}`);
+
+        // Update local storage
+        const calls = await loadCalls();
+        const localCall = calls.find(c => c.id === id);
+
+        if (localCall) {
+            const vapiStatus = vapiCall.status;
+            const endedReason = vapiCall.endedReason || '';
+
+            if (vapiStatus === 'ended') {
+                // Check if the call failed before connecting (error reasons)
+                if (endedReason.startsWith('call.start.error')) {
+                    localCall.status = 'no_answer';
+                    localCall.endedAt = vapiCall.endedAt || new Date().toISOString();
+                    localCall.errorReason = endedReason;
+                } else {
+                    // Extract duration from various VAPI response locations
+                    localCall.duration = vapiCall.costBreakdown?.duration
+                        || vapiCall.duration
+                        || vapiCall.artifact?.duration
+                        || null;
+
+                    // Extract recording URL
+                    localCall.recordingUrl = vapiCall.recordingUrl
+                        || vapiCall.artifact?.recordingUrl
+                        || null;
+
+                    // Extract transcript — VAPI v2 uses artifact.messages array
+                    if (!localCall.transcript) {
+                        if (typeof vapiCall.transcript === 'string' && vapiCall.transcript.length > 0) {
+                            localCall.transcript = vapiCall.transcript;
+                        } else if (typeof vapiCall.artifact?.transcript === 'string' && vapiCall.artifact.transcript.length > 0) {
+                            localCall.transcript = vapiCall.artifact.transcript;
+                        } else if (Array.isArray(vapiCall.artifact?.messages) && vapiCall.artifact.messages.length > 0) {
+                            // Build transcript from messages array
+                            localCall.transcript = vapiCall.artifact.messages
+                                .filter(m => m.role && m.message)
+                                .map(m => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.message}`)
+                                .join('\n');
+                        } else if (Array.isArray(vapiCall.messages) && vapiCall.messages.length > 0) {
+                            localCall.transcript = vapiCall.messages
+                                .filter(m => m.role && m.message)
+                                .map(m => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.message}`)
+                                .join('\n');
+                        }
+                    }
+
+                    localCall.endedAt = vapiCall.endedAt || new Date().toISOString();
+
+                    // Categorize based on call characteristics
+                    if (!localCall.transcript && localCall.duration && localCall.duration < 15) {
+                        localCall.status = 'no_answer';
+                    } else if (endedReason === 'customer-ended-call' && localCall.duration && localCall.duration < 15) {
+                        localCall.status = 'not_interested';
+                    } else if (endedReason.includes('error')) {
+                        localCall.status = 'no_answer';
+                        localCall.errorReason = endedReason;
+                    } else if (localCall.transcript && !localCall.analysis) {
+                        // Auto-analyze if we have a transcript and haven't yet analyzed
+                        console.log(`🧠 Auto-analyzing call ${id}…`);
+                        localCall.analysis = await analyzeTranscript(localCall.transcript, localCall.contactName, localCall.company);
+                        localCall.status = localCall.analysis.status || 'completed';
+                    } else if (!localCall.analysis) {
+                        localCall.status = 'completed';
+                    }
+
+                    // Flag if recording not ready yet (VAPI processes async)
+                    localCall._recordingPending = !localCall.recordingUrl && !localCall.transcript;
+                }
+            } else if (vapiStatus === 'ringing' || vapiStatus === 'queued') {
+                localCall.status = 'ringing';
+            } else if (vapiStatus === 'in-progress') {
+                localCall.status = 'in_progress';
+            }
+            await saveCalls(calls);
+        }
+
+        res.json(localCall || { id, status: vapiCall.status });
+    } catch (err) {
+        console.error('Call status error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Claude Transcript Analysis ─────────────────────────────────
+async function analyzeTranscript(transcript, contactName, company) {
+    try {
+        const message = await callClaude({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 2048,
+            messages: [
+                {
+                    role: 'user',
+                    content: `Analyze this sales call transcript and return a JSON object with the following fields. Return ONLY the JSON, no markdown fences.
+
+Transcript:
+${transcript}
+
+Contact: ${contactName || 'Unknown'} at ${company || 'Unknown Company'}
+
+Return this exact JSON structure:
+{
+  "status": "meeting_booked" | "callback" | "not_interested" | "no_answer" | "voicemail",
+  "summary": "2-3 sentence summary of the call outcome",
+  "painPoints": ["list of pain points mentioned"],
+  "currentSoftware": ["software/tools they currently use"],
+  "objections": ["reasons they gave for hesitation or rejection"],
+  "interestLevel": "high" | "medium" | "low" | "none",
+  "followUpRecommendation": "what to do next",
+  "keyQuotes": ["1-2 important direct quotes from the prospect"]
+}`,
+                },
+            ],
+        });
+
+        let text = message.content[0].text.trim();
+        text = text.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim();
+        return JSON.parse(text);
+    } catch (err) {
+        console.error('Analysis error:', err.message);
+        return {
+            status: 'completed',
+            summary: 'Unable to analyze transcript automatically.',
+            painPoints: [],
+            currentSoftware: [],
+            objections: [],
+            interestLevel: 'unknown',
+            followUpRecommendation: 'Review call recording manually.',
+            keyQuotes: [],
+        };
+    }
+}
+
+// ─── POST /api/media/upload-token (Vercel Blob) ─────────────
+app.post('/api/media/upload-token', async (req, res) => {
+    try {
+        const { filename, contentType } = req.body;
+        if (!filename) return res.status(400).json({ error: 'Filename is required' });
+
+        if (!process.env.BLOB_READ_WRITE_TOKEN) {
+            return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is missing' });
+        }
+
+        const pathname = `orbit-media/${Date.now()}-${filename}`;
+        const token = await generateClientTokenFromReadWriteToken({
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+            pathname,
+            maximumSizeInBytes: 50 * 1024 * 1024, // 50MB
+        });
+
+        res.json({ clientToken: token, pathname });
+    } catch (e) {
+        console.error('Blob Token Error:', e);
+        res.status(500).json({ error: 'Failed to generate upload token', details: e.message });
+    }
+});
+
+// ─── GET /api/media/test — Diagnostic: test full Fal.ai queue flow ──
+app.get('/api/media/test', async (req, res) => {
+    const steps = [];
+    const falKey = process.env.FAL_KEY;
+    if (!falKey) return res.json({ error: 'FAL_KEY not configured', steps });
+
+    const model = 'fal-ai/kling-video/v3/pro/text-to-video';
+    const input = { prompt: 'A gentle ocean wave rolling onto a sandy beach at sunset', duration: '5' };
+
+    try {
+        // Step 1: Submit to queue
+        steps.push({ step: 'submit', url: `https://queue.fal.run/${model}`, input });
+        const queueRes = await fetch(`https://queue.fal.run/${model}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(input),
+        });
+        const queueText = await queueRes.text();
+        steps.push({ step: 'submit_response', status: queueRes.status, body: queueText.slice(0, 500) });
+
+        if (!queueRes.ok) return res.json({ error: 'Queue submit failed', steps });
+
+        const queueData = JSON.parse(queueText);
+        const requestId = queueData.request_id;
+        steps.push({ step: 'queued', requestId });
+
+        // Step 2: Poll status (up to 10 attempts for test)
+        for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 3000));
+            const statusUrl = `https://queue.fal.run/${model}/requests/${requestId}/status`;
+            const statusRes = await fetch(statusUrl, {
+                headers: { 'Authorization': `Key ${falKey}` },
+            });
+            const statusText = await statusRes.text();
+            steps.push({ step: `poll_${i}`, status: statusRes.status, body: statusText.slice(0, 300) });
+
+            const statusData = JSON.parse(statusText);
+            if (statusData.status === 'COMPLETED') {
+                // Step 3: Fetch result
+                const resultUrl = `https://queue.fal.run/${model}/requests/${requestId}`;
+                const resultRes = await fetch(resultUrl, {
+                    headers: { 'Authorization': `Key ${falKey}` },
+                });
+                const resultText = await resultRes.text();
+                steps.push({ step: 'result', status: resultRes.status, body: resultText.slice(0, 800) });
+                return res.json({ success: true, steps });
+            }
+            if (statusData.status === 'FAILED') {
+                steps.push({ step: 'failed', data: statusData });
+                return res.json({ error: 'Generation failed', steps });
+            }
+        }
+        return res.json({ error: 'Still processing after 30s (test limit)', steps });
+    } catch (err) {
+        steps.push({ step: 'error', message: err.message });
+        return res.json({ error: err.message, steps });
+    }
+});
+
+// ─── POST /api/media/generate (Fal.ai queue submit) ─────────────
+app.post('/api/media/generate', async (req, res) => {
+    try {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
+
+        const { mode, model, prompt, aspectRatio, duration, resolution, referenceImage, referenceImageUrl, generate_audio, audio, negative_prompt, num_images } = req.body;
+        if (!prompt || !model) return res.status(400).json({ error: 'Prompt and model are required' });
+
+        const actualRefImage = referenceImage || referenceImageUrl;
+        const actualGenerateAudio = generate_audio !== undefined ? generate_audio : audio;
+
+        console.log(`🎬 Media generation: ${mode} with ${model}`);
+
+        // Build the input payload
+        const input = { prompt };
+
+        if (negative_prompt) {
+            input.negative_prompt = negative_prompt;
+        }
+
+        // Aspect ratio
+        if (aspectRatio) {
+            input.aspect_ratio = aspectRatio;
+        }
+
+        // Number of images (for image generation models)
+        if (num_images && num_images > 1 && !mode?.includes('video')) {
+            input.num_images = Math.min(num_images, 4);
+        }
+
+        // Image size (only for image modes, not video, and not models that handle aspect_ratio natively)
+        if (!mode?.includes('video') && aspectRatio) {
+            // Nano Banana uses aspect_ratio + resolution natively — don't send image_size
+            if (model.includes('nano-banana')) {
+                // Already set aspect_ratio above; add default resolution if not specified
+                if (!input.resolution) {
+                    input.resolution = '1K';
+                }
+                // Do NOT set image_size for Nano Banana
+            } else {
+                const [w, h] = aspectRatio.split(':').map(Number);
+                const baseSize = 1080;
+                if (w > h) {
+                    input.image_size = { width: baseSize, height: Math.round(baseSize * h / w) };
+                } else if (h > w) {
+                    input.image_size = { width: Math.round(baseSize * w / h), height: baseSize };
+                } else {
+                    input.image_size = { width: baseSize, height: baseSize };
+                }
+            }
+        }
+
+        // Video Settings
+        if (mode?.includes('video')) {
+            if (model.includes('sora')) {
+                // Sora: takes prompt and aspect_ratio only
+            } else if (model.includes('veo2')) {
+                // Veo 2.0: duration must be string with 's' suffix: "5s", "6s", "7s", "8s"
+                if (duration) {
+                    const parsedDuration = parseInt(String(duration).replace(/[^0-9]/g, ''));
+                    const validDuration = [5, 6, 7, 8].includes(parsedDuration) ? parsedDuration : 5;
+                    input.duration = `${validDuration}s`;
+                } else {
+                    input.duration = '5s';
+                }
+                // Veo uses image_url for reference images
+                if (actualRefImage) {
+                    input.image_url = actualRefImage;
+                }
+            } else {
+                // Kling v3/v2/v1: duration as string "5", "10", etc.
+                if (duration) input.duration = String(duration).replace(/[^0-9]/g, '');
+                if (actualGenerateAudio === true) input.generate_audio = true;
+
+                // Kling v3 uses 'start_image_url' for reference images
+                if (actualRefImage) {
+                    input.start_image_url = actualRefImage;
+                    console.log(`📸 Set start_image_url for Kling: ${actualRefImage.slice(0, 80)}...`);
+                }
+            }
+
+            // Generic fallback for other models
+            if (actualRefImage && !input.image_url && !input.start_image_url) {
+                input.image_url = actualRefImage;
+            }
+        } else {
+            // Image generation reference
+            if (actualRefImage) {
+                // Nano Banana models use image_urls (array), not image_url
+                if (model.includes('nano-banana')) {
+                    input.image_urls = [actualRefImage];
+                    console.log(`📸 Set image_urls (array) for Nano Banana: ${actualRefImage.slice(0, 80)}...`);
+                } else {
+                    input.image_url = actualRefImage;
+                }
+            }
+        }
+
+        // Final payload sanitization based on model strictness
+        if (model.includes('sora')) {
+            delete input.duration;
+            delete input.generate_audio;
+        } else if (model.includes('veo2')) {
+            delete input.generate_audio; // Veo does not support generate_audio
+        } else if (!mode?.includes('video')) {
+            delete input.duration;
+            delete input.generate_audio;
+        }
+
+        console.log(`🎬 Fal.ai payload for ${model}:`, JSON.stringify(input).slice(0, 500));
+
+        // Submit to fal.ai queue
+        const queueRes = await fetch(`https://queue.fal.run/${model}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Key ${falKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(input),
+        });
+
+        if (!queueRes.ok) {
+            const errText = await queueRes.text();
+            console.error(`Fal.ai queue error: ${queueRes.status} ${errText.slice(0, 500)}`);
+            return res.status(queueRes.status).json({ error: `Fal.ai: ${errText.slice(0, 200)}` });
+        }
+
+        const resText = await queueRes.text();
+        let queueData;
+        try {
+            queueData = JSON.parse(resText);
+        } catch (parseErr) {
+            console.error(`Fal.ai non-JSON response: ${resText.slice(0, 200)}`);
+            return res.status(500).json({ error: `Fal.ai invalid response: ${resText.slice(0, 100)}` });
+        }
+
+        console.log(`   Queued: ${queueData.request_id || 'unknown'}`);
+        console.log(`   status_url: ${queueData.status_url}`);
+        console.log(`   response_url: ${queueData.response_url}`);
+        res.json({
+            success: true,
+            requestId: queueData.request_id,
+            statusUrl: queueData.status_url,
+            responseUrl: queueData.response_url,
+            modelUsed: model,
+        });
+    } catch (err) {
+        console.error('Media generate error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/media/check-status — uses Fal.ai's own status_url ──
+app.post('/api/media/check-status', async (req, res) => {
+    try {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
+
+        const { statusUrl } = req.body;
+        if (!statusUrl) return res.status(400).json({ error: 'statusUrl required' });
+
+        const statusRes = await fetch(statusUrl, {
+            headers: { 'Authorization': `Key ${falKey}` },
+        });
+
+        if (!statusRes.ok) {
+            const errText = await statusRes.text();
+            console.error(`❌ Fal status [${statusRes.status}]: ${errText.slice(0, 200)}`);
+            return res.status(statusRes.status).json({ error: `Status ${statusRes.status}: ${errText.slice(0, 100)}` });
+        }
+
+        const statusData = await statusRes.json();
+        console.log(`📊 Status: ${statusData.status}${statusData.error ? ' — ' + statusData.error : ''}`);
+        res.json({
+            status: statusData.status || 'IN_QUEUE',
+            error: statusData.error || null,
+            logs: statusData.logs || null,
+            queue_position: statusData.queue_position || null,
+        });
+    } catch (err) {
+        console.error('❌ Media status error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/media/fetch-result — uses Fal.ai's own response_url ──
+app.post('/api/media/fetch-result', async (req, res) => {
+    try {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) return res.status(500).json({ error: 'FAL_KEY not configured' });
+
+        const { responseUrl } = req.body;
+        if (!responseUrl) return res.status(400).json({ error: 'responseUrl required' });
+
+        console.log(`📥 Fetching result from: ${responseUrl}`);
+        const resultRes = await fetch(responseUrl, {
+            headers: { 'Authorization': `Key ${falKey}` },
+        });
+
+        if (!resultRes.ok) {
+            const errText = await resultRes.text();
+            console.error(`❌ Result fetch [${resultRes.status}]: ${errText.slice(0, 200)}`);
+            return res.status(resultRes.status).json({ error: `Result fetch failed: ${errText.slice(0, 100)}` });
+        }
+
+        const result = await resultRes.json();
+        console.log(`✅ Result keys: [${Object.keys(result).join(', ')}]`);
+        console.log(`✅ Full result: ${JSON.stringify(result).slice(0, 500)}`);
+        res.json({ status: 'COMPLETED', result });
+    } catch (err) {
+        console.error('❌ Media result error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── REDDIT OAUTH & AGENTS ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+import axios from 'axios';
+
+const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID;
+const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET;
+const REDIRECT_URI = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}/api/reddit/callback`
+    : 'http://localhost:3000/api/reddit/callback';
+
+// ─── GET /api/reddit/auth ─────────────────────────────────────────
+// Redirects the user to Reddit to authorize the app
+app.get('/api/reddit/auth', (req, res) => {
+    if (!REDDIT_CLIENT_ID) {
+        return res.status(500).send('REDDIT_CLIENT_ID is not configured in environment variables.');
+    }
+
+    const { agentId } = req.query;
+    if (!agentId) {
+        return res.status(400).send('agentId query parameter is required');
+    }
+
+    // State encodes the agentId so we know which agent to link the token to on callback
+    const state = Buffer.from(JSON.stringify({ agentId })).toString('base64');
+    const scope = 'read submit identity'; // read posts, submit comments, identity
+    const duration = 'permanent'; // required to get a refresh_token
+
+    const authUrl = `https://www.reddit.com/api/v1/authorize?` +
+        `client_id=${REDDIT_CLIENT_ID}` +
+        `&response_type=code` +
+        `&state=${state}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&duration=${duration}` +
+        `&scope=${encodeURIComponent(scope)}`;
+
+    res.redirect(authUrl);
+});
+
+// ─── GET /api/reddit/callback ─────────────────────────────────────
+// Handles the redirect from Reddit and exchanges code for tokens
+app.get('/api/reddit/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+
+    if (error) {
+        return res.send(`<h2>Reddit Auth Failed</h2><p>${error}</p><script>setTimeout(() => window.close(), 3000);</script>`);
+    }
+
+    if (!code || !state) {
+        return res.status(400).send('Missing code or state');
+    }
+
+    let agentId;
+    try {
+        const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
+        agentId = decodedState.agentId;
+    } catch (e) {
+        return res.status(400).send('Invalid state parameter');
+    }
+
+    try {
+        // Exchange code for tokens
+        const auth = Buffer.from(`${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}`).toString('base64');
+        const tokenResponse = await axios.post('https://www.reddit.com/api/v1/access_token',
+            new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: REDIRECT_URI
+            }).toString(),
+            {
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'CeleritechOrbit/1.0.0'
+                }
+            }
+        );
+
+        const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+        if (!refresh_token) {
+            console.warn('No refresh token received. Ensure duration=permanent is set.');
+            return res.send(`<h2>Authorization Error</h2><p>No refresh token granted by Reddit.</p><script>setTimeout(() => window.close(), 3000);</script>`);
+        }
+
+        // Fetch the Reddit username to display in the UI
+        const meResponse = await axios.get('https://oauth.reddit.com/api/v1/me', {
+            headers: {
+                'Authorization': `Bearer ${access_token}`,
+                'User-Agent': 'CeleritechOrbit/1.0.0'
+            }
+        });
+
+        const redditUsername = meResponse.data.name;
+
+        if (!redisCreds) {
+            return res.status(500).send('<h2>OAuth Error</h2><p>No Redis credentials configured.</p>');
+        }
+
+        // Save to Redis database
+        await redisSet(`reddit_agent_token:${agentId}`, {
+            refresh_token,
+            username: redditUsername,
+            updatedAt: Date.now()
+        });
+
+        // Return a script that posts a message back to the main window and closes the popup
+        res.send(`
+            <html>
+            <body style="font-family: system-ui; text-align: center; padding: 40px;">
+                <h2 style="color: #10b981;">Successfully Connected!</h2>
+                <p>Linked agent to Reddit account: <strong>u/${redditUsername}</strong></p>
+                <p>You can close this window.</p>
+                <script>
+                    if (window.opener) {
+                        window.opener.postMessage({ type: 'REDDIT_AUTH_SUCCESS', agentId: '${agentId}', username: '${redditUsername}' }, '*');
+                    }
+                    setTimeout(() => window.close(), 2000);
+                </script>
+            </body>
+            </html>
+        `);
+    } catch (err) {
+        console.error('Reddit OAuth Callback Error:', err.response?.data || err.message);
+        res.status(500).send(`<h2>OAuth Error</h2><p>Failed to exchange code for tokens. Ensure Vercel KV is configured.</p><pre>${err.message}</pre>`);
+    }
+});
+
+// ─── TEMPORARY: Debug Environment Variables ─────────────────────
+app.get('/api/debug-env', (req, res) => {
+    res.json({
+        redisConfigured: useKV,
+        REDIS_URL_exists: !!process.env.REDIS_URL,
+        KV_URL_exists: !!process.env.KV_URL,
+        VERCEL: !!process.env.VERCEL,
+        NODE_ENV: process.env.NODE_ENV,
+    });
+});
+
+// ─── GET /api/health ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// ─── SOCIAL OAUTH CONNECTIONS ───────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+// In-memory token store (for dev); in production use Redis
+const socialTokens = {};
+
+async function getSocialTokens() {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => {});
+            const data = await r.get('orbit_social_tokens');
+            return data ? JSON.parse(data) : {};
+        } catch { return {}; }
+    }
+    return socialTokens;
+}
+
+async function saveSocialToken(platform, tokenData) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => {});
+            const tokens = JSON.parse(await r.get('orbit_social_tokens') || '{}');
+            tokens[platform] = tokenData;
+            await r.set('orbit_social_tokens', JSON.stringify(tokens));
+        } catch (err) { console.error('Redis token save error:', err.message); }
+    }
+    socialTokens[platform] = tokenData;
+}
+
+async function removeSocialToken(platform) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => {});
+            const tokens = JSON.parse(await r.get('orbit_social_tokens') || '{}');
+            delete tokens[platform];
+            await r.set('orbit_social_tokens', JSON.stringify(tokens));
+        } catch (err) { console.error('Redis token remove error:', err.message); }
+    }
+    delete socialTokens[platform];
+}
+
+// Platform OAuth configs
+function getOAuthConfig(platform, req) {
+    // Use the request's actual host so redirect URI matches the domain the user is on
+    let baseUrl;
+    if (req && req.headers && req.headers.host) {
+        const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+        baseUrl = `${proto}://${req.headers.host}`;
+    } else {
+        baseUrl = process.env.APP_URL
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+            || `http://localhost:${PORT}`;
+    }
+    const redirectUri = `${baseUrl}/api/oauth/callback`;
+
+    const configs = {
+        facebook: {
+            clientId: process.env.FACEBOOK_APP_ID,
+            clientSecret: process.env.FACEBOOK_APP_SECRET,
+            authorizeUrl: 'https://www.facebook.com/v19.0/dialog/oauth',
+            tokenUrl: 'https://graph.facebook.com/v19.0/oauth/access_token',
+            scopes: 'pages_show_list,pages_read_engagement,pages_manage_posts',
+            profileUrl: 'https://graph.facebook.com/me?fields=name,email',
+        },
+        instagram: {
+            clientId: process.env.INSTAGRAM_APP_ID,
+            clientSecret: process.env.INSTAGRAM_APP_SECRET,
+            authorizeUrl: 'https://www.instagram.com/oauth/authorize',
+            tokenUrl: 'https://api.instagram.com/oauth/access_token',
+            scopes: 'instagram_business_basic,instagram_manage_comments,instagram_business_manage_messages',
+            profileUrl: 'https://graph.instagram.com/me?fields=user_id,username',
+            extraParams: { enable_signup: 'true' },
+        },
+        youtube: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+            tokenUrl: 'https://oauth2.googleapis.com/token',
+            scopes: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
+            profileUrl: 'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
+            extraParams: { access_type: 'offline', prompt: 'consent' },
+        },
+        x: {
+            clientId: process.env.X_CLIENT_ID,
+            clientSecret: process.env.X_CLIENT_SECRET,
+            authorizeUrl: 'https://twitter.com/i/oauth2/authorize',
+            tokenUrl: 'https://api.x.com/2/oauth2/token',
+            scopes: 'tweet.read tweet.write users.read offline.access',
+            profileUrl: 'https://api.x.com/2/users/me',
+            usePKCE: true,
+        },
+        linkedin: {
+            clientId: process.env.LINKEDIN_CLIENT_ID,
+            clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
+            authorizeUrl: 'https://www.linkedin.com/oauth/v2/authorization',
+            tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
+            scopes: 'openid profile w_member_social',
+            profileUrl: 'https://api.linkedin.com/v2/userinfo',
+        },
+    };
+    const cfg = configs[platform];
+    if (cfg) cfg.redirectUri = redirectUri;
+    return cfg;
+}
+
+// PKCE helper for X (Twitter)
+function generateCodeVerifier() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    let result = '';
+    for (let i = 0; i < 64; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    return result;
+}
+
+// Temporary PKCE store
+const pkceStore = {};
+
+// ─── GET /api/oauth/:platform/connect ───────────────────────────
+app.get('/api/oauth/:platform/connect', (req, res) => {
+    const { platform } = req.params;
+    const cfg = getOAuthConfig(platform, req);
+    if (!cfg) return res.status(400).json({ error: `Unknown platform: ${platform}` });
+    if (!cfg.clientId) {
+        return res.status(400).json({
+            error: `${platform} OAuth not configured. Set the required env vars.`,
+            required: platform === 'facebook'
+                ? ['FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET']
+                : platform === 'instagram'
+                    ? ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET']
+                : platform === 'youtube'
+                    ? ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']
+                    : platform === 'x'
+                        ? ['X_CLIENT_ID', 'X_CLIENT_SECRET']
+                        : ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'],
+        });
+    }
+
+    const state = `${platform}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const params = new URLSearchParams({
+        client_id: cfg.clientId,
+        redirect_uri: cfg.redirectUri,
+        response_type: 'code',
+        scope: cfg.scopes,
+        state,
+    });
+
+    // Extra params (e.g. YouTube needs access_type=offline)
+    if (cfg.extraParams) {
+        for (const [k, v] of Object.entries(cfg.extraParams)) params.set(k, v);
+    }
+
+    // PKCE for X
+    if (cfg.usePKCE) {
+        const codeVerifier = generateCodeVerifier();
+        pkceStore[state] = codeVerifier;
+        params.set('code_challenge', codeVerifier); // plain method
+        params.set('code_challenge_method', 'plain');
+    }
+
+    const authUrl = `${cfg.authorizeUrl}?${params.toString()}`;
+    console.log(`🔗 OAuth redirect for ${platform}: ${authUrl.slice(0, 120)}...`);
+    res.redirect(authUrl);
+});
+
+// ─── GET /api/oauth/callback ────────────────────────────────────
+app.get('/api/oauth/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+
+    if (error) {
+        console.error(`OAuth error: ${error}`);
+        return res.send(oauthResultPage('error', null, `Authorization denied: ${error}`));
+    }
+
+    if (!code || !state) {
+        return res.status(400).send(oauthResultPage('error', null, 'Missing code or state'));
+    }
+
+    // Extract platform from state
+    const platform = state.split('_')[0];
+    const cfg = getOAuthConfig(platform, req);
+    if (!cfg) return res.status(400).send(oauthResultPage('error', platform, 'Unknown platform'));
+
+    try {
+        // Exchange code for access token
+        const tokenParams = new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: cfg.redirectUri,
+            client_id: cfg.clientId,
+            client_secret: cfg.clientSecret,
+        });
+
+        // PKCE verifier for X
+        if (cfg.usePKCE && pkceStore[state]) {
+            tokenParams.set('code_verifier', pkceStore[state]);
+            delete pkceStore[state];
+        }
+
+        const tokenHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+        // X (Twitter) requires Basic auth for token exchange
+        if (platform === 'x') {
+            const basicAuth = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString('base64');
+            tokenHeaders['Authorization'] = `Basic ${basicAuth}`;
+        }
+
+        const tokenRes = await fetch(cfg.tokenUrl, {
+            method: 'POST',
+            headers: tokenHeaders,
+            body: tokenParams.toString(),
+        });
+
+        let tokenData;
+        const contentType = tokenRes.headers.get('content-type') || '';
+        if (contentType.includes('json')) {
+            tokenData = await tokenRes.json();
+        } else {
+            // Facebook sometimes returns URL-encoded
+            const text = await tokenRes.text();
+            try { tokenData = JSON.parse(text); } catch {
+                tokenData = Object.fromEntries(new URLSearchParams(text));
+            }
+        }
+
+        if (!tokenRes.ok || tokenData.error) {
+            console.error(`Token exchange error for ${platform}:`, tokenData);
+            return res.send(oauthResultPage('error', platform,
+                tokenData.error_description || tokenData.error || 'Token exchange failed'));
+        }
+
+        const accessToken = tokenData.access_token;
+        if (!accessToken) {
+            return res.send(oauthResultPage('error', platform, 'No access token received'));
+        }
+
+        // Fetch profile info
+        let profileName = 'Connected Account';
+        try {
+            const profileHeaders = { Authorization: `Bearer ${accessToken}` };
+            const profileRes = await fetch(cfg.profileUrl, { headers: profileHeaders });
+            if (profileRes.ok) {
+                const profile = await profileRes.json();
+                if (platform === 'youtube') {
+                    profileName = profile.items?.[0]?.snippet?.title || profileName;
+                } else if (platform === 'x') {
+                    profileName = profile.data?.name || profile.data?.username || profileName;
+                } else if (platform === 'linkedin') {
+                    profileName = profile.name || profile.given_name || profileName;
+                } else if (platform === 'instagram') {
+                    profileName = profile.username || profile.name || profileName;
+                } else {
+                    profileName = profile.name || profileName;
+                }
+            }
+        } catch (profileErr) {
+            console.error(`Profile fetch error for ${platform}:`, profileErr.message);
+        }
+
+        // Save token
+        await saveSocialToken(platform, {
+            accessToken,
+            refreshToken: tokenData.refresh_token || null,
+            expiresAt: tokenData.expires_in
+                ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
+                : null,
+            profileName,
+            connectedAt: new Date().toISOString(),
+        });
+
+        console.log(`✅ ${platform} connected as "${profileName}"`);
+        res.send(oauthResultPage('success', platform, profileName));
+
+    } catch (err) {
+        console.error(`OAuth callback error for ${platform}:`, err);
+        res.send(oauthResultPage('error', platform, err.message));
+    }
+});
+
+// ─── GET /api/oauth/status ──────────────────────────────────────
+app.get('/api/oauth/status', async (req, res) => {
+    const tokens = await getSocialTokens();
+    const status = {};
+    for (const platform of ['facebook', 'instagram', 'youtube', 'x', 'linkedin']) {
+        const token = tokens[platform];
+        if (token?.accessToken) {
+            status[platform] = {
+                connected: true,
+                name: token.profileName || 'Connected',
+                connectedAt: token.connectedAt,
+                expiresAt: token.expiresAt,
+            };
+        } else {
+            status[platform] = { connected: false };
+        }
+    }
+    res.json(status);
+});
+
+// ─── POST /api/oauth/:platform/disconnect ───────────────────────
+app.post('/api/oauth/:platform/disconnect', async (req, res) => {
+    const { platform } = req.params;
+    await removeSocialToken(platform);
+    console.log(`🔌 ${platform} disconnected`);
+    res.json({ success: true, platform });
+});
+
+// ─── POST /api/data-deletion (Meta callback + user form) ────────
+app.post('/api/data-deletion', async (req, res) => {
+    const { email, name, reason, signed_request } = req.body;
+
+    // Meta sends a signed_request for deauthorisation callbacks
+    if (signed_request) {
+        console.log('🗑️ Meta data deletion callback received');
+        // Parse the signed_request to get user_id (Meta format)
+        try {
+            const payload = signed_request.split('.')[1];
+            const decoded = JSON.parse(Buffer.from(payload, 'base64').toString());
+            console.log(`🗑️ Meta user ${decoded.user_id} requested data deletion`);
+            // Remove all social tokens (we don't have per-user yet, but clear what we can)
+            await removeSocialToken('facebook');
+            await removeSocialToken('instagram');
+        } catch (e) {
+            console.error('Meta signed_request parse error:', e.message);
+        }
+        // Meta expects a JSON response with a confirmation URL and code
+        const confirmCode = `DEL_${Date.now()}`;
+        return res.json({
+            url: `${process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : 'http://localhost:' + PORT}/data-deletion.html`,
+            confirmation_code: confirmCode,
+        });
+    }
+
+    // User-submitted form
+    if (email) {
+        console.log(`🗑️ Data deletion request from ${email} (${name || 'anonymous'}). Reason: ${reason || 'none'}`);
+        
+        // Remove user from database
+        try {
+            let users = await getUsers();
+            const userIndex = users.findIndex(u => u.email === email.toLowerCase());
+            if (userIndex >= 0) {
+                users.splice(userIndex, 1);
+                await saveUsers(users);
+                console.log(`✅ User ${email} deleted from database`);
+            }
+            // Clear all social tokens
+            for (const p of ['facebook', 'instagram', 'youtube', 'x', 'linkedin']) {
+                await removeSocialToken(p);
+            }
+        } catch (err) {
+            console.error('Data deletion error:', err.message);
+        }
+    }
+
+    res.json({ success: true, message: 'Deletion request received. Your data will be removed within 30 days.' });
+});
+
+// ─── OAuth result page (closes popup + notifies parent) ─────────
+function oauthResultPage(status, platform, detail) {
+    const isSuccess = status === 'success';
+    return `<!DOCTYPE html>
+<html><head><title>OAuth ${isSuccess ? 'Success' : 'Error'}</title>
+<style>
+  body { font-family: 'Inter', -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f1f5f9; }
+  .card { text-align: center; padding: 48px; border-radius: 20px; background: #1e293b; border: 1px solid #334155; max-width: 400px; }
+  .icon { font-size: 48px; margin-bottom: 16px; }
+  h2 { margin: 0 0 8px; font-size: 1.3rem; }
+  p { margin: 0; color: #94a3b8; font-size: 0.9rem; }
+  .closing { margin-top: 20px; font-size: 0.8rem; color: #64748b; }
+</style></head><body>
+<div class="card">
+  <div class="icon">${isSuccess ? '✅' : '❌'}</div>
+  <h2>${isSuccess ? `${platform} Connected!` : 'Connection Failed'}</h2>
+  <p>${isSuccess ? `Signed in as ${detail}` : detail || 'Unknown error'}</p>
+  <p class="closing">This window will close automatically...</p>
+</div>
+<script>
+  if (window.opener) {
+    window.opener.postMessage({ type: 'oauth_result', status: '${status}', platform: '${platform || ''}', detail: '${(detail || '').replace(/'/g, "\\'")}' }, '*');
+  }
+  setTimeout(() => window.close(), 2500);
+</script>
+</body></html>`;
+}
+
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        services: {
+            anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
+            gemini: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'placeholder',
+            openrouter: !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'your_openrouter_api_key',
+            perplexity: !!process.env.PERPLEXITY_API_KEY && process.env.PERPLEXITY_API_KEY !== 'your_perplexity_api_key',
+            vapi: !!process.env.VAPI_API_KEY,
+            fal: !!process.env.FAL_KEY,
+            wordpress: !!process.env.WORDPRESS_URL && process.env.WORDPRESS_URL !== 'https://yoursite.com',
+            facebook: !!process.env.FACEBOOK_APP_ID,
+            google: !!process.env.GOOGLE_CLIENT_ID,
+            x: !!process.env.X_CLIENT_ID,
+            linkedin: !!process.env.LINKEDIN_CLIENT_ID,
+        },
+    });
+});
+
+// ─── Start Server ────────────────────────────────────────────────
+if (!isVercel) {
+    app.listen(PORT, () => {
+        console.log(`\n✨ Celeritech Orbit Server running on http://localhost:${PORT}`);
+        console.log(`   Health: http://localhost:${PORT}/api/health\n`);
+    });
+}
+
+export default app;
+

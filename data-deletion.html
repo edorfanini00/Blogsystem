@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Deletion - Celeritech Orbit</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.8; }
+        .policy-header { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-bottom: 1px solid #334155; padding: 48px 24px; text-align: center; }
+        .policy-header h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px; }
+        .policy-header p { color: #94a3b8; font-size: 0.95rem; }
+        .policy-header .logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 24px; }
+        .policy-header .logo svg { color: #ea580c; }
+        .policy-header .logo span { font-size: 1.2rem; font-weight: 700; color: #f8fafc; }
+        .policy-container { max-width: 780px; margin: 0 auto; padding: 48px 24px 80px; }
+        h2 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
+        h3 { font-size: 1.05rem; font-weight: 600; color: #cbd5e1; margin: 24px 0 12px; }
+        p { margin-bottom: 16px; color: #94a3b8; }
+        ul, ol { margin: 0 0 16px 24px; }
+        li { margin-bottom: 8px; color: #94a3b8; }
+        a { color: #ea580c; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .effective-date { display: inline-block; background: #1e293b; border: 1px solid #334155; padding: 6px 16px; border-radius: 20px; font-size: 0.8rem; color: #64748b; margin-top: 8px; }
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: #ea580c; font-size: 0.9rem; text-decoration: none; margin-bottom: 32px; }
+        .back-link:hover { text-decoration: underline; }
+        .step-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin: 16px 0; }
+        .step-card .step-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #ea580c; color: white; font-size: 0.85rem; font-weight: 700; border-radius: 50%; margin-right: 12px; }
+        .step-card h3 { display: inline; margin: 0; }
+        .step-card p { margin-top: 12px; }
+        .deletion-form { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; margin: 32px 0; }
+        .deletion-form h3 { margin-top: 0; color: #f8fafc; }
+        .deletion-form input, .deletion-form textarea { width: 100%; padding: 12px 14px; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: #e2e8f0; font-family: inherit; font-size: 0.9rem; margin-bottom: 16px; outline: none; }
+        .deletion-form input:focus, .deletion-form textarea:focus { border-color: #ea580c; }
+        .deletion-form label { display: block; margin-bottom: 6px; font-size: 0.85rem; font-weight: 600; color: #cbd5e1; }
+        .deletion-form textarea { min-height: 80px; resize: vertical; }
+        .deletion-btn { background: #dc2626; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .deletion-btn:hover { background: #b91c1c; }
+        .success-msg { display: none; background: #065f46; border: 1px solid #10b981; border-radius: 12px; padding: 20px; text-align: center; color: #d1fae5; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="policy-header">
+        <div class="logo">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                <path d="M2 12h20"></path>
+            </svg>
+            <span>Celeritech Orbit</span>
+        </div>
+        <h1>Data Deletion Instructions</h1>
+        <p>How to request deletion of your data from Celeritech Orbit</p>
+        <div class="effective-date">Last updated: March 24, 2026</div>
+    </div>
+
+    <div class="policy-container">
+        <a href="/login.html" class="back-link">← Back to Sign In</a>
+
+        <h2>Your Right to Data Deletion</h2>
+        <p>In compliance with applicable data protection regulations including the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA), and platform-specific requirements from Meta, Google, X, and LinkedIn, you have the right to request the deletion of your personal data from Celeritech Orbit at any time.</p>
+
+        <h2>What Data We Delete</h2>
+        <p>When you request data deletion, we will permanently remove:</p>
+        <ul>
+            <li><strong>Account information:</strong> Your name, email address, and encrypted password</li>
+            <li><strong>OAuth tokens:</strong> All access tokens and refresh tokens for connected social media accounts (Facebook, Instagram, YouTube, X, LinkedIn)</li>
+            <li><strong>Connected account data:</strong> Profile names, connection dates, and token metadata</li>
+            <li><strong>Generated content:</strong> Blog posts, scheduled social media posts, generated images and videos</li>
+            <li><strong>Usage preferences:</strong> Theme settings, saved configurations, and local storage data</li>
+            <li><strong>Analytics data:</strong> Post performance data and scheduling history</li>
+        </ul>
+
+        <h2>How to Request Data Deletion</h2>
+        <p>You can delete your data using any of the following methods:</p>
+
+        <div class="step-card">
+            <span class="step-num">1</span>
+            <h3>Disconnect Individual Accounts</h3>
+            <p>To remove data for a specific social media platform, go to <strong>Post Scheduler → Accounts</strong> and click the "Connected" button on any platform to disconnect it. This immediately revokes and deletes the OAuth token for that platform.</p>
+        </div>
+
+        <div class="step-card">
+            <span class="step-num">2</span>
+            <h3>Delete Your Entire Account</h3>
+            <p>To delete all your data from Celeritech Orbit, use the deletion request form below. This will permanently remove your account and all associated data within 30 days.</p>
+        </div>
+
+        <div class="step-card">
+            <span class="step-num">3</span>
+            <h3>Contact Us Directly</h3>
+            <p>You can also email us at <a href="mailto:privacy@celeritech.biz">privacy@celeritech.biz</a> with the subject line "Data Deletion Request" and include the email address associated with your account.</p>
+        </div>
+
+        <h2>Submit a Deletion Request</h2>
+
+        <div class="deletion-form">
+            <h3>Request Data Deletion</h3>
+            <p style="color: #94a3b8; margin-bottom: 20px;">Fill in the form below and we will process your request within 30 days.</p>
+            
+            <form id="deletionForm">
+                <label for="delEmail">Email address associated with your account *</label>
+                <input type="email" id="delEmail" placeholder="your-email@example.com" required>
+
+                <label for="delName">Full name</label>
+                <input type="text" id="delName" placeholder="Your name">
+
+                <label for="delReason">Reason for deletion (optional)</label>
+                <textarea id="delReason" placeholder="Tell us why you're requesting deletion..."></textarea>
+
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 20px;">
+                    <input type="checkbox" id="delConfirm" required style="width: auto; margin: 0;">
+                    <span>I understand this action is permanent and all my data will be deleted</span>
+                </label>
+
+                <button type="submit" class="deletion-btn" id="delSubmitBtn">🗑️ Request Data Deletion</button>
+            </form>
+
+            <div class="success-msg" id="delSuccess">
+                <p style="color: #d1fae5; font-weight: 600; margin-bottom: 4px;">✅ Deletion request received</p>
+                <p style="color: #a7f3d0; font-size: 0.9rem; margin: 0;">We will process your request within 30 days and send a confirmation to your email.</p>
+            </div>
+        </div>
+
+        <h2>Facebook / Instagram Data Deletion</h2>
+        <p>If you logged into Celeritech Orbit using your Facebook or Instagram account, you can also remove your data by:</p>
+        <ol>
+            <li>Go to your <a href="https://www.facebook.com/settings?tab=applications" target="_blank">Facebook App Settings</a></li>
+            <li>Find "Celeritech Orbit" in your list of apps</li>
+            <li>Click "Remove" to revoke access</li>
+            <li>This will trigger an automatic data deletion request on our end</li>
+        </ol>
+        <p>Alternatively, submit a request using the form above or email <a href="mailto:privacy@celeritech.biz">privacy@celeritech.biz</a>.</p>
+
+        <h2>Processing Timeline</h2>
+        <ul>
+            <li><strong>OAuth token revocation:</strong> Immediate (within seconds)</li>
+            <li><strong>Account data deletion:</strong> Within 30 days</li>
+            <li><strong>Backup purge:</strong> Within 90 days</li>
+            <li><strong>Confirmation email:</strong> Sent upon completion</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>For any questions about data deletion, contact us at:<br>
+        <strong>Email:</strong> <a href="mailto:privacy@celeritech.biz">privacy@celeritech.biz</a><br>
+        <strong>Website:</strong> <a href="https://www.celeritech.biz">www.celeritech.biz</a></p>
+    </div>
+
+    <script>
+        document.getElementById('deletionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('delSubmitBtn');
+            btn.textContent = 'Submitting...';
+            btn.disabled = true;
+
+            // Send deletion request to server
+            try {
+                const res = await fetch('/api/data-deletion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('delEmail').value,
+                        name: document.getElementById('delName').value,
+                        reason: document.getElementById('delReason').value,
+                    })
+                });
+                // Show success regardless (we don't want to leak whether an email exists)
+            } catch (err) {
+                console.error('Deletion request error:', err);
+            }
+
+            document.getElementById('deletionForm').style.display = 'none';
+            document.getElementById('delSuccess').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

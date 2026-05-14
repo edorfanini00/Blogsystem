@@ -1,0 +1,2393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Celeritech Orbit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+  <script type="module">
+    import { enforceAuth, logout } from '/src/auth.js';
+
+    // Check session instantly before page render
+    const user = enforceAuth();
+
+    if (user) {
+      window.currentUser = user;
+      document.addEventListener('DOMContentLoaded', () => {
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            logout();
+          });
+        }
+      });
+    }
+  </script>
+</head>
+
+<body>
+  <div class="app-layout">
+
+    <!-- ─── Left Sidebar ──────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <img src="https://ik.imagekit.io/kusosheutk/A-color.png" alt="Celeritech" class="logo-img" />
+        <span class="logo-text">Orbit</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="blogs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+          <span>Blogs</span>
+        </a>
+        <a href="#" class="nav-item" data-page="ai-sales">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+          </svg>
+          <span>AI Sales</span>
+        </a>
+        <a href="#" class="nav-item" data-page="media">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+            <line x1="7" y1="2" x2="7" y2="22" />
+            <line x1="17" y1="2" x2="17" y2="22" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <line x1="2" y1="7" x2="7" y2="7" />
+            <line x1="2" y1="17" x2="7" y2="17" />
+            <line x1="17" y1="7" x2="22" y2="7" />
+            <line x1="17" y1="17" x2="22" y2="17" />
+          </svg>
+          <span>Image & Video</span>
+        </a>
+        <a href="#" class="nav-item" data-page="posts">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M19.07 4.93a10 10 0 010 14.14" />
+            <path d="M15.54 8.46a5 5 0 010 7.07" />
+          </svg>
+          <span>Posts Generator</span>
+        </a>
+
+        <!-- POST SCHEDULER -->
+        <a href="#" class="nav-item" data-page="scheduler">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M8 14h.01" />
+            <path d="M12 14h.01" />
+            <path d="M16 14h.01" />
+            <path d="M8 18h.01" />
+            <path d="M12 18h.01" />
+          </svg>
+          <span>Post Scheduler</span>
+        </a>
+
+        <!-- REDDIT -->
+        <a href="#media" class="nav-item" data-page="reddit">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+            <path d="M8 11V15" />
+            <path d="M16 11V15" />
+            <path d="M12 11V15" />
+          </svg>
+          <span>Reddit Agents</span>
+        </a>
+
+        <!-- ONE PAGERS -->
+        <a href="#" class="nav-item" data-page="onepager">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+          <span>One Pagers</span>
+        </a>
+
+        <!-- FULL CAMPAIGN -->
+        <a href="#" class="nav-item" data-page="campaign">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span>Full Campaign</span>
+        </a>
+
+        <div style="flex-grow: 1;"></div>
+
+        <a href="#" class="nav-item" id="logoutBtn" style="margin-top: auto; filter: grayscale(1);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Log Out</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer"
+        style="display: flex; justify-content: space-between; align-items: center; padding-right: 15px;">
+        <div class="status-indicator online" id="connectionStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Online</span>
+        </div>
+        <button id="themeToggleBtn" title="Toggle Light/Dark Mode"
+          style="background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: color 0.2s, background 0.2s;">
+          <!-- Moon Icon (Default visually shows moon to switch TO dark, or sun to switch to light, we'll swap via JS) -->
+          <svg id="themeIconSun" style="display: none;" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg id="themeIconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ─── Main Content ──────────────────────────────── -->
+    <main class="main-content">
+
+      <!-- ═══ PAGE: BLOGS ═══════════════════════════════ -->
+      <div class="page" id="pageBlog">
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-header">
+          <div>
+            <h1>Create Blog Post</h1>
+            <p class="subtitle">Plan, prioritize, and generate your blog articles with ease.</p>
+          </div>
+          <button class="btn-outline" id="newBlogBtn">+ New Blog</button>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Input Panel -->
+          <section class="card input-panel" id="inputPanel">
+            <form id="blogForm" class="blog-form">
+              <div class="form-group">
+                <label for="keywords">Keywords</label>
+                <div class="input-wrapper">
+                  <input type="text" id="keywords" name="keywords" placeholder="Type a keyword and press Enter…" />
+                </div>
+                <div class="keyword-tags" id="keywordTags"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="description">Topic</label>
+                <div class="input-wrapper">
+                  <textarea id="description" name="description" rows="4"
+                    placeholder="Describe the topic and key points you want covered…" required></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="slider-header">
+                  <label for="wordCount">Word Count</label>
+                  <div class="word-count-badge"><span id="wordCountValue">1500</span> words</div>
+                </div>
+                <div class="slider-wrapper">
+                  <input type="range" id="wordCount" name="wordCount" min="500" max="5000" step="100" value="1500" />
+                  <div class="slider-labels">
+                    <span>500</span>
+                    <span>5000</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="slider-header">
+                  <label for="imageCount">Images</label>
+                  <div class="word-count-badge"><span id="imageCountValue">3</span> images</div>
+                </div>
+                <div class="slider-wrapper">
+                  <input type="range" id="imageCount" name="imageCount" min="0" max="5" step="1" value="3" />
+                  <div class="slider-labels">
+                    <span>0</span>
+                    <span>5</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="blogTarget">Target Audience</label>
+                <div class="input-wrapper">
+                  <input type="text" id="blogTarget" name="blogTarget"
+                    placeholder="e.g. Small business owners, SaaS founders, Marketing managers" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="blogProduct">Product / Service</label>
+                <div class="input-wrapper">
+                  <input type="text" id="blogProduct" name="blogProduct"
+                    placeholder="e.g. ERP software, Consulting services, Organic food products" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="blogTrends">Trends</label>
+                <div class="input-wrapper">
+                  <input type="text" id="blogTrends" name="blogTrends"
+                    placeholder="e.g. AI automation, Sustainability, Remote work, Data privacy" />
+                </div>
+              </div>
+
+              <div class="form-group" style="position:relative;">
+                <label>Tone</label>
+                <div class="custom-select-wrapper" id="blogToneWrapper">
+                  <div class="custom-select-trigger" id="blogToneTrigger">
+                    <span id="blogToneText">Professional</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="custom-select-options" id="blogToneOptions">
+                    <div class="custom-option selected" data-value="professional">Professional</div>
+                    <div class="custom-option" data-value="conversational">Conversational</div>
+                    <div class="custom-option" data-value="authoritative">Authoritative & Expert</div>
+                    <div class="custom-option" data-value="friendly">Friendly & Approachable</div>
+                    <div class="custom-option" data-value="bold">Bold & Provocative</div>
+                    <div class="custom-option" data-value="educational">Educational / Tutorial</div>
+                    <div class="custom-option" data-value="storytelling">Storytelling / Narrative</div>
+                    <div class="custom-option" data-value="data_driven">Data-Driven & Analytical</div>
+                  </div>
+                  <input type="hidden" id="blogToneValue" value="professional">
+                </div>
+              </div>
+
+              <div class="form-group" style="position:relative;">
+                <label>Language</label>
+                <div class="custom-select-wrapper" id="blogLangWrapper">
+                  <div class="custom-select-trigger" id="blogLangTrigger">
+                    <span id="blogLangText">English</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round" class="caret" style="color:var(--text-muted);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="custom-select-options" id="blogLangOptions">
+                    <div class="custom-option selected" data-value="english">English</div>
+                    <div class="custom-option" data-value="spanish">Spanish</div>
+                    <div class="custom-option" data-value="both">Both (English + Spanish)</div>
+                  </div>
+                  <input type="hidden" id="blogLangValue" value="english">
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" id="generateBtn">
+                <span class="btn-text">Generate Blog</span>
+                <span class="btn-loader" style="display:none;">
+                  <span class="spinner"></span>
+                  Generating…
+                </span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Preview Panel -->
+          <section class="card preview-panel" id="previewPanel">
+            <div class="lang-tabs" id="langTabs" style="display:none;">
+              <button class="lang-tab active" data-lang="en">🇬🇧 English</button>
+              <button class="lang-tab" data-lang="es">🇪🇸 Spanish</button>
+            </div>
+            <div class="card-header-flex">
+              <h3>Blog Preview</h3>
+              <div class="preview-actions" id="previewActions" style="display:none;">
+                <button class="btn-small-outline" id="copyBtn">Copy Markdown</button>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div class="preview-empty" id="previewEmpty">
+              <div class="empty-icon">📝</div>
+              <h4>No content yet</h4>
+              <p>Your AI-generated blog will appear here</p>
+            </div>
+
+            <!-- Loading state with progress bar -->
+            <div class="preview-loading" id="previewLoading" style="display:none;">
+              <div class="progress-container">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="loadingText">Starting generation…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+                </div>
+                <div class="progress-percent" id="progressPercent">0%</div>
+              </div>
+              <div class="skeleton-header"></div>
+              <div class="skeleton-line w-90"></div>
+              <div class="skeleton-line w-70"></div>
+              <div class="skeleton-line w-80"></div>
+              <div class="skeleton-gap"></div>
+              <div class="skeleton-image"></div>
+            </div>
+
+            <!-- Blog content -->
+            <div class="preview-content" id="previewContent" style="display:none;">
+              <!-- SEO Meta Bar -->
+              <div class="seo-bar" id="seoBar" style="display:none;">
+                <div class="seo-item">
+                  <span class="seo-label">SEO Title</span>
+                  <span class="seo-value" id="seoTitle"></span>
+                </div>
+                <div class="seo-item">
+                  <span class="seo-label">Meta Description</span>
+                  <span class="seo-value" id="seoMetaDesc"></span>
+                </div>
+                <div class="seo-keywords" id="seoKeywords"></div>
+              </div>
+
+              <!-- Blog Body -->
+              <article class="blog-body" id="blogBody"></article>
+            </div>
+          </section>
+
+          <!-- Publish Panel -->
+          <section class="card publish-panel" id="publishPanel" style="display:none;">
+            <h3>Publish to WordPress</h3>
+            <p class="publish-info">Your blog is ready! Send it directly as a draft to WordPress.</p>
+            <button class="btn-secondary" id="publishBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM3.443 12c0-1.158.237-2.26.662-3.262l3.647 9.992A8.564 8.564 0 013.443 12zM12 20.557a8.528 8.528 0 01-2.964-.528l3.147-9.143 3.225 8.836.027.065A8.508 8.508 0 0112 20.557zm1.348-12.853c.632-.033 1.2-.1 1.2-.1.565-.066.499-.897-.066-.864 0 0-1.698.133-2.793.133-1.028 0-2.759-.133-2.759-.133-.565-.033-.631.831-.066.864 0 0 .535.067 1.1.1l1.634 4.479-2.295 6.879-3.82-11.358c.632-.033 1.2-.1 1.2-.1.566-.066.5-.897-.065-.864 0 0-1.699.133-2.794.133-.196 0-.429-.005-.672-.013A8.55 8.55 0 0112 3.443c2.39 0 4.566.98 6.13 2.562-.039-.003-.077-.009-.118-.009-1.028 0-1.758.897-1.758 1.862 0 .864.499 1.596 1.029 2.461.399.697.864 1.594.864 2.889 0 .897-.344 1.938-.797 3.391l-1.046 3.493-3.79-11.278-.167-.47z" />
+              </svg>
+              <span class="btn-text">Send Draft</span>
+              <span class="btn-loader" style="display:none;">
+                <span class="spinner-orange"></span>
+                Publishing…
+              </span>
+            </button>
+            <div class="publish-result" id="publishResult" style="display:none;"></div>
+          </section>
+
+        </div>
+
+        <!-- Blog History -->
+        <section class="card blog-history-card" id="blogHistoryCard">
+          <div class="call-log-header">
+            <h3>Blog History</h3>
+            <select class="history-filter" id="blogHistoryFilter"
+              style="margin-left: auto; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 0.8rem; background: var(--bg-card); color: var(--text-primary); outline: none;">
+              <option value="all">Company Wide</option>
+              <option value="me">My Blogs</option>
+            </select>
+          </div>
+          <div class="blog-history-empty" id="blogHistoryEmpty">
+            <div class="empty-icon">📝</div>
+            <h4>No blogs saved yet</h4>
+            <p>Generated blogs will appear here</p>
+          </div>
+          <div class="blog-history-list" id="blogHistoryList" style="display:none;"></div>
+        </section>
+
+      </div>
+      <div class="page" id="pageSales" style="display:none;">
+
+        <div class="dashboard-header">
+          <div>
+            <h1>AI Sales</h1>
+            <p class="subtitle">Auto-dial prospects, record calls, and get AI-powered sales intelligence.</p>
+          </div>
+        </div>
+
+        <!-- New Call Card -->
+        <section class="card sales-input-card">
+          <h3>Start a Call</h3>
+          <form id="salesCallForm" class="sales-form">
+            <div class="sales-form-row">
+              <div class="form-group">
+                <label for="salesPhone">Phone Number</label>
+                <div class="input-wrapper">
+                  <input type="tel" id="salesPhone" placeholder="+1 (555) 123-4567" required />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="salesName">Contact Name</label>
+                <div class="input-wrapper">
+                  <input type="text" id="salesName" placeholder="John Doe" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="salesCompany">Company</label>
+                <div class="input-wrapper">
+                  <input type="text" id="salesCompany" placeholder="Acme Corp" />
+                </div>
+              </div>
+            </div>
+            <details class="script-details">
+              <summary>Customize Sales Script</summary>
+              <div class="form-group">
+                <textarea id="salesScript" rows="5"
+                  placeholder="Leave empty to use the default Celeritech sales script…"></textarea>
+              </div>
+            </details>
+            <button type="submit" class="btn-primary" id="callBtn">
+              <span class="btn-text">📞 Call Now</span>
+              <span class="btn-loader" style="display:none;">
+                <span class="spinner"></span>
+                Calling…
+              </span>
+            </button>
+          </form>
+        </section>
+
+        <!-- Call Log -->
+        <section class="card sales-log-card">
+          <div class="call-log-header">
+            <h3>Call Log</h3>
+            <button class="btn-small-outline btn-danger-text" id="clearAllCallsBtn" style="display:none;">Clear
+              All</button>
+          </div>
+          <div class="call-filter-tabs" id="callFilterTabs">
+            <button class="filter-tab active" data-filter="all">All</button>
+            <button class="filter-tab" data-filter="callback">🟠 Callback</button>
+            <button class="filter-tab" data-filter="no_answer">⚪ No Answer</button>
+            <button class="filter-tab" data-filter="meeting_booked">🟢 Meeting Booked</button>
+            <button class="filter-tab" data-filter="not_interested">🔴 Not Interested</button>
+          </div>
+          <div class="call-log-empty" id="callLogEmpty">
+            <div class="empty-icon">📞</div>
+            <h4>No calls yet</h4>
+            <p>Your call history will appear here</p>
+          </div>
+          <div class="call-log" id="callLog" style="display:none;">
+            <table class="call-table">
+              <thead>
+                <tr>
+                  <th>Contact</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Date</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="callLogBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ═══ PAGE: POSTS GENERATOR ═════════════════════ -->
+      <div class="page" id="pagePosts" style="display:none;">
+
+        <div class="dashboard-header">
+          <div>
+            <h1>Posts Generator</h1>
+            <p class="subtitle">Research-driven ad creatives that stop the scroll.</p>
+          </div>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Input Card -->
+          <section class="card bento-left">
+            <h3 class="card-title">Product & Research</h3>
+
+            <form id="adForm">
+              <div class="form-group">
+                <label for="adProduct">Product / Service</label>
+                <div class="input-wrapper">
+                  <input id="adProduct" type="text" placeholder="e.g. Celeritech ERP, Enterpryze…" required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="adDescription">Description & Details</label>
+                <div class="input-wrapper">
+                  <textarea id="adDescription" rows="4"
+                    placeholder="What does it do? Who is it for? Key selling points…"></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Number of Posts</label>
+                <div class="stepper">
+                  <button type="button" class="stepper-btn" id="stepperMinus">−</button>
+                  <span class="stepper-value" id="adPostCount">3</span>
+                  <button type="button" class="stepper-btn" id="stepperPlus">+</button>
+                </div>
+              </div>
+
+              <div class="form-group" style="position: relative;">
+                <label>CTA Goal</label>
+                <div class="custom-select-wrapper" id="ctaGoalWrapper">
+                  <div class="custom-select-trigger" id="ctaGoalTrigger">
+                    <span id="ctaGoalText">Book a Meeting</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round" class="caret" style="color: var(--text-muted);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="custom-select-options" id="ctaGoalOptions">
+                    <div class="custom-option selected" data-value="book_meeting">Book a Meeting</div>
+                    <div class="custom-option" data-value="sign_up_free">Sign Up for Free</div>
+                    <div class="custom-option" data-value="download">Download</div>
+                    <div class="custom-option" data-value="learn_more">Learn More</div>
+                    <div class="custom-option" data-value="get_quote">Get a Quote</div>
+                    <div class="custom-option" data-value="buy_now">Buy Now</div>
+                    <div class="custom-option" data-value="free_trial">Start Free Trial</div>
+                    <div class="custom-option" data-value="contact_us">Contact Us</div>
+                  </div>
+                  <input type="hidden" id="adCtaGoal" value="book_meeting">
+                </div>
+              </div>
+              <label>Product Files <small>(optional)</small></label>
+              <div class="file-upload-area" id="fileUploadArea">
+                <input type="file" id="adFileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx"
+                  style="display:none" />
+                <div class="file-upload-prompt" id="fileUploadPrompt">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <span>Drop files here or <strong>click to browse</strong></span>
+                  <small>PDF, DOC, TXT, CSV, XLSX</small>
+                </div>
+                <div class="file-list" id="fileList"></div>
+              </div>
+
+              <label>Example Images <small>(optional — style references for ad image generation)</small></label>
+              <div class="file-upload-area" id="imageUploadArea">
+                <input type="file" id="adImageInput" multiple accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+                <div class="file-upload-prompt" id="imageUploadPrompt">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span>Drop images here or <strong>click to browse</strong></span>
+                  <small>PNG, JPG, WEBP — used as style references</small>
+                </div>
+                <div class="image-preview-grid" id="imagePreviewGrid"></div>
+              </div>
+
+              <h4 class="toggle-section-title">Platform Formats</h4>
+              <div class="platform-grid">
+                <label class="platform-btn">
+                  <input type="checkbox" id="togInstagram" />
+                  <span>Instagram Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="togReels" />
+                  <span>Instagram Reels</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="togYoutubeShorts" />
+                  <span>YouTube Shorts</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="togLinkedin" />
+                  <span>LinkedIn</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="togX" />
+                  <span>X (Twitter)</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="togVideoScript" />
+                  <span>Video Script</span>
+                </label>
+              </div>
+
+              <div class="duration-row" id="durationRow" style="display:none;">
+                <label for="adDuration">Video Duration</label>
+                <input id="adDuration" type="text" placeholder="e.g. 30 seconds, 1 minute" />
+              </div>
+
+              <div class="progress-container" id="adProgressContainer" style="display:none; margin-top: 16px;">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="adLoadingText">Generating ad creatives…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="adProgressBarFill"
+                    style="width:0%; background: var(--accent-primary);"></div>
+                </div>
+                <div class="progress-percent" id="adProgressPercent">0%</div>
+              </div>
+
+              <button type="submit" class="btn-primary" id="adGenerateBtn">
+                <span class="btn-text">🔍 Research & Generate</span>
+                <span class="btn-loader" style="display:none"><span class="spinner"></span>Generating…</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Output Card -->
+          <section class="card bento-right ad-output-card">
+            <h3 class="card-title">Generated Content</h3>
+
+            <!-- Progress -->
+            <div class="ad-progress" id="adProgress" style="display:none;">
+              <div class="progress-bar">
+                <div class="progress-fill" id="adProgressFill"></div>
+              </div>
+              <div class="progress-info">
+                <span id="adProgressText">Starting…</span>
+                <span id="adProgressPct">0%</span>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div class="preview-empty" id="adEmpty">
+              <div class="preview-empty-icon">📣</div>
+              <h3>No content yet</h3>
+              <p>Your AI-generated ads will appear here</p>
+            </div>
+
+            <!-- Streamed content -->
+            <div class="ad-output-body" id="adOutputBody" style="display:none;"></div>
+
+            <!-- Copy button -->
+            <div class="ad-output-actions" id="adOutputActions" style="display:none;">
+              <button class="btn-outline" id="adCopyBtn">📋 Copy All</button>
+              <button class="btn-primary btn-sm" id="adGenerateImagesBtn">🎨 Generate Ad Images</button>
+              <button class="btn-primary btn-sm" id="adEmailBtn">📧 Send to Agency</button>
+            </div>
+
+            <!-- Generate Images Progress -->
+            <div id="adImageProgress" style="display:none; margin-top: 16px;">
+              <div class="progress-header">
+                <span class="spinner-orange"></span>
+                <span id="adImageProgressText">Generating ad images…</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="adImageProgressFill"
+                  style="width:0%; background: var(--accent-primary);"></div>
+              </div>
+            </div>
+
+            <!-- Generated Ad Images Gallery -->
+            <div class="ad-images-gallery" id="adImagesGallery" style="display:none;"></div>
+          </section>
+
+        </div>
+
+        <!-- Post History -->
+        <section class="card blog-history-card" id="adHistoryCard">
+          <div class="call-log-header">
+            <h3>Post History</h3>
+            <select class="history-filter" id="postHistoryFilter"
+              style="margin-left: auto; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 0.8rem; background: var(--bg-card); color: var(--text-primary); outline: none;">
+              <option value="all">Company Wide</option>
+              <option value="me">My Posts</option>
+            </select>
+          </div>
+          <div class="blog-history-empty" id="adHistoryEmpty">
+            <div class="empty-icon">📣</div>
+            <h4>No posts generated yet</h4>
+            <p>Generated ad sets will appear here</p>
+          </div>
+          <div class="blog-history-list" id="adHistoryList" style="display:none;"></div>
+        </section>
+
+      </div>
+
+      <!-- ═══ PAGE: IMAGE & VIDEO ═══ -->
+      <div class="page" id="pageMedia" style="display:none;">
+        <div class="page-header">
+          <div>
+            <h1>Image & Video</h1>
+            <p class="subtitle">Generate stunning visuals with Fal.ai models.</p>
+          </div>
+        </div>
+
+        <!-- Result Area + History (combined) -->
+        <section class="card media-result-card" style="min-height:200px; margin-bottom:24px;">
+
+          <!-- Generation History Grid -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0;">Generation History</h3>
+            <button type="button" class="btn-small-outline" id="mediaSelectToggleBtn" style="display:none;"
+              onclick="window.toggleMediaSelectionMode && window.toggleMediaSelectionMode()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
+                <polyline points="9 11 12 14 22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              <span id="mediaSelectToggleText">Select</span>
+            </button>
+          </div>
+          <div class="media-history-grid" id="mediaHistoryGrid"></div>
+          <div class="blog-history-empty" id="mediaHistoryEmpty">
+            <div class="empty-icon" style="opacity: 0.5;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <h4 style="margin-top: 12px;">No generations yet</h4>
+            <p>Your generated images and videos will appear here</p>
+          </div>
+        </section>
+
+        <!-- Selection Action Bar (floats at bottom when items selected) -->
+        <div class="media-select-action-bar" id="mediaSelectActionBar" style="display:none;">
+          <span class="media-select-count" id="mediaSelectCount">0 selected</span>
+          <div class="media-select-actions">
+            <button type="button" class="ve-btn ve-btn-primary" id="mediaEditSelectedBtn"
+              onclick="window.editSelectedMedia && window.editSelectedMedia()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+              Edit in Editor
+            </button>
+            <button type="button" class="ve-btn ve-btn-ghost" id="mediaCancelSelectBtn"
+              onclick="window.toggleMediaSelectionMode && window.toggleMediaSelectionMode(true)">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Selection Mode Logic (inline script - must load before main.js module) -->
+        <script>
+          (function () {
+            window._mediaSelectionMode = false;
+
+            window.toggleMediaSelectionMode = function (forceOff) {
+              var grid = document.getElementById('mediaHistoryGrid');
+              var bar = document.getElementById('mediaSelectActionBar');
+              var toggleText = document.getElementById('mediaSelectToggleText');
+              var toggleBtn = document.getElementById('mediaSelectToggleBtn');
+              if (!grid) return;
+
+              if (forceOff || window._mediaSelectionMode) {
+                window._mediaSelectionMode = false;
+                grid.classList.remove('selection-mode');
+                var sel = grid.querySelectorAll('.media-history-item.selected');
+                for (var i = 0; i < sel.length; i++) sel[i].classList.remove('selected');
+                if (bar) bar.style.display = 'none';
+                if (toggleText) toggleText.textContent = 'Select';
+                if (toggleBtn) toggleBtn.style.borderColor = '';
+              } else {
+                window._mediaSelectionMode = true;
+                grid.classList.add('selection-mode');
+                if (toggleText) toggleText.textContent = 'Done';
+                if (toggleBtn) toggleBtn.style.borderColor = '#6366f1';
+              }
+            };
+
+            window.updateSelectionCount = function () {
+              var grid = document.getElementById('mediaHistoryGrid');
+              var bar = document.getElementById('mediaSelectActionBar');
+              var countEl = document.getElementById('mediaSelectCount');
+              if (!grid) return;
+              var selected = grid.querySelectorAll('.media-history-item.selected');
+              var count = selected.length;
+              if (count > 0) {
+                if (bar) bar.style.display = '';
+                if (countEl) countEl.textContent = count + ' selected';
+              } else {
+                if (bar) bar.style.display = 'none';
+              }
+            };
+
+            window.editSelectedMedia = function () {
+              var grid = document.getElementById('mediaHistoryGrid');
+              if (!grid) return;
+              var selected = grid.querySelectorAll('.media-history-item.selected');
+              var urls = [];
+              var labels = [];
+              for (var i = 0; i < selected.length; i++) {
+                var mode = selected[i].getAttribute('data-mode') || '';
+                if (mode.indexOf('video') !== -1) {
+                  urls.push(selected[i].getAttribute('data-url'));
+                  labels.push('Clip ' + (urls.length));
+                }
+              }
+              if (urls.length === 0) {
+                if (window.showToast) window.showToast('Select at least one video to edit', 'error');
+                return;
+              }
+              window.toggleMediaSelectionMode(true);
+              if (window.openVideoEditor) {
+                window.openVideoEditor(urls, labels, function (mergedUrl) {
+                  if (mergedUrl && window.saveToMediaHistory) {
+                    window.saveToMediaHistory({
+                      url: mergedUrl, blobUrl: mergedUrl,
+                      prompt: labels.join(' → '), mode: 'video',
+                      model: 'merged', date: new Date().toISOString(),
+                      isMultiScene: true, merged: true,
+                    });
+                    if (window.renderMediaHistory) window.renderMediaHistory();
+                    if (window.showToast) window.showToast('Merged video saved!', 'success');
+                  }
+                });
+              }
+            };
+          })();
+        </script>
+
+        <!-- Dark Floating Input Panel (bottom) -->
+        <div class="media-gen-floating-panel">
+
+          <!-- Left Column: Type Selector (Image / Video / Audio) -->
+          <div class="media-type-pill">
+            <button type="button" class="type-btn" id="mediaTypeImageBtn" title="Image Mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </button>
+            <button type="button" class="type-btn active" id="mediaTypeVideoBtn" title="Video Mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                <line x1="7" y1="2" x2="7" y2="22" />
+                <line x1="17" y1="2" x2="17" y2="22" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <line x1="2" y1="7" x2="7" y2="7" />
+                <line x1="2" y1="17" x2="7" y2="17" />
+                <line x1="17" y1="7" x2="22" y2="7" />
+                <line x1="17" y1="17" x2="22" y2="17" />
+              </svg>
+            </button>
+            <button type="button" class="type-btn" id="mediaTypeAudioBtn" title="Audio Mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 4v16" />
+                <path d="M8 8v8" />
+                <path d="M16 8v8" />
+                <path d="M4 11v2" />
+                <path d="M20 11v2" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Main Input Area -->
+          <form id="mediaForm" class="media-gen-main">
+
+            <!-- Top Row: Image Uploads + Scene Strip & Minimize -->
+            <div class="media-gen-top-row">
+              <div class="media-gen-image-inputs"
+                style="display:flex; align-items:center; gap:6px; flex:1; overflow-x:auto;">
+                <input type="file" id="mediaRefInput" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+
+                <!-- Scene 1: Original pair (wrapped in selectable container) -->
+                <div class="scene-pair active" id="scenePair0" onclick="window.selectScene(0)"
+                  style="display:flex; align-items:center; gap:12px; padding:4px 8px; border-radius:14px; cursor:pointer; background:rgba(255,255,255,0.06); border:1.5px solid rgba(99,102,241,0.5); transition:all 0.2s; flex-shrink:0;">
+
+                  <!-- Start image -->
+                  <button type="button" class="media-gen-img-square-btn" id="mediaRefTriggerBtn" title="Add Image">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <line x1="12" y1="10" x2="12" y2="16" />
+                      <line x1="9" y1="13" x2="15" y2="13" />
+                    </svg>
+                  </button>
+                  <div id="mediaRefPreviewMini" style="display:none;" class="media-ref-preview-mini">
+                    <img id="mediaRefImgMini" />
+                    <button type="button" class="media-ref-clear-mini" id="mediaRefClearBtn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="3">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <!-- Swap icon -->
+                  <div class="swap-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="16 3 21 3 21 8" />
+                      <line x1="4" y1="14" x2="21" y2="3" />
+                      <polyline points="8 21 3 21 3 16" />
+                      <line x1="20" y1="10" x2="3" y2="21" />
+                    </svg>
+                  </div>
+
+                  <!-- End image -->
+                  <button type="button" class="media-gen-img-square-btn view-only-btn" title="Add Style Reference">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <line x1="12" y1="10" x2="12" y2="16" />
+                      <line x1="9" y1="13" x2="15" y2="13" />
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Add Scene + button with inline onclick -->
+                <button type="button" id="addSceneBtn" onclick="window.addNewScene()"
+                  style="min-width:36px; height:36px; border-radius:10px; border:2px dashed rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:20px; transition:all 0.2s;"
+                  title="Add Scene">+</button>
+              </div>
+
+              <button type="button" class="media-minimize-btn" title="Minimize">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="5" x2="19" y2="19" />
+                  <polyline points="19 9 19 19 9 19" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Middle Row: Prompt (shared, switches per selected scene) -->
+            <div class="media-gen-middle-row">
+              <div class="media-gen-prompt-wrapper">
+                <textarea id="mediaPrompt" placeholder="Describe the video you want to create" required></textarea>
+              </div>
+              <button type="button" class="media-gen-enhance-btn" title="Enhance prompt">
+                ✨
+                <span style="font-size: 10px; font-weight: bold; margin-left: 2px;">T</span>
+              </button>
+            </div>
+
+            <!-- Internal Progress loader -->
+            <div class="media-gen-progress" id="mediaProgressContainer" style="display:none;">
+              <div class="progress-bar-track"
+                style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px;">
+                <div class="progress-bar-fill" id="mediaProgressFill"
+                  style="width:0%; background: #fff; height: 100%; border-radius: 2px;"></div>
+              </div>
+              <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-top: 6px; text-align: center;"
+                id="mediaProgressText">Generating…</div>
+            </div>
+
+            <!-- Bottom Row: Settings & Submit -->
+            <div class="media-gen-bottom-row">
+              <div class="media-gen-settings-row">
+                <!-- Model -->
+                <div class="media-gen-pill" id="mediaModelDropdownWrapper">
+                  <div class="media-gen-pill-trigger" id="mediaModelTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                    <span id="mediaModelText">Kling 3.0</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaModelOptions">
+                    <!-- Populated via JS -->
+                  </div>
+                  <input type="hidden" id="mediaModel" required>
+                </div>
+
+                <!-- Aspect Ratio -->
+                <div class="media-gen-pill" id="mediaAspectDropdownWrapper">
+                  <div class="media-gen-pill-trigger" id="mediaAspectTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="6" width="20" height="12" rx="2" />
+                    </svg>
+                    <span id="mediaAspectText">16:9</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaAspectOptions">
+                    <div class="media-gen-option selected" data-value="16:9">16:9</div>
+                    <div class="media-gen-option" data-value="9:16">9:16</div>
+                    <div class="media-gen-option" data-value="1:1">1:1</div>
+                  </div>
+                  <input type="hidden" id="mediaAspect" value="16:9">
+                </div>
+
+                <!-- Audio Toggle (Video Only) -->
+                <div class="media-gen-pill toggleable" id="mediaAudioBtn" style="display:flex;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                  <span>Audio</span>
+                  <input type="hidden" id="mediaAudio" value="false">
+                </div>
+
+                <!-- Duration (Video Only) -->
+                <div class="media-gen-pill" id="mediaDurationDropdownWrapper" style="display:flex;">
+                  <div class="media-gen-pill-trigger" id="mediaDurationTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span id="mediaDurationText">15 sec</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaDurationOptions">
+                    <div class="media-gen-option" data-value="5">5 sec</div>
+                    <div class="media-gen-option" data-value="10">10 sec</div>
+                    <div class="media-gen-option selected" data-value="15">15 sec</div>
+                  </div>
+                  <input type="hidden" id="mediaDuration" value="15">
+                </div>
+
+                <!-- Quantity -->
+                <div class="media-gen-pill" id="mediaQuantityDropdownWrapper">
+                  <div class="media-gen-pill-trigger" id="mediaQuantityTrigger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                      <rect x="14" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                    <span id="mediaQuantityText">×1</span>
+                  </div>
+                  <div class="media-gen-dropdown-menu" id="mediaQuantityOptions">
+                    <div class="media-gen-option selected" data-value="1">×1</div>
+                    <div class="media-gen-option" data-value="2">×2</div>
+                    <div class="media-gen-option" data-value="3">×3</div>
+                    <div class="media-gen-option" data-value="4">×4</div>
+                  </div>
+                  <input type="hidden" id="mediaQuantity" value="1">
+                </div>
+              </div>
+
+              <!-- Submit Button (auto-detects single vs multi-scene) -->
+              <button type="submit" class="media-gen-submit-btn" id="mediaGenerateBtn">
+                <span class="btn-text">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="5 12 12 5 19 12" />
+                  </svg>
+                </span>
+                <span class="btn-loader" style="display:none;"><span class="spinner"
+                    style="border-color: rgba(0,0,0,0.2); border-top-color: #000;"></span></span>
+              </button>
+            </div>
+
+          </form>
+        </div>
+
+
+      </div>
+
+      <!-- ═══ PAGE: REDDIT AGENTS ═══ -->
+      <div class="page" id="pageReddit" style="display:none;">
+        <div class="page-header">
+          <div>
+            <h1>Reddit Agents</h1>
+            <p class="subtitle">24/7 autonomous agents that scan Reddit and sell your product.</p>
+          </div>
+          <button class="btn-primary" id="redditCreateAgentBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Create Agent
+          </button>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="bento-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--accent-primary);">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Posts Scanned</h4>
+              <p class="stat-value" id="redditStatScanned">0</p>
+            </div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Comments Posted</h4>
+              <p class="stat-value" id="redditStatPosted">0</p>
+            </div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13"></path>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Replies Received</h4>
+              <p class="stat-value" id="redditStatReplies">0</p>
+            </div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <h4>Total Engagement</h4>
+              <p class="stat-value" id="redditStatEngagement">0</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bento-grid">
+          <!-- Active Agents Management -->
+          <section class="card bento-left" id="redditAgentManagerCard">
+            <h3 class="card-title">Active Agents</h3>
+
+            <div id="redditAgentList">
+              <!-- Rendered via JS -->
+            </div>
+
+            <div class="preview-empty" id="redditNoAgents" style="padding: 32px 16px;">
+              <div class="preview-empty-icon" style="opacity: 0.5;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path
+                    d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                  <path d="M8 11V15" />
+                  <path d="M16 11V15" />
+                  <path d="M12 11V15" />
+                </svg>
+              </div>
+              <h3 style="margin-top: 16px;">No agents running</h3>
+              <p style="text-align: center; max-width: 250px; margin: 0 auto;">Create an agent to start scanning Reddit
+                for leads automatically.</p>
+            </div>
+
+            <!-- Hidden Agent Creator Form -->
+            <form id="redditAgentForm"
+              style="display:none; margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h4 style="margin:0;font-size:1.1rem;font-weight:600;color:var(--text-primary);">Configure New Agent
+                </h4>
+                <button type="button" class="btn-small-outline" id="redditCancelAgentBtn">Cancel</button>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentName">Agent Name</label>
+                <div class="input-wrapper">
+                  <input type="text" id="redditAgentName" placeholder="e.g. ERP Sales Bot" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentSubreddits">Target Subreddits (comma separated)</label>
+                <div class="input-wrapper">
+                  <input type="text" id="redditAgentSubreddits" placeholder="e.g. compsci, entrepreneur, SaaS" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentKeywords">Trigger Keywords (comma separated)</label>
+                <div class="input-wrapper">
+                  <input type="text" id="redditAgentKeywords"
+                    placeholder="e.g. looking for ERP, inventory management mess" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="redditAgentPitch">Product Pitch & Instructions</label>
+                <div class="input-wrapper">
+                  <textarea id="redditAgentPitch" rows="4"
+                    placeholder="Tell the AI what to pitch when it finds a match. e.g. 'I work at Celeritech, we build an ERP for food manu...'"
+                    required></textarea>
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" style="width:100%;">Save & Start Agent</button>
+            </form>
+          </section>
+
+          <!-- Activity Log -->
+          <section class="card bento-right" id="redditActivityCard">
+            <h3 class="card-title">Activity Log</h3>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+              <button class="btn-small-outline" id="redditManualScanBtn" style="width:100%; justify-content:center;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  style="margin-right:6px;">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.42 5.42" />
+                </svg>
+                Force Scan Now
+              </button>
+            </div>
+
+            <div id="redditActivityLog" class="reddit-timeline">
+              <!-- Logs populated via JS -->
+            </div>
+
+            <div class="preview-empty" id="redditNoActivity">
+              <div class="preview-empty-icon" style="opacity: 0.5;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </div>
+              <h4 style="margin-top: 12px;">No activity yet</h4>
+              <p>Logs will appear here once agents start posting.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ═══ PAGE: FULL CAMPAIGN ═══ -->
+      <div class="page" id="pageCampaign" style="display:none;">
+        <div class="dashboard-header">
+          <div>
+            <h1>Full Campaign</h1>
+            <p class="subtitle">Orchestrate a complete marketing campaign — blog, social posts, and visuals in one go.
+            </p>
+          </div>
+          <button class="btn-outline" id="newCampaignBtn">+ New Campaign</button>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Campaign Setup -->
+          <section class="card bento-left">
+            <h3 class="card-title">Campaign Setup</h3>
+            <form id="campaignForm">
+              <div class="form-group">
+                <label for="campaignName">Campaign Name</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignName" placeholder="e.g. Q2 Product Launch, Spring Sale Push"
+                    required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignProduct">Product / Service</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignProduct" placeholder="e.g. Celeritech ERP, Enterpryze SaaS" required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignAudience">Target Audience</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignAudience" placeholder="e.g. Food manufacturers, SaaS founders"
+                    required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignGoal">Campaign Goal</label>
+                <div class="input-wrapper">
+                  <textarea id="campaignGoal" rows="3" placeholder="Describe the campaign objective and key messaging…"
+                    required></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="campaignTrends">Trends / Angles</label>
+                <div class="input-wrapper">
+                  <input type="text" id="campaignTrends"
+                    placeholder="e.g. AI automation, sustainability, cost reduction" />
+                </div>
+              </div>
+
+              <h4 class="toggle-section-title">Content to Generate</h4>
+              <div class="platform-grid">
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogBlog" checked />
+                  <span>📝 Blog Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogInstagram" checked />
+                  <span>📸 Instagram Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogLinkedin" checked />
+                  <span>💼 LinkedIn Post</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogX" />
+                  <span>🐦 X (Twitter)</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogReels" />
+                  <span>🎬 Reels Script</span>
+                </label>
+                <label class="platform-btn">
+                  <input type="checkbox" id="campTogImage" checked />
+                  <span>🖼️ Hero Image</span>
+                </label>
+              </div>
+
+              <div class="progress-container" id="campaignProgressContainer" style="display:none; margin-top: 16px;">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="campaignLoadingText">Launching campaign…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="campaignProgressFill"
+                    style="width:0%; background: var(--accent-primary);"></div>
+                </div>
+                <div class="progress-percent" id="campaignProgressPercent">0%</div>
+              </div>
+
+              <button type="submit" class="btn-primary" id="campaignGenerateBtn" style="margin-top: 16px;">
+                <span class="btn-text">🚀 Launch Campaign</span>
+                <span class="btn-loader" style="display:none;"><span class="spinner"></span>Generating…</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Campaign Output -->
+          <section class="card bento-right">
+            <h3 class="card-title">Campaign Output</h3>
+
+            <div class="preview-empty" id="campaignEmpty">
+              <div class="preview-empty-icon">🚀</div>
+              <h3>No campaign yet</h3>
+              <p>Configure your campaign and hit Launch — all content will be generated here.</p>
+            </div>
+
+            <div id="campaignOutputBody" style="display:none;">
+              <!-- Campaign output sections rendered by JS -->
+            </div>
+
+            <div class="ad-output-actions" id="campaignOutputActions" style="display:none;">
+              <button class="btn-outline" id="campaignCopyAllBtn">📋 Copy All</button>
+              <button class="btn-primary btn-sm" id="campaignEmailBtn">📧 Send to Agency</button>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Campaign History -->
+        <section class="card blog-history-card" id="campaignHistoryCard">
+          <div class="call-log-header">
+            <h3>Campaign History</h3>
+            <select class="history-filter" id="campaignHistoryFilter"
+              style="margin-left: auto; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 0.8rem; background: var(--bg-card); color: var(--text-primary); outline: none;">
+              <option value="all">Company Wide</option>
+              <option value="me">My Campaigns</option>
+            </select>
+          </div>
+          <div class="blog-history-empty" id="campaignHistoryEmpty">
+            <div class="empty-icon">🚀</div>
+            <h4>No campaigns yet</h4>
+            <p>Launched campaigns will appear here</p>
+          </div>
+          <div class="blog-history-list" id="campaignHistoryList" style="display:none;"></div>
+        </section>
+
+      </div>
+
+      <!-- ═══ PAGE: POST SCHEDULER ═══════════════════════ -->
+      <div class="page" id="pageScheduler" style="display:none;">
+
+        <div class="dashboard-header">
+          <div>
+            <h1>Post Scheduler</h1>
+            <p class="subtitle">Schedule and manage posts across Facebook, Instagram, YouTube, X, and LinkedIn.</p>
+          </div>
+        </div>
+
+        <!-- Sub-navigation tabs -->
+        <div class="scheduler-tabs">
+          <button class="sched-tab active" data-sched-view="accounts">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+            </svg>
+            Accounts
+          </button>
+          <button class="sched-tab" data-sched-view="compose">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+            Compose
+          </button>
+          <button class="sched-tab" data-sched-view="calendar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Calendar
+          </button>
+          <button class="sched-tab" data-sched-view="analytics">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Analytics
+          </button>
+        </div>
+
+        <!-- ─── CONNECT ACCOUNTS VIEW ─────── -->
+        <div class="sched-view" id="schedAccounts">
+
+          <!-- Welcome Banner -->
+          <div class="sched-accounts-banner" id="schedAccountsBanner">
+            <div class="sched-banner-content">
+              <div class="sched-banner-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                </svg>
+              </div>
+              <div>
+                <h2>Connect Your Accounts</h2>
+                <p>Link your social media accounts to schedule and publish posts directly. Connect via OAuth for secure, token-based access.</p>
+              </div>
+            </div>
+            <div class="sched-banner-stats" id="schedBannerStats">
+              <span class="sched-banner-stat"><strong id="schedConnectedCount">0</strong> Connected</span>
+              <span class="sched-banner-stat muted"><strong id="schedDisconnectedCount">5</strong> Remaining</span>
+            </div>
+          </div>
+
+          <!-- Platform Connection Cards -->
+          <div class="sched-accounts-grid" id="schedAccountsGrid">
+
+            <!-- Facebook -->
+            <div class="sched-account-card" data-platform="facebook">
+              <div class="sched-account-card-left">
+                <div class="sched-account-icon sched-plat-facebook">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </div>
+                <div class="sched-account-info">
+                  <h4>Facebook</h4>
+                  <p>Connect your Facebook Page to publish posts, stories, and reels.</p>
+                  <div class="sched-account-status disconnected" id="schedStatusFacebook">
+                    <span class="status-dot"></span>
+                    <span>Not connected</span>
+                  </div>
+                </div>
+              </div>
+              <button class="sched-connect-btn" data-platform="facebook" id="schedBtnFacebook">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                Connect
+              </button>
+            </div>
+
+            <!-- Instagram -->
+            <div class="sched-account-card" data-platform="instagram">
+              <div class="sched-account-card-left">
+                <div class="sched-account-icon sched-plat-instagram">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                </div>
+                <div class="sched-account-info">
+                  <h4>Instagram</h4>
+                  <p>Connect your Instagram Business account for posts and reels.</p>
+                  <div class="sched-account-status disconnected" id="schedStatusInstagram">
+                    <span class="status-dot"></span>
+                    <span>Not connected</span>
+                  </div>
+                </div>
+              </div>
+              <button class="sched-connect-btn" data-platform="instagram" id="schedBtnInstagram">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                Connect
+              </button>
+            </div>
+
+            <!-- YouTube -->
+            <div class="sched-account-card" data-platform="youtube">
+              <div class="sched-account-card-left">
+                <div class="sched-account-icon sched-plat-youtube">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                </div>
+                <div class="sched-account-info">
+                  <h4>YouTube</h4>
+                  <p>Connect your YouTube channel to schedule video uploads and community posts.</p>
+                  <div class="sched-account-status disconnected" id="schedStatusYoutube">
+                    <span class="status-dot"></span>
+                    <span>Not connected</span>
+                  </div>
+                </div>
+              </div>
+              <button class="sched-connect-btn" data-platform="youtube" id="schedBtnYoutube">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                Connect
+              </button>
+            </div>
+
+            <!-- X (Twitter) -->
+            <div class="sched-account-card" data-platform="x">
+              <div class="sched-account-card-left">
+                <div class="sched-account-icon sched-plat-x">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </div>
+                <div class="sched-account-info">
+                  <h4>X (Twitter)</h4>
+                  <p>Connect your X account to post tweets and threads automatically.</p>
+                  <div class="sched-account-status disconnected" id="schedStatusX">
+                    <span class="status-dot"></span>
+                    <span>Not connected</span>
+                  </div>
+                </div>
+              </div>
+              <button class="sched-connect-btn" data-platform="x" id="schedBtnX">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                Connect
+              </button>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="sched-account-card" data-platform="linkedin">
+              <div class="sched-account-card-left">
+                <div class="sched-account-icon sched-plat-linkedin">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                </div>
+                <div class="sched-account-info">
+                  <h4>LinkedIn</h4>
+                  <p>Connect your LinkedIn profile or company page for professional posts.</p>
+                  <div class="sched-account-status disconnected" id="schedStatusLinkedin">
+                    <span class="status-dot"></span>
+                    <span>Not connected</span>
+                  </div>
+                </div>
+              </div>
+              <button class="sched-connect-btn" data-platform="linkedin" id="schedBtnLinkedin">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                Connect
+              </button>
+            </div>
+
+          </div>
+
+          <!-- OAuth Info Section -->
+          <div class="sched-oauth-info">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span>We use OAuth 2.0 for secure authentication. Your credentials are never stored — only access tokens for publishing. You can revoke access at any time.</span>
+          </div>
+
+        </div>
+
+        <!-- ─── COMPOSE VIEW ─────────────── -->
+        <div class="sched-view" id="schedCompose" style="display:none;">
+          <div class="bento-grid">
+            <!-- Left: Compose Form -->
+            <section class="card bento-left">
+              <h3 class="card-title">New Scheduled Post</h3>
+
+              <form id="schedulerForm">
+                <!-- Platform Selector -->
+                <div class="form-group">
+                  <label>Select Platforms</label>
+                  <div class="sched-platform-row" id="schedPlatformRow">
+                    <label class="sched-platform-btn" data-platform="facebook">
+                      <input type="checkbox" />
+                      <span class="sched-plat-icon sched-plat-facebook">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                      </span>
+                      <span class="sched-plat-name">Facebook</span>
+                    </label>
+                    <label class="sched-platform-btn" data-platform="instagram">
+                      <input type="checkbox" />
+                      <span class="sched-plat-icon sched-plat-instagram">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                      </span>
+                      <span class="sched-plat-name">Instagram</span>
+                    </label>
+                    <label class="sched-platform-btn" data-platform="youtube">
+                      <input type="checkbox" />
+                      <span class="sched-plat-icon sched-plat-youtube">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                      </span>
+                      <span class="sched-plat-name">YouTube</span>
+                    </label>
+                    <label class="sched-platform-btn" data-platform="x">
+                      <input type="checkbox" />
+                      <span class="sched-plat-icon sched-plat-x">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                      </span>
+                      <span class="sched-plat-name">X</span>
+                    </label>
+                    <label class="sched-platform-btn" data-platform="linkedin">
+                      <input type="checkbox" />
+                      <span class="sched-plat-icon sched-plat-linkedin">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                      </span>
+                      <span class="sched-plat-name">LinkedIn</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Apply to All Toggle -->
+                <div class="form-group">
+                  <div class="sched-apply-all-row">
+                    <label class="sched-switch-label">
+                      <span>Apply to All Platforms</span>
+                      <div class="sched-toggle-switch">
+                        <input type="checkbox" id="schedApplyAll" checked />
+                        <span class="sched-toggle-slider"></span>
+                      </div>
+                    </label>
+                    <span class="sched-apply-hint" id="schedApplyHint">One post for all platforms</span>
+                  </div>
+                </div>
+
+                <!-- Shared Compose (Apply to All ON) -->
+                <div id="schedSharedCompose">
+                  <div class="form-group">
+                    <label for="schedContent">Post Content</label>
+                    <div class="input-wrapper">
+                      <textarea id="schedContent" rows="5" placeholder="Write your post content here…"></textarea>
+                    </div>
+                    <div class="sched-char-count" id="schedCharCount">0 characters</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Media</label>
+                    <div class="file-upload-area" id="schedMediaUploadArea">
+                      <input type="file" id="schedMediaInput" multiple accept=".png,.jpg,.jpeg,.webp,.mp4,.mov" style="display:none" />
+                      <div class="file-upload-prompt" id="schedMediaPrompt">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        <span>Drop images/videos or <strong>click to browse</strong></span>
+                        <small>PNG, JPG, WEBP, MP4, MOV</small>
+                      </div>
+                      <div class="image-preview-grid" id="schedMediaPreviewGrid"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Individual Platform Cards (Apply to All OFF) -->
+                <div id="schedIndividualCompose" style="display:none;">
+                  <div class="sched-individual-cards" id="schedIndividualCards">
+                    <!-- Rendered by JS based on selected platforms -->
+                  </div>
+                </div>
+
+                <!-- Schedule Date/Time -->
+                <div class="form-group">
+                  <label for="schedDateTime">Schedule Date & Time</label>
+                  <div class="input-wrapper">
+                    <input type="datetime-local" id="schedDateTime" required />
+                  </div>
+                </div>
+
+                <button type="submit" class="btn-primary" id="schedSubmitBtn">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                  <span class="btn-text">Schedule Post</span>
+                  <span class="btn-loader" style="display:none;">
+                    <span class="spinner"></span>
+                    Scheduling…
+                  </span>
+                </button>
+              </form>
+            </section>
+
+            <!-- Right: Upcoming Posts Queue -->
+            <section class="card bento-right">
+              <h3 class="card-title">Upcoming Posts</h3>
+              <div class="preview-empty" id="schedQueueEmpty">
+                <div class="preview-empty-icon">📅</div>
+                <h3>No posts scheduled</h3>
+                <p>Your upcoming posts will appear here</p>
+              </div>
+              <div id="schedQueueList" style="display:none;"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ─── CALENDAR VIEW ─────────────── -->
+        <div class="sched-view" id="schedCalendar" style="display:none;">
+          <div class="card sched-calendar-card">
+            <div class="sched-cal-header">
+              <button class="sched-cal-nav" id="schedCalPrev">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <h3 id="schedCalTitle">March 2026</h3>
+              <button class="sched-cal-nav" id="schedCalNext">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <button class="btn-small-outline" id="schedCalToday" style="margin-left:auto;">Today</button>
+            </div>
+            <div class="sched-cal-grid">
+              <div class="sched-cal-day-header">Sun</div>
+              <div class="sched-cal-day-header">Mon</div>
+              <div class="sched-cal-day-header">Tue</div>
+              <div class="sched-cal-day-header">Wed</div>
+              <div class="sched-cal-day-header">Thu</div>
+              <div class="sched-cal-day-header">Fri</div>
+              <div class="sched-cal-day-header">Sat</div>
+            </div>
+            <div class="sched-cal-body" id="schedCalBody">
+              <!-- Calendar cells rendered by JS -->
+            </div>
+
+            <!-- Day Detail Drawer -->
+            <div class="sched-day-detail" id="schedDayDetail" style="display:none;">
+              <div class="sched-day-detail-header">
+                <h4 id="schedDayDetailTitle">March 24, 2026</h4>
+                <button class="btn-small-outline" id="schedDayDetailClose">✕</button>
+              </div>
+              <div id="schedDayDetailList"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── ANALYTICS VIEW ────────────── -->
+        <div class="sched-view" id="schedAnalytics" style="display:none;">
+          <!-- Stats Row -->
+          <div class="bento-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+            <div class="card stat-card">
+              <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--accent-primary);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div class="stat-content">
+                <h4>Total Scheduled</h4>
+                <p class="stat-value" id="schedStatTotal">0</p>
+              </div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              </div>
+              <div class="stat-content">
+                <h4>Published</h4>
+                <p class="stat-value" id="schedStatPublished">0</p>
+              </div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-icon" style="background: rgba(251, 191, 36, 0.1); color: #f59e0b;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div class="stat-content">
+                <h4>Pending</h4>
+                <p class="stat-value" id="schedStatPending">0</p>
+              </div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              </div>
+              <div class="stat-content">
+                <h4>Platforms Used</h4>
+                <p class="stat-value" id="schedStatPlatforms">0</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Platform Breakdown -->
+          <div class="card">
+            <h3>Platform Breakdown</h3>
+            <div class="sched-analytics-breakdown" id="schedAnalyticsBreakdown">
+              <!-- Rendered by JS -->
+            </div>
+            <div class="preview-empty" id="schedAnalyticsEmpty">
+              <div class="preview-empty-icon">📊</div>
+              <h3>No data yet</h3>
+              <p>Schedule some posts to see analytics</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ═══ PAGE: ONE PAGERS ═══════════════════════ -->
+      <div class="page" id="pageOnePager" style="display:none;">
+
+        <div class="dashboard-header">
+          <div>
+            <h1>Marketing One Pagers</h1>
+            <p class="subtitle">Generate stunning branded one-pager PDFs in seconds.</p>
+          </div>
+        </div>
+
+        <div class="bento-grid">
+
+          <!-- Input Card -->
+          <section class="card bento-left" id="onepagerInputCard">
+            <h3 class="card-title">One Pager Details</h3>
+
+            <form id="onepagerForm">
+              <div class="form-group">
+                <label for="opTitle">Page Title / Heading</label>
+                <div class="input-wrapper">
+                  <input id="opTitle" type="text" placeholder="e.g. SAP Business One: Complete ERP Solution" required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="opSubtitle">Subtitle</label>
+                <div class="input-wrapper">
+                  <input id="opSubtitle" type="text" placeholder="e.g. Flexible, Integrated Solution for Growing Businesses" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="opDescription">Description / Intro Paragraph</label>
+                <div class="input-wrapper">
+                  <textarea id="opDescription" rows="3" placeholder="Brief overview of the product or service…"></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Bullet Points <small>(one per line)</small></label>
+                <div class="input-wrapper">
+                  <textarea id="opBullets" rows="8" placeholder="SAP Business One: Flexible, Integrated Solution&#10;Robust ERP Solution. Easy to Extend with Add-ons&#10;Intuitive, User-friendly Interface&#10;Streamline your Financial Operations&#10;Maximize Customer Relationships&#10;Simplify Procurement&#10;Effortlessly Manage Shipments, Inventory, and Pricing&#10;See Your Entire Business Clearly. Take Swift, Informed Actions&#10;Artificial Intelligence and Automation&#10;Harness Industry Expertise and Scalability"></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="opSectionTitle">Section Heading</label>
+                <div class="input-wrapper">
+                  <input id="opSectionTitle" type="text" value="Table of Contents" placeholder="e.g. Table of Contents, Key Features, Why Choose Us" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="opFooter">Footer Text</label>
+                <div class="input-wrapper">
+                  <input id="opFooter" type="text" placeholder="e.g. www.celeritech.com | info@celeritech.com" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="opLogoUrl">Logo URL <small>(optional)</small></label>
+                <div class="input-wrapper">
+                  <input id="opLogoUrl" type="text" value="https://ik.imagekit.io/kusosheutk/A-color.png" placeholder="https://example.com/logo.png" />
+                </div>
+              </div>
+
+              <!-- Format Options -->
+              <h4 class="toggle-section-title" style="margin-top:8px;">Output Format</h4>
+              <div class="op-format-grid">
+                <div class="op-format-option">
+                  <label>Columns</label>
+                  <div class="op-column-btns">
+                    <button type="button" class="op-col-btn" data-cols="1">1</button>
+                    <button type="button" class="op-col-btn active" data-cols="2">2</button>
+                    <button type="button" class="op-col-btn" data-cols="3">3</button>
+                  </div>
+                </div>
+                <div class="op-format-option">
+                  <label>Header Image</label>
+                  <div class="op-toggle-row">
+                    <button type="button" class="op-toggle-btn active" data-img="no">No Image</button>
+                    <button type="button" class="op-toggle-btn" data-img="yes">With Image</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Image upload area (shown when "With Image" selected) -->
+              <div class="form-group" id="opImageUploadGroup" style="display:none;">
+                <label>Header Image</label>
+                <div class="file-upload-area" id="opImageUploadArea">
+                  <input type="file" id="opImageInput" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
+                  <div class="file-upload-prompt" id="opImageUploadPrompt">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <span>Drop image here or <strong>click to browse</strong></span>
+                    <small>PNG, JPG, WEBP</small>
+                  </div>
+                  <div id="opImagePreview" style="display:none;">
+                    <img id="opImagePreviewImg" style="max-width:100%;max-height:200px;border-radius:12px;" />
+                    <button type="button" class="btn-small-outline" id="opImageRemoveBtn" style="margin-top:8px;">Remove</button>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" id="opGenerateBtn">
+                <span class="btn-text">🔄 Generate Preview</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Preview Card -->
+          <section class="card bento-right" id="onepagerPreviewCard">
+            <div class="card-header-flex">
+              <h3 class="card-title">Live Preview</h3>
+              <div id="opPreviewActions" style="display:none;">
+                <button class="btn-primary btn-sm" id="opDownloadPdfBtn" style="margin:0; padding:10px 20px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download PDF
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div class="preview-empty" id="opEmpty">
+              <div class="preview-empty-icon">📄</div>
+              <h3>No preview yet</h3>
+              <p>Fill in the details and click Generate Preview</p>
+            </div>
+
+            <!-- The live preview container -->
+            <div id="opPreviewContainer" style="display:none;">
+              <div id="opPreviewFrame" class="op-preview-frame">
+                <!-- Dynamically rendered one-pager -->
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <!-- Media Viewer Modal -->
+  <div class="modal-overlay" id="mediaViewerModal" style="display:none;"
+    onclick="window.closeMediaViewer && window.closeMediaViewer()">
+    <div class="modal" onclick="event.stopPropagation()"
+      style="max-width:480px; width:85%; max-height:70vh; padding:0; overflow:hidden; border-radius:16px; position:relative; display:flex; flex-direction:column;">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; background:var(--bg-card); border-bottom:1px solid var(--border-light);">
+        <span style="font-weight:600; font-size:0.9rem; color:var(--text-primary);">Preview</span>
+        <button type="button" id="mediaViewerClose" onclick="window.closeMediaViewer && window.closeMediaViewer()"
+          style="background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+      </div>
+      <div id="mediaResultContent" style="overflow:auto; flex:1; max-height:50vh;"></div>
+      <div
+        style="padding:10px 16px; display:flex; justify-content:center; gap:10px; background:var(--bg-card); border-top:1px solid var(--border-light);">
+        <button type="button" class="btn-primary btn-sm" id="mediaDownloadBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Download
+        </button>
+        <button type="button" class="btn-primary btn-sm" id="mediaCreateVideoBtn"
+          style="display:none; background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          Create Video
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Video Editor Modal ──────────────────────────────────────── -->
+  <div class="modal-overlay" id="videoEditorModal" style="display:none;"
+    onclick="window.closeVideoEditor && window.closeVideoEditor()">
+    <div class="video-editor" onclick="event.stopPropagation()">
+      <div class="ve-header">
+        <span class="ve-title">🎬 Video Editor</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="ve-total-dur" id="veTotalDur" style="font-size:0.75rem;color:rgba(255,255,255,0.4);">0.0s</span>
+          <button type="button" class="ve-close" onclick="window.closeVideoEditor && window.closeVideoEditor()">✕</button>
+        </div>
+      </div>
+      <div class="ve-preview">
+        <video id="vePreviewPlayer" playsinline></video>
+        <div class="ve-preview-empty" id="vePreviewEmpty">Select a clip to preview</div>
+      </div>
+
+      <!-- Timeline Section -->
+      <div class="ve-timeline-section">
+        <!-- Time ruler -->
+        <div class="ve-ruler" id="veRuler"></div>
+        <!-- Playhead -->
+        <div class="ve-playhead-track" id="vePlayheadTrack">
+          <div class="ve-playhead" id="vePlayhead" style="left:0;">
+            <div class="ve-playhead-handle"></div>
+            <div class="ve-playhead-line"></div>
+          </div>
+        </div>
+        <!-- Clip tracks -->
+        <div class="ve-tracks" id="veTracks"></div>
+      </div>
+
+      <div class="ve-status" id="veStatus"></div>
+      <div class="ve-actions">
+        <button type="button" class="btn-sm ve-btn ve-btn-secondary" id="vePlayAllBtn">▶ Play All</button>
+        <button type="button" class="btn-sm ve-btn ve-btn-primary" id="veMergeBtn">
+          <span class="ve-btn-text">✂ Merge & Export</span>
+          <span class="ve-btn-loader" style="display:none;">Merging…</span>
+        </button>
+        <button type="button" class="btn-sm ve-btn ve-btn-ghost" id="veCancelBtn">Cancel</button>
+      </div>
+      <canvas id="veMergeCanvas" style="display:none;"></canvas>
+    </div>
+  </div>
+
+  <script>
+    // Standalone modal handlers — runs outside Vite module scope
+    window.closeMediaViewer = function () {
+      var m = document.getElementById('mediaViewerModal');
+      if (m) m.style.display = 'none';
+      var c = document.getElementById('mediaResultContent');
+      if (c) c.innerHTML = '';
+    };
+    document.addEventListener('DOMContentLoaded', function () {
+      var closeBtn = document.getElementById('mediaViewerClose');
+      if (closeBtn) closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        window.closeMediaViewer();
+      });
+      var overlay = document.getElementById('mediaViewerModal');
+      if (overlay) overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) window.closeMediaViewer();
+      });
+      var dlBtn = document.getElementById('mediaDownloadBtn');
+      if (dlBtn) dlBtn.addEventListener('click', function () {
+        var url = window.lastMediaResultUrl;
+        if (!url) return;
+        dlBtn.disabled = true;
+        dlBtn.textContent = 'Downloading…';
+        fetch(url).then(function (r) { return r.blob(); }).then(function (blob) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = window.lastMediaIsVideo ? 'fal-video.mp4' : 'fal-image.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }).catch(function () {
+          window.open(url, '_blank');
+        }).finally(function () {
+          dlBtn.disabled = false;
+          dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download';
+        });
+      });
+
+      // Create Video from image
+      var cvBtn = document.getElementById('mediaCreateVideoBtn');
+      if (cvBtn) cvBtn.addEventListener('click', function () {
+        var url = window.lastMediaResultUrl;
+        if (!url || window.lastMediaIsVideo) return;
+
+        // Close modal
+        window.closeMediaViewer();
+
+        // Switch to Video mode
+        var videoBtn = document.getElementById('mediaTypeVideoBtn');
+        if (videoBtn) videoBtn.click();
+
+        // Set reference image
+        var refImg = document.getElementById('mediaRefImgMini');
+        var refPreview = document.getElementById('mediaRefPreviewMini');
+        var refTrigger = document.getElementById('mediaRefTriggerBtn');
+        if (refImg) refImg.src = url;
+        if (refPreview) refPreview.style.display = 'block';
+        if (refTrigger) refTrigger.style.display = 'none';
+
+        // Scroll to prompt and focus
+        var prompt = document.getElementById('mediaPrompt');
+        if (prompt) {
+          prompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(function () { prompt.focus(); }, 400);
+        }
+      });
+    });
+
+    // ─── Scene selection & prompt switching ───
+    window._sceneCount = 1;
+    window._sceneData = []; // additional scenes: { startImg, endImg, prompt }
+    window._activeScene = 0; // 0 = original, 1+ = additional (idx+1)
+    window._scene0prompt = ''; // prompt for scene 0
+
+    window.selectScene = function (sceneNum) {
+      var prompt = document.getElementById('mediaPrompt');
+      if (!prompt) return;
+
+      // Save current prompt to current scene
+      if (window._activeScene === 0) {
+        window._scene0prompt = prompt.value;
+      } else {
+        var prevIdx = window._activeScene - 1;
+        if (window._sceneData[prevIdx]) window._sceneData[prevIdx].prompt = prompt.value;
+      }
+
+      // Switch to new scene
+      window._activeScene = sceneNum;
+
+      // Load new scene's prompt
+      if (sceneNum === 0) {
+        prompt.value = window._scene0prompt || '';
+      } else {
+        var idx = sceneNum - 1;
+        prompt.value = (window._sceneData[idx] && window._sceneData[idx].prompt) || '';
+      }
+
+      // Update visual highlight on all pairs
+      var allPairs = document.querySelectorAll('.scene-pair');
+      allPairs.forEach(function (p) {
+        p.style.background = 'transparent';
+        p.style.border = '1.5px solid transparent';
+      });
+      var activePair = document.getElementById('scenePair' + sceneNum);
+      if (activePair) {
+        activePair.style.background = 'rgba(255,255,255,0.06)';
+        activePair.style.border = '1.5px solid rgba(99,102,241,0.5)';
+      }
+
+      prompt.focus();
+    };
+
+    // ─── Add Scene: creates a new selectable pair ───
+    window.addNewScene = function () {
+      window._sceneCount++;
+      var sceneIdx = window._sceneData.length;
+      var sceneNum = sceneIdx + 1;
+      window._sceneData.push({ startImg: null, endImg: null, prompt: '' });
+
+      var addBtn = document.getElementById('addSceneBtn');
+      if (!addBtn) return;
+
+      // Selectable pair container
+      var pair = document.createElement('div');
+      pair.className = 'scene-pair';
+      pair.id = 'scenePair' + sceneNum;
+      pair.style.cssText = 'display:flex; align-items:center; gap:12px; padding:4px 8px; border-radius:14px; cursor:pointer; background:transparent; border:1.5px solid transparent; transition:all 0.2s; flex-shrink:0;';
+      pair.onclick = function () { window.selectScene(sceneNum); };
+
+      var placeholderSVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><line x1="12" y1="10" x2="12" y2="16" /><line x1="9" y1="13" x2="15" y2="13" /></svg>';
+      var swapSVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8" /><line x1="4" y1="14" x2="21" y2="3" /><polyline points="8 21 3 21 3 16" /><line x1="20" y1="10" x2="3" y2="21" /></svg>';
+
+      var startBox = document.createElement('button');
+      startBox.type = 'button';
+      startBox.className = 'media-gen-img-square-btn';
+      startBox.title = 'Scene ' + window._sceneCount + ' - Start Image';
+      startBox.innerHTML = placeholderSVG;
+      startBox.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.onchange = function (ev) {
+          var f = ev.target.files[0]; if (!f) return;
+          var r = new FileReader();
+          r.onload = function (re) {
+            window._sceneData[sceneIdx].startImg = re.target.result;
+            startBox.style.padding = '0'; startBox.style.overflow = 'hidden';
+            startBox.innerHTML = '<img src="' + re.target.result + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />';
+          };
+          r.readAsDataURL(f);
+        };
+        inp.click();
+      });
+
+      var swap = document.createElement('div');
+      swap.className = 'swap-icon';
+      swap.innerHTML = swapSVG;
+
+      var endBox = document.createElement('button');
+      endBox.type = 'button';
+      endBox.className = 'media-gen-img-square-btn view-only-btn';
+      endBox.title = 'Scene ' + window._sceneCount + ' - End Image';
+      endBox.innerHTML = placeholderSVG;
+      endBox.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.onchange = function (ev) {
+          var f = ev.target.files[0]; if (!f) return;
+          var r = new FileReader();
+          r.onload = function (re) {
+            window._sceneData[sceneIdx].endImg = re.target.result;
+            endBox.style.padding = '0'; endBox.style.overflow = 'hidden';
+            endBox.innerHTML = '<img src="' + re.target.result + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />';
+          };
+          r.readAsDataURL(f);
+        };
+        inp.click();
+      });
+
+      pair.appendChild(startBox);
+      pair.appendChild(swap);
+      pair.appendChild(endBox);
+
+      // Red ✕ delete button
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.innerHTML = '✕';
+      delBtn.title = 'Remove Scene';
+      delBtn.style.cssText = 'position:absolute; top:2px; right:2px; width:16px; height:16px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:9px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; z-index:2; opacity:0; transition:opacity 0.2s;';
+      delBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        // Find the current index of this pair in the DOM (closure sceneIdx can be stale after deletes)
+        var allPairs = Array.from(document.querySelectorAll('.scene-pair'));
+        var currentIdx = allPairs.indexOf(pair);
+        // Scene 0 is the original pair (idx 0), additional scenes start at idx 1
+        // _sceneData index = currentIdx - 1 (since scene 0 is not in _sceneData)
+        var dataIdx = currentIdx - 1;
+        if (dataIdx >= 0 && dataIdx < window._sceneData.length) {
+          window._sceneData.splice(dataIdx, 1);
+        }
+        window._sceneCount--;
+        // Remove from DOM
+        pair.remove();
+        // Switch to scene 0
+        window.selectScene(0);
+      });
+      pair.appendChild(delBtn);
+
+      // Show ✕ on hover
+      pair.style.position = 'relative';
+      pair.addEventListener('mouseenter', function () { delBtn.style.opacity = '1'; });
+      pair.addEventListener('mouseleave', function () { delBtn.style.opacity = '0'; });
+
+      addBtn.parentNode.insertBefore(pair, addBtn);
+
+
+      // Enable drag-drop
+      if (window.enableDropOnBox) {
+        window.enableDropOnBox(startBox, function (url) { window._sceneData[sceneIdx].startImg = url; });
+        window.enableDropOnBox(endBox, function (url) { window._sceneData[sceneIdx].endImg = url; });
+      }
+
+      // Select the new scene
+      window.selectScene(sceneNum);
+    };
+
+    // ─── Drag & Drop support for image boxes ───
+    // Makes any element accept image drops (from history or external)
+    window.enableDropOnBox = function (box, onImageSet) {
+      box.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        box.style.outline = '2px solid #6366f1';
+        box.style.outlineOffset = '-2px';
+      });
+      box.addEventListener('dragleave', function (e) {
+        e.preventDefault();
+        box.style.outline = '';
+        box.style.outlineOffset = '';
+      });
+      box.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        box.style.outline = '';
+        box.style.outlineOffset = '';
+
+        // Check for dragged image URL (from history)
+        var url = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+        if (url && (url.startsWith('http') || url.startsWith('data:'))) {
+          box.style.padding = '0';
+          box.style.overflow = 'hidden';
+          box.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />';
+          if (onImageSet) onImageSet(url);
+          return;
+        }
+
+        // Check for dropped files
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          var f = e.dataTransfer.files[0];
+          if (!f.type.startsWith('image/')) return;
+          var r = new FileReader();
+          r.onload = function (re) {
+            box.style.padding = '0';
+            box.style.overflow = 'hidden';
+            box.innerHTML = '<img src="' + re.target.result + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />';
+            if (onImageSet) onImageSet(re.target.result);
+          };
+          r.readAsDataURL(f);
+        }
+      });
+    };
+
+    // Make history grid items draggable
+    window.makeHistoryDraggable = function () {
+      var items = document.querySelectorAll('.media-history-item');
+      items.forEach(function (item) {
+        item.setAttribute('draggable', 'true');
+        item.addEventListener('dragstart', function (e) {
+          var img = item.querySelector('img');
+          var video = item.querySelector('video');
+          var url = '';
+          if (img) url = img.src;
+          else if (video) url = video.poster || video.src || '';
+          e.dataTransfer.setData('text/plain', url);
+          e.dataTransfer.effectAllowed = 'copy';
+        });
+      });
+    };
+
+    // Enable drop on original ref image button
+    var origRefBtn = document.getElementById('mediaRefTriggerBtn');
+    if (origRefBtn) {
+      window.enableDropOnBox(origRefBtn, function (url) {
+        var refImg = document.getElementById('mediaRefImgMini');
+        var refPreview = document.getElementById('mediaRefPreviewMini');
+        if (refImg) refImg.src = url;
+        if (refPreview) refPreview.style.display = 'block';
+        origRefBtn.style.display = 'none';
+      });
+    }
+
+    // Periodically make new history items draggable
+    setInterval(window.makeHistoryDraggable, 2000);
+  </script>
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="deleteModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-icon">🗑️</div>
+      <h3>Delete Call Log</h3>
+      <p class="modal-desc" id="deleteModalDesc">Are you sure you want to delete this call? This action cannot be
+        undone.</p>
+      <label class="modal-label" for="deleteConfirmInput">Type <strong>delete</strong> to confirm</label>
+      <input type="text" id="deleteConfirmInput" class="modal-input" placeholder="delete" autocomplete="off" />
+      <div class="modal-actions">
+        <button class="btn-outline modal-cancel" id="deleteModalCancel">Cancel</button>
+        <button class="btn-primary modal-confirm-delete" id="deleteModalConfirm" disabled>Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
