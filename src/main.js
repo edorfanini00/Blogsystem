@@ -2,6 +2,10 @@ import { marked } from 'marked';
 import { put } from '@vercel/blob/client';
 import { concatVideos } from './videoConcat.js';
 
+// Flag that main.js started loading (if this line runs, imports succeeded)
+window._mainJsLoaded = 'imports-ok';
+console.log('✅ main.js: imports loaded successfully');
+
 // ─── DOM Elements ────────────────────────────────────────────────
 const blogForm = document.getElementById('blogForm');
 const keywordsInput = document.getElementById('keywords');

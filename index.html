@@ -2338,6 +2338,15 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+  <!-- Catch any errors from main.js module loading -->
+  <script>
+    window._mainJsErrors = [];
+    window.addEventListener('error', function(e) {
+      var msg = (e.filename || '') + ':' + (e.lineno || '?') + ' — ' + (e.message || 'Unknown error');
+      window._mainJsErrors.push(msg);
+      console.error('🔴 GLOBAL ERROR:', msg);
+    });
+  </script>
   <script type="module" src="/src/main.js"></script>
 
   <!-- Standalone fallback for One Pager (runs outside module system) -->
@@ -2351,6 +2360,12 @@
         }
 
         console.warn('⚠ One Pager: main.js handler NOT found, using standalone fallback');
+        console.warn('⚠ main.js load status:', window._mainJsLoaded || 'NOT LOADED (imports may have failed)');
+        if (window._mainJsErrors && window._mainJsErrors.length > 0) {
+          console.error('🔴 main.js errors:', window._mainJsErrors);
+          // Show first error to user so they can report it
+          document.title = 'ERROR: ' + window._mainJsErrors[0];
+        }
 
         // Standalone fallback implementation
         var _generating = false;
@@ -2410,8 +2425,59 @@
                       if (loadingTextEl) loadingTextEl.textContent = d.message;
                     }
                     if (d.type === 'result') {
-                      console.log('✅ Fallback: result received');
-                      alert('One pager generated! (Note: main.js module did not load, showing raw result)');
+                      console.log('✅ Fallback: result received', d);
+                      // Render the preview using the same template as main.js
+                      var data = d;
+                      var logo = 'https://ik.imagekit.io/kusosheutk/A-color.png';
+                      var bHtml = '';
+                      var bullets = data.bullets || [];
+                      for (var b = 0; b < bullets.length; b++) {
+                        bHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;"><div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[b] + '</div></div>';
+                      }
+                      var pageHtml = '<div style="width:100%;min-height:700px;padding:48px 56px;font-family:Inter,-apple-system,sans-serif;background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
+                      pageHtml += '<div style="display:flex;align-items:center;margin-bottom:32px;"><img src="' + logo + '" alt="Celeritech" style="height:48px;" crossorigin="anonymous" /></div>';
+                      if (data.headerImage) pageHtml += '<img src="' + data.headerImage + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;" />';
+                      if (data.title) pageHtml += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;color:#1e293b;margin-bottom:8px;line-height:1.15;">' + data.title + '</div>';
+                      pageHtml += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:800;font-style:italic;color:#7c3aed;margin-bottom:8px;line-height:1.2;">' + (data.sectionHeading || 'Key Features') + '</div>';
+                      if (data.subtitle) pageHtml += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + data.subtitle + '</div>';
+                      if (data.description) pageHtml += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + data.description + '</div>';
+                      pageHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;column-gap:48px;">' + bHtml + '</div>';
+                      if (data.footer) pageHtml += '<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">' + data.footer + '</div>';
+                      pageHtml += '</div>';
+
+                      var previewFrame = document.getElementById('opPreviewFrame');
+                      var previewContainer = document.getElementById('opPreviewContainer');
+                      var emptyState = document.getElementById('opEmpty');
+                      var previewActs = document.getElementById('opPreviewActions');
+                      if (previewFrame) previewFrame.innerHTML = pageHtml;
+                      if (previewContainer) previewContainer.style.display = 'block';
+                      if (emptyState) emptyState.style.display = 'none';
+                      if (previewActs) previewActs.style.display = 'flex';
+
+                      // Auto-scroll to preview
+                      if (previewContainer) {
+                        setTimeout(function() { previewContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+                      }
+
+                      // Wire up download button
+                      var dlBtn = document.getElementById('opDownloadPdfBtn');
+                      if (dlBtn && typeof html2pdf !== 'undefined') {
+                        dlBtn.onclick = function() {
+                          dlBtn.disabled = true;
+                          dlBtn.textContent = 'Downloading…';
+                          var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
+                          html2pdf().set({
+                            margin: 0,
+                            filename: (data.title || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
+                            image: { type: 'jpeg', quality: 0.98 },
+                            html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+                            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+                          }).from(pageEl).save().then(function() {
+                            dlBtn.disabled = false;
+                            dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF';
+                          });
+                        };
+                      }
                     }
                     if (d.type === 'error') {
                       alert('Error: ' + d.error);
