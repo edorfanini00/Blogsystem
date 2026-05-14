@@ -1843,93 +1843,93 @@
           </div>
         </div>
 
-        <div class="bento-grid">
+        <!-- Input Section -->
+        <section class="card" style="margin-bottom: 24px;">
+          <form id="onepagerForm" style="display:flex; flex-direction:column; gap:20px;">
 
-          <!-- Input Card -->
-          <section class="card bento-left" id="onepagerInputCard">
-            <h3 class="card-title">What's this one-pager about?</h3>
+            <div class="form-group">
+              <label for="opDescription">Describe your product, service, or topic</label>
+              <div class="input-wrapper">
+                <textarea id="opDescription" rows="5"
+                  placeholder="e.g. SAP Business One is a flexible ERP solution for small and midsize businesses. It integrates financials, sales, procurement, inventory, and customer management into one platform. Key benefits include AI-powered automation, flexible deployment options, and industry-specific scalability…"
+                  required></textarea>
+              </div>
+            </div>
 
-            <form id="onepagerForm">
-              <div class="form-group">
-                <label for="opDescription">Describe the product, service, or topic</label>
-                <div class="input-wrapper">
-                  <textarea id="opDescription" rows="6" placeholder="e.g. SAP Business One is a flexible ERP solution for small and midsize businesses. It integrates financials, sales, procurement, inventory, and customer management into one platform. Key benefits include AI-powered automation, flexible deployment options, and industry-specific scalability…" required></textarea>
+            <!-- Format Options Row -->
+            <div style="display:flex; gap:24px; align-items:flex-end; flex-wrap:wrap;">
+              <div style="flex:1; min-width:140px;">
+                <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">Columns</label>
+                <div style="display:flex; gap:6px;">
+                  <button type="button" class="op-col-btn" data-cols="1">1 Column</button>
+                  <button type="button" class="op-col-btn active" data-cols="2">2 Columns</button>
+                  <button type="button" class="op-col-btn" data-cols="3">3 Columns</button>
                 </div>
               </div>
-
-              <!-- Format Options -->
-              <h4 class="toggle-section-title" style="margin-top:8px;">Output Format</h4>
-              <div class="op-format-grid">
-                <div class="op-format-option">
-                  <label>Columns</label>
-                  <div class="op-column-btns">
-                    <button type="button" class="op-col-btn" data-cols="1">1</button>
-                    <button type="button" class="op-col-btn active" data-cols="2">2</button>
-                    <button type="button" class="op-col-btn" data-cols="3">3</button>
-                  </div>
-                </div>
-                <div class="op-format-option">
-                  <label>Header Image</label>
-                  <div class="op-toggle-row">
-                    <button type="button" class="op-toggle-btn active" data-img="no">No Image</button>
-                    <button type="button" class="op-toggle-btn" data-img="yes">AI Image</button>
-                  </div>
+              <div style="flex:1; min-width:140px;">
+                <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">Header Image</label>
+                <div style="display:flex; gap:6px;">
+                  <button type="button" class="op-img-btn active" data-img="no">No Image</button>
+                  <button type="button" class="op-img-btn" data-img="yes">AI Image</button>
                 </div>
               </div>
-
-              <!-- Progress -->
-              <div class="progress-container" id="opProgressContainer" style="display:none; margin-top:8px;">
-                <div class="progress-header">
-                  <span class="spinner-orange"></span>
-                  <span id="opLoadingText">Generating one-pager…</span>
-                </div>
-                <div class="progress-bar-track">
-                  <div class="progress-bar-fill" id="opProgressFill" style="width:0%; background: var(--accent-primary);"></div>
-                </div>
-              </div>
-
-              <button type="submit" class="btn-primary" id="opGenerateBtn">
-                <span class="btn-text">✨ Generate One Pager</span>
-                <span class="btn-loader" style="display:none;">
-                  <span class="spinner"></span>
-                  Generating…
-                </span>
-              </button>
-            </form>
-          </section>
-
-          <!-- Preview Card -->
-          <section class="card bento-right" id="onepagerPreviewCard">
-            <div class="card-header-flex">
-              <h3 class="card-title">Live Preview</h3>
-              <div id="opPreviewActions" style="display:none;">
-                <button class="btn-primary btn-sm" id="opDownloadPdfBtn" style="margin:0; padding:10px 20px;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download PDF
+              <div style="flex:0 0 auto;">
+                <button type="submit" class="btn-primary" id="opGenerateBtn" style="margin:0; padding:14px 32px;">
+                  <span class="btn-text">✨ Generate One Pager</span>
+                  <span class="btn-loader" style="display:none;">
+                    <span class="spinner"></span>
+                    Generating…
+                  </span>
                 </button>
               </div>
             </div>
 
-            <!-- Empty state -->
-            <div class="preview-empty" id="opEmpty">
-              <div class="preview-empty-icon">📄</div>
-              <h3>No preview yet</h3>
-              <p>Describe your product and click Generate</p>
-            </div>
-
-            <!-- The live preview container -->
-            <div id="opPreviewContainer" style="display:none;">
-              <div id="opPreviewFrame" class="op-preview-frame">
-                <!-- Dynamically rendered one-pager -->
+            <!-- Progress Bar -->
+            <div id="opProgressContainer" style="display:none;">
+              <div class="progress-header">
+                <span class="spinner-orange"></span>
+                <span id="opLoadingText">Generating one-pager…</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="opProgressFill" style="width:0%; background: var(--accent-primary);"></div>
               </div>
             </div>
-          </section>
 
-        </div>
+          </form>
+        </section>
+
+        <!-- Preview Section -->
+        <section class="card" style="min-height: 300px;">
+          <div class="card-header-flex">
+            <h3>Preview</h3>
+            <div id="opPreviewActions" style="display:none;">
+              <button class="btn-primary btn-sm" id="opDownloadPdfBtn" style="margin:0; padding:10px 24px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download PDF
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty state -->
+          <div class="preview-empty" id="opEmpty">
+            <div class="empty-icon">📄</div>
+            <h4>No preview yet</h4>
+            <p>Describe your product and click Generate</p>
+          </div>
+
+          <!-- Live preview -->
+          <div id="opPreviewContainer" style="display:none;">
+            <div id="opPreviewFrame" class="op-preview-frame">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </section>
+
       </div>
 
     </main>

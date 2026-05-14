@@ -4295,6 +4295,8 @@ function initAccountConnections() {
 // ═══════════════════════════════════════════════════════════════════
 
 (function initOnePager() {
+    console.log('🔧 One Pager module initializing…');
+
     const form = document.getElementById('onepagerForm');
     const previewFrame = document.getElementById('opPreviewFrame');
     const previewContainer = document.getElementById('opPreviewContainer');
@@ -4306,258 +4308,252 @@ function initAccountConnections() {
     const progressFill = document.getElementById('opProgressFill');
     const loadingText = document.getElementById('opLoadingText');
 
-    if (!form) return;
+    if (!form) {
+        console.warn('⚠ One Pager form not found, skipping init');
+        return;
+    }
 
-    // State
+    console.log('✅ One Pager module elements found');
+
+    // ─── State ──────────────────────────────────────
     let opColumns = 2;
     let opWithImage = false;
     let lastGeneratedTitle = 'one-pager';
 
-    // ─── Format Option Toggles ──────────────────────
-    document.querySelectorAll('.op-col-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    // ─── Column Buttons ─────────────────────────────
+    const colBtns = document.querySelectorAll('.op-col-btn');
+    console.log(`   Found ${colBtns.length} column buttons`);
+    colBtns.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            document.querySelectorAll('.op-col-btn').forEach(b => b.classList.remove('active'));
+            colBtns.forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
-            opColumns = parseInt(btn.dataset.cols);
+            opColumns = parseInt(btn.getAttribute('data-cols'));
+            console.log('📐 Columns set to:', opColumns);
         });
     });
 
-    document.querySelectorAll('.op-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    // ─── Image Toggle Buttons ───────────────────────
+    const imgBtns = document.querySelectorAll('.op-img-btn');
+    console.log(`   Found ${imgBtns.length} image toggle buttons`);
+    imgBtns.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            document.querySelectorAll('.op-toggle-btn').forEach(b => b.classList.remove('active'));
+            imgBtns.forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
-            opWithImage = btn.dataset.img === 'yes';
+            opWithImage = btn.getAttribute('data-img') === 'yes';
+            console.log('🖼️ Image toggle:', opWithImage ? 'AI Image' : 'No Image');
         });
     });
 
-    // ─── Orange Arrow SVG (matching reference) ─────
+    // ─── Orange Arrow SVG ───────────────────────────
     function orangeArrowSvg() {
-        return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>`;
+        return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12h14M13 6l6 6-6 6" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
 
-    // ─── Render One Pager Preview from API result ───
+    // ─── Render Preview from API Data ────────────────
     function renderOnePager(data) {
-        const { title, subtitle, sectionHeading, bullets, description, footer, headerImage } = data;
-        const logoUrl = 'https://ik.imagekit.io/kusosheutk/A-color.png';
-        const cols = opColumns;
+        var title = data.title || '';
+        var subtitle = data.subtitle || '';
+        var sectionHeading = data.sectionHeading || 'Key Features';
+        var bullets = data.bullets || [];
+        var description = data.description || '';
+        var footer = data.footer || '';
+        var headerImage = data.headerImage || null;
+        var logoUrl = 'https://ik.imagekit.io/kusosheutk/A-color.png';
 
         lastGeneratedTitle = title || 'one-pager';
 
-        // Build bullet items HTML
-        const bulletItemsHtml = (bullets || []).map(b => `
-            <div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;">
-                <div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">
-                    ${orangeArrowSvg()}
-                </div>
-                <div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">${b}</div>
-            </div>
-        `).join('');
-
-        // Grid columns
-        let gridCols = '1fr 1fr';
-        if (cols === 1) gridCols = '1fr';
-        else if (cols === 3) gridCols = '1fr 1fr 1fr';
-        const colGap = cols === 3 ? '32px' : '48px';
-
-        let html = `
-        <div class="op-page" style="
-            width:100%;
-            min-height:700px;
-            padding:48px 56px;
-            position:relative;
-            overflow:hidden;
-            font-family:'Inter', -apple-system, sans-serif;
-            background:
-                radial-gradient(ellipse at 0% 0%, rgba(234, 136, 80, 0.15) 0%, transparent 50%),
-                radial-gradient(ellipse at 100% 0%, rgba(176, 148, 220, 0.12) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 100%, rgba(200, 180, 230, 0.10) 0%, transparent 50%),
-                linear-gradient(180deg, #fefefe 0%, #f8f4f0 100%);
-        ">`;
-
-        // Logo
-        html += `
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">
-            <img src="${logoUrl}" alt="Logo" style="height:48px;width:auto;object-fit:contain;" crossorigin="anonymous" />
-        </div>`;
-
-        // Header image (AI-generated)
-        if (headerImage) {
-            html += `<img src="${headerImage}" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />`;
+        // Build bullet HTML
+        var bulletHtml = '';
+        for (var i = 0; i < bullets.length; i++) {
+            bulletHtml += '<div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;">' +
+                '<div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">' + orangeArrowSvg() + '</div>' +
+                '<div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">' + bullets[i] + '</div>' +
+                '</div>';
         }
 
-        // Section title (purple, italic, bold – matching reference)
-        html += `<div style="
-            font-family:'Montserrat','Inter',sans-serif;
-            font-size:2rem;
-            font-weight:800;
-            font-style:italic;
-            color:#7c3aed;
-            letter-spacing:-0.02em;
-            margin-bottom:8px;
-            line-height:1.2;
-        ">${sectionHeading || 'Key Features'}</div>`;
+        // Grid columns
+        var gridCols = opColumns === 1 ? '1fr' : opColumns === 3 ? '1fr 1fr 1fr' : '1fr 1fr';
+        var colGap = opColumns === 3 ? '32px' : '48px';
+
+        var html = '<div class="op-page" style="' +
+            'width:100%;min-height:700px;padding:48px 56px;position:relative;overflow:hidden;' +
+            'font-family:Inter,-apple-system,sans-serif;' +
+            'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),' +
+            'radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),' +
+            'radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),' +
+            'linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);">';
+
+        // Logo
+        html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">' +
+            '<img src="' + logoUrl + '" alt="Celeritech" style="height:48px;width:auto;object-fit:contain;" crossorigin="anonymous" />' +
+            '</div>';
+
+        // Header image
+        if (headerImage) {
+            html += '<img src="' + headerImage + '" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
+        }
+
+        // Section title
+        html += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2rem;font-weight:800;font-style:italic;color:#7c3aed;letter-spacing:-0.02em;margin-bottom:8px;line-height:1.2;">' + sectionHeading + '</div>';
 
         // Subtitle
         if (subtitle) {
-            html += `<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">${subtitle}</div>`;
+            html += '<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">' + subtitle + '</div>';
         }
 
         // Description
         if (description) {
-            html += `<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">${description}</div>`;
+            html += '<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">' + description + '</div>';
         }
 
-        // Bullet list
-        html += `
-        <div style="
-            display:grid;
-            grid-template-columns:${gridCols};
-            gap:20px;
-            column-gap:${colGap};
-        ">
-            ${bulletItemsHtml}
-        </div>`;
+        // Bullets grid
+        html += '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:20px;column-gap:' + colGap + ';">' + bulletHtml + '</div>';
 
         // Footer
         if (footer) {
-            html += `<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">${footer}</div>`;
+            html += '<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">' + footer + '</div>';
         }
 
-        html += `</div>`;
+        html += '</div>';
 
         previewFrame.innerHTML = html;
         previewContainer.style.display = '';
         if (emptyState) emptyState.style.display = 'none';
         if (previewActions) previewActions.style.display = '';
+
+        console.log('✅ One pager rendered:', title);
     }
 
-    // ─── Form Submit — call API ─────────────────────
-    form.addEventListener('submit', async (e) => {
+    // ─── Form Submit ────────────────────────────────
+    form.addEventListener('submit', function(e) {
         e.preventDefault();
+        console.log('📄 One Pager form submitted');
 
-        const description = document.getElementById('opDescription')?.value?.trim();
+        var descEl = document.getElementById('opDescription');
+        var description = descEl ? descEl.value.trim() : '';
         if (!description) {
             showToast('Please describe your product or service', 'error');
             return;
         }
 
-        // Show loading state
-        const btnText = generateBtn.querySelector('.btn-text');
-        const btnLoader = generateBtn.querySelector('.btn-loader');
+        console.log('   Description:', description.substring(0, 80) + '…');
+        console.log('   Columns:', opColumns, '| Image:', opWithImage);
+
+        // UI: show loading
+        var btnText = generateBtn.querySelector('.btn-text');
+        var btnLoader = generateBtn.querySelector('.btn-loader');
         if (btnText) btnText.style.display = 'none';
         if (btnLoader) btnLoader.style.display = '';
         generateBtn.disabled = true;
         if (progressContainer) {
             progressContainer.style.display = '';
-            progressFill.style.width = '0%';
-            loadingText.textContent = 'Starting generation…';
+            if (progressFill) progressFill.style.width = '0%';
+            if (loadingText) loadingText.textContent = 'Starting generation…';
         }
 
-        try {
-            const res = await fetch(`${API_BASE}/api/onepager/generate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    description,
-                    withImage: opWithImage,
-                    columns: opColumns,
-                }),
-            });
+        // Call API
+        fetch(API_BASE + '/api/onepager/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                description: description,
+                withImage: opWithImage,
+                columns: opColumns,
+            }),
+        })
+        .then(function(res) {
+            if (!res.ok) throw new Error('Server error: ' + res.status);
+            console.log('   SSE stream started');
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
 
-            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+            function readChunk() {
+                return reader.read().then(function(result) {
+                    if (result.done) {
+                        console.log('   SSE stream ended');
+                        return;
+                    }
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (!line.startsWith('data: ')) continue;
-                    try {
-                        const data = JSON.parse(line.slice(6));
-
-                        if (data.type === 'progress') {
-                            const pct = Math.round((data.step / data.total) * 100);
-                            if (progressFill) progressFill.style.width = `${pct}%`;
-                            if (loadingText) loadingText.textContent = data.message;
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        if (line.indexOf('data: ') !== 0) continue;
+                        try {
+                            var data = JSON.parse(line.slice(6));
+                            if (data.type === 'progress') {
+                                var pct = Math.round((data.step / data.total) * 100);
+                                if (progressFill) progressFill.style.width = pct + '%';
+                                if (loadingText) loadingText.textContent = data.message;
+                                console.log('   Progress:', pct + '%', data.message);
+                            }
+                            if (data.type === 'result') {
+                                renderOnePager(data);
+                                showToast('One pager generated!');
+                            }
+                            if (data.type === 'error') {
+                                showToast(data.error || 'Generation failed', 'error');
+                            }
+                        } catch (parseErr) {
+                            console.warn('SSE parse skip:', parseErr.message);
                         }
-
-                        if (data.type === 'result') {
-                            renderOnePager(data);
-                            showToast('One pager generated!');
-                        }
-
-                        if (data.type === 'error') {
-                            showToast(data.error || 'Generation failed', 'error');
-                        }
-                    } catch { /* skip parse errors */ }
-                }
+                    }
+                    return readChunk();
+                });
             }
-        } catch (err) {
-            console.error('One-pager generation error:', err);
+
+            return readChunk();
+        })
+        .catch(function(err) {
+            console.error('❌ One-pager generation error:', err);
             showToast('Generation failed: ' + err.message, 'error');
-        } finally {
+        })
+        .finally(function() {
             if (btnText) btnText.style.display = '';
             if (btnLoader) btnLoader.style.display = 'none';
             generateBtn.disabled = false;
             if (progressContainer) progressContainer.style.display = 'none';
-        }
+        });
     });
 
     // ─── Download PDF ───────────────────────────────
     if (downloadBtn) {
-        downloadBtn.addEventListener('click', async () => {
-            const pageEl = previewFrame.querySelector('.op-page');
+        downloadBtn.addEventListener('click', function() {
+            var pageEl = previewFrame.querySelector('.op-page');
             if (!pageEl) {
                 showToast('Generate a preview first', 'error');
                 return;
             }
 
             downloadBtn.disabled = true;
-            const origText = downloadBtn.innerHTML;
-            downloadBtn.innerHTML = `<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…`;
+            var origText = downloadBtn.innerHTML;
+            downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
 
-            try {
-                const filename = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
+            var filename = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-                const opt = {
-                    margin: 0,
-                    filename: filename,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: {
-                        scale: 2,
-                        useCORS: true,
-                        allowTaint: true,
-                        logging: false,
-                    },
-                    jsPDF: {
-                        unit: 'in',
-                        format: 'letter',
-                        orientation: 'portrait',
-                    },
-                };
-
-                await html2pdf().set(opt).from(pageEl).save();
-                showToast('PDF downloaded successfully!');
-            } catch (err) {
-                console.error('PDF generation error:', err);
-                showToast('PDF generation failed: ' + err.message, 'error');
-            } finally {
+            html2pdf().set({
+                margin: 0,
+                filename: filename,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+            }).from(pageEl).save().then(function() {
+                showToast('PDF downloaded!');
+            }).catch(function(err) {
+                console.error('PDF error:', err);
+                showToast('PDF failed: ' + err.message, 'error');
+            }).finally(function() {
                 downloadBtn.disabled = false;
                 downloadBtn.innerHTML = origText;
-            }
+            });
         });
     }
+
+    console.log('✅ One Pager module ready');
 })();
