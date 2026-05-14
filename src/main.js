@@ -4301,24 +4301,23 @@ function initAccountConnections() {
     const previewActions = document.getElementById('opPreviewActions');
     const emptyState = document.getElementById('opEmpty');
     const downloadBtn = document.getElementById('opDownloadPdfBtn');
-    const imageUploadGroup = document.getElementById('opImageUploadGroup');
-    const imageUploadArea = document.getElementById('opImageUploadArea');
-    const imageInput = document.getElementById('opImageInput');
-    const imagePreview = document.getElementById('opImagePreview');
-    const imagePreviewImg = document.getElementById('opImagePreviewImg');
-    const imageRemoveBtn = document.getElementById('opImageRemoveBtn');
-    const imageUploadPrompt = document.getElementById('opImageUploadPrompt');
+    const generateBtn = document.getElementById('opGenerateBtn');
+    const progressContainer = document.getElementById('opProgressContainer');
+    const progressFill = document.getElementById('opProgressFill');
+    const loadingText = document.getElementById('opLoadingText');
 
     if (!form) return;
 
     // State
     let opColumns = 2;
     let opWithImage = false;
-    let opUploadedImageDataUrl = null;
+    let lastGeneratedTitle = 'one-pager';
 
     // ─── Format Option Toggles ──────────────────────
     document.querySelectorAll('.op-col-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             document.querySelectorAll('.op-col-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             opColumns = parseInt(btn.dataset.cols);
@@ -4326,66 +4325,14 @@ function initAccountConnections() {
     });
 
     document.querySelectorAll('.op-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             document.querySelectorAll('.op-toggle-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             opWithImage = btn.dataset.img === 'yes';
-            if (imageUploadGroup) {
-                imageUploadGroup.style.display = opWithImage ? '' : 'none';
-            }
         });
     });
-
-    // ─── Image Upload ───────────────────────────────
-    if (imageUploadArea && imageInput) {
-        imageUploadArea.addEventListener('click', () => {
-            if (!opUploadedImageDataUrl) imageInput.click();
-        });
-
-        imageUploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            imageUploadArea.style.borderColor = '#ea580c';
-        });
-
-        imageUploadArea.addEventListener('dragleave', () => {
-            imageUploadArea.style.borderColor = '';
-        });
-
-        imageUploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            imageUploadArea.style.borderColor = '';
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                handleImageFile(file);
-            }
-        });
-
-        imageInput.addEventListener('change', () => {
-            const file = imageInput.files[0];
-            if (file) handleImageFile(file);
-        });
-    }
-
-    if (imageRemoveBtn) {
-        imageRemoveBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            opUploadedImageDataUrl = null;
-            if (imagePreview) imagePreview.style.display = 'none';
-            if (imageUploadPrompt) imageUploadPrompt.style.display = '';
-            if (imageInput) imageInput.value = '';
-        });
-    }
-
-    function handleImageFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            opUploadedImageDataUrl = e.target.result;
-            if (imagePreviewImg) imagePreviewImg.src = opUploadedImageDataUrl;
-            if (imagePreview) imagePreview.style.display = '';
-            if (imageUploadPrompt) imageUploadPrompt.style.display = 'none';
-        };
-        reader.readAsDataURL(file);
-    }
 
     // ─── Orange Arrow SVG (matching reference) ─────
     function orangeArrowSvg() {
@@ -4394,35 +4341,30 @@ function initAccountConnections() {
         </svg>`;
     }
 
-    // ─── Render One Pager Preview ───────────────────
-    function renderOnePager() {
-        const title = document.getElementById('opTitle')?.value || '';
-        const subtitle = document.getElementById('opSubtitle')?.value || '';
-        const description = document.getElementById('opDescription')?.value || '';
-        const bulletsRaw = document.getElementById('opBullets')?.value || '';
-        const sectionTitle = document.getElementById('opSectionTitle')?.value || 'Table of Contents';
-        const footer = document.getElementById('opFooter')?.value || '';
-        const logoUrl = document.getElementById('opLogoUrl')?.value || '';
+    // ─── Render One Pager Preview from API result ───
+    function renderOnePager(data) {
+        const { title, subtitle, sectionHeading, bullets, description, footer, headerImage } = data;
+        const logoUrl = 'https://ik.imagekit.io/kusosheutk/A-color.png';
+        const cols = opColumns;
 
-        const bullets = bulletsRaw.split('\n').map(b => b.trim()).filter(b => b.length > 0);
+        lastGeneratedTitle = title || 'one-pager';
 
         // Build bullet items HTML
-        const bulletItemsHtml = bullets.map(b => `
-            <div class="op-bullet-item" style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;">
-                <div class="op-bullet-arrow" style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">
+        const bulletItemsHtml = (bullets || []).map(b => `
+            <div style="display:flex;align-items:flex-start;gap:12px;break-inside:avoid;">
+                <div style="flex-shrink:0;width:20px;height:20px;margin-top:2px;">
                     ${orangeArrowSvg()}
                 </div>
-                <div class="op-bullet-text" style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">${b}</div>
+                <div style="font-size:0.88rem;font-weight:500;color:#334155;line-height:1.5;">${b}</div>
             </div>
         `).join('');
 
-        // Determine grid column style
+        // Grid columns
         let gridCols = '1fr 1fr';
-        if (opColumns === 1) gridCols = '1fr';
-        else if (opColumns === 3) gridCols = '1fr 1fr 1fr';
-        const colGap = opColumns === 3 ? '32px' : '48px';
+        if (cols === 1) gridCols = '1fr';
+        else if (cols === 3) gridCols = '1fr 1fr 1fr';
+        const colGap = cols === 3 ? '32px' : '48px';
 
-        // Build the page HTML with inline styles for PDF fidelity
         let html = `
         <div class="op-page" style="
             width:100%;
@@ -4439,20 +4381,18 @@ function initAccountConnections() {
         ">`;
 
         // Logo
-        if (logoUrl) {
-            html += `
-            <div class="op-logo-bar" style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">
-                <img src="${logoUrl}" alt="Logo" style="height:48px;width:auto;object-fit:contain;" crossorigin="anonymous" />
-            </div>`;
-        }
+        html += `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">
+            <img src="${logoUrl}" alt="Logo" style="height:48px;width:auto;object-fit:contain;" crossorigin="anonymous" />
+        </div>`;
 
-        // Header image
-        if (opWithImage && opUploadedImageDataUrl) {
-            html += `<img class="op-header-image" src="${opUploadedImageDataUrl}" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />`;
+        // Header image (AI-generated)
+        if (headerImage) {
+            html += `<img src="${headerImage}" alt="Header" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-bottom:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />`;
         }
 
         // Section title (purple, italic, bold – matching reference)
-        html += `<div class="op-section-title" style="
+        html += `<div style="
             font-family:'Montserrat','Inter',sans-serif;
             font-size:2rem;
             font-weight:800;
@@ -4461,21 +4401,21 @@ function initAccountConnections() {
             letter-spacing:-0.02em;
             margin-bottom:8px;
             line-height:1.2;
-        ">${sectionTitle}</div>`;
+        ">${sectionHeading || 'Key Features'}</div>`;
 
         // Subtitle
         if (subtitle) {
-            html += `<div class="op-subtitle" style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">${subtitle}</div>`;
+            html += `<div style="font-size:1rem;color:#64748b;font-weight:500;margin-bottom:24px;line-height:1.6;">${subtitle}</div>`;
         }
 
         // Description
         if (description) {
-            html += `<div class="op-desc" style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">${description}</div>`;
+            html += `<div style="font-size:0.9rem;color:#475569;line-height:1.7;margin-bottom:28px;">${description}</div>`;
         }
 
         // Bullet list
         html += `
-        <div class="op-bullets cols-${opColumns}" style="
+        <div style="
             display:grid;
             grid-template-columns:${gridCols};
             gap:20px;
@@ -4486,7 +4426,7 @@ function initAccountConnections() {
 
         // Footer
         if (footer) {
-            html += `<div class="op-footer" style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">${footer}</div>`;
+            html += `<div style="margin-top:48px;padding-top:20px;border-top:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:#94a3b8;font-weight:500;text-align:center;">${footer}</div>`;
         }
 
         html += `</div>`;
@@ -4497,11 +4437,83 @@ function initAccountConnections() {
         if (previewActions) previewActions.style.display = '';
     }
 
-    // ─── Form Submit ────────────────────────────────
-    form.addEventListener('submit', (e) => {
+    // ─── Form Submit — call API ─────────────────────
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        renderOnePager();
-        showToast('One pager preview generated!');
+
+        const description = document.getElementById('opDescription')?.value?.trim();
+        if (!description) {
+            showToast('Please describe your product or service', 'error');
+            return;
+        }
+
+        // Show loading state
+        const btnText = generateBtn.querySelector('.btn-text');
+        const btnLoader = generateBtn.querySelector('.btn-loader');
+        if (btnText) btnText.style.display = 'none';
+        if (btnLoader) btnLoader.style.display = '';
+        generateBtn.disabled = true;
+        if (progressContainer) {
+            progressContainer.style.display = '';
+            progressFill.style.width = '0%';
+            loadingText.textContent = 'Starting generation…';
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/api/onepager/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    description,
+                    withImage: opWithImage,
+                    columns: opColumns,
+                }),
+            });
+
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+
+                        if (data.type === 'progress') {
+                            const pct = Math.round((data.step / data.total) * 100);
+                            if (progressFill) progressFill.style.width = `${pct}%`;
+                            if (loadingText) loadingText.textContent = data.message;
+                        }
+
+                        if (data.type === 'result') {
+                            renderOnePager(data);
+                            showToast('One pager generated!');
+                        }
+
+                        if (data.type === 'error') {
+                            showToast(data.error || 'Generation failed', 'error');
+                        }
+                    } catch { /* skip parse errors */ }
+                }
+            }
+        } catch (err) {
+            console.error('One-pager generation error:', err);
+            showToast('Generation failed: ' + err.message, 'error');
+        } finally {
+            if (btnText) btnText.style.display = '';
+            if (btnLoader) btnLoader.style.display = 'none';
+            generateBtn.disabled = false;
+            if (progressContainer) progressContainer.style.display = 'none';
+        }
     });
 
     // ─── Download PDF ───────────────────────────────
@@ -4518,8 +4530,7 @@ function initAccountConnections() {
             downloadBtn.innerHTML = `<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…`;
 
             try {
-                const title = document.getElementById('opTitle')?.value || 'one-pager';
-                const filename = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
+                const filename = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
                 const opt = {
                     margin: 0,
@@ -4550,5 +4561,3 @@ function initAccountConnections() {
         });
     }
 })();
-
-

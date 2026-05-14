@@ -2935,6 +2935,112 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// ─── POST /api/onepager/generate (SSE) ──────────────────────────
+app.post('/api/onepager/generate', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+    });
+
+    function send(data) { res.write(`data: ${JSON.stringify(data)}\n\n`); }
+
+    try {
+        const { description, withImage, columns } = req.body;
+        if (!description) {
+            send({ type: 'error', error: 'Description is required' });
+            res.end();
+            return;
+        }
+
+        const totalSteps = withImage ? 3 : 2;
+
+        // Step 1: Use Claude to generate the one-pager content
+        send({ type: 'progress', step: 1, total: totalSteps, message: 'Generating one-pager content with AI…' });
+
+        const contentResponse = await callClaude({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 2048,
+            messages: [{
+                role: 'user',
+                content: `Based on this description, generate content for a marketing one-pager document:
+
+"${description}"
+
+Return ONLY a JSON object with these fields:
+{
+  "title": "Main page title (short, punchy, 5-10 words)",
+  "subtitle": "Subtitle/tagline (one line)",
+  "sectionHeading": "Section heading for the bullet points (e.g. 'Key Features', 'Why Choose Us', 'Table of Contents', 'What We Offer')",
+  "bullets": ["Bullet point 1", "Bullet point 2", ...],
+  "description": "A brief 1-2 sentence overview paragraph",
+  "footer": "Footer text (e.g. website URL, email, phone)"
+}
+
+Rules:
+- Generate 8-12 compelling bullet points
+- Make bullets concise but descriptive (5-15 words each)
+- The title should be bold and marketing-focused
+- The section heading should match the content theme
+- The footer should be professional
+- Return ONLY the JSON, no markdown, no code fences`,
+            }],
+        });
+
+        let content;
+        try {
+            const raw = contentResponse.content[0].text.trim();
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            content = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        } catch (parseErr) {
+            console.error('Failed to parse one-pager content:', parseErr.message);
+            send({ type: 'error', error: 'Failed to parse AI-generated content' });
+            res.end();
+            return;
+        }
+
+        console.log(`📄 One-pager content generated: "${content.title}" (${content.bullets?.length || 0} bullets)`);
+
+        // Step 2: Generate header image if requested
+        let headerImageDataUrl = null;
+        if (withImage) {
+            send({ type: 'progress', step: 2, total: totalSteps, message: 'Generating header image…' });
+
+            const imgPrompt = `Professional marketing banner for "${content.title}". Clean, modern, corporate design with subtle gradients. Premium stock photo quality. Wide aspect ratio. No text, no logos, no watermarks.`;
+            const img = await generateImageWithGemini(imgPrompt);
+            if (img && img.buffer) {
+                headerImageDataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
+                console.log('🖼️ Header image generated');
+            } else {
+                console.log('⚠ Header image generation failed, continuing without');
+            }
+        }
+
+        // Final step: Send result
+        send({ type: 'progress', step: totalSteps, total: totalSteps, message: 'Finalizing one-pager…' });
+
+        send({
+            type: 'result',
+            title: content.title || '',
+            subtitle: content.subtitle || '',
+            sectionHeading: content.sectionHeading || 'Key Features',
+            bullets: content.bullets || [],
+            description: content.description || '',
+            footer: content.footer || '',
+            headerImage: headerImageDataUrl,
+            columns: columns || 2,
+        });
+
+        console.log('✅ One-pager generation complete');
+
+    } catch (err) {
+        console.error('❌ One-pager generation error:', err);
+        send({ type: 'error', error: err.message || 'Generation failed' });
+    }
+    res.end();
+});
+
 // ─── Start Server ────────────────────────────────────────────────
 if (!isVercel) {
     app.listen(PORT, () => {

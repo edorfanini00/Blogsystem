@@ -1839,7 +1839,7 @@
         <div class="dashboard-header">
           <div>
             <h1>Marketing One Pagers</h1>
-            <p class="subtitle">Generate stunning branded one-pager PDFs in seconds.</p>
+            <p class="subtitle">Describe your product or service — AI generates a branded one-pager PDF.</p>
           </div>
         </div>
 
@@ -1847,55 +1847,13 @@
 
           <!-- Input Card -->
           <section class="card bento-left" id="onepagerInputCard">
-            <h3 class="card-title">One Pager Details</h3>
+            <h3 class="card-title">What's this one-pager about?</h3>
 
             <form id="onepagerForm">
               <div class="form-group">
-                <label for="opTitle">Page Title / Heading</label>
+                <label for="opDescription">Describe the product, service, or topic</label>
                 <div class="input-wrapper">
-                  <input id="opTitle" type="text" placeholder="e.g. SAP Business One: Complete ERP Solution" required />
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="opSubtitle">Subtitle</label>
-                <div class="input-wrapper">
-                  <input id="opSubtitle" type="text" placeholder="e.g. Flexible, Integrated Solution for Growing Businesses" />
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="opDescription">Description / Intro Paragraph</label>
-                <div class="input-wrapper">
-                  <textarea id="opDescription" rows="3" placeholder="Brief overview of the product or service…"></textarea>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label>Bullet Points <small>(one per line)</small></label>
-                <div class="input-wrapper">
-                  <textarea id="opBullets" rows="8" placeholder="SAP Business One: Flexible, Integrated Solution&#10;Robust ERP Solution. Easy to Extend with Add-ons&#10;Intuitive, User-friendly Interface&#10;Streamline your Financial Operations&#10;Maximize Customer Relationships&#10;Simplify Procurement&#10;Effortlessly Manage Shipments, Inventory, and Pricing&#10;See Your Entire Business Clearly. Take Swift, Informed Actions&#10;Artificial Intelligence and Automation&#10;Harness Industry Expertise and Scalability"></textarea>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="opSectionTitle">Section Heading</label>
-                <div class="input-wrapper">
-                  <input id="opSectionTitle" type="text" value="Table of Contents" placeholder="e.g. Table of Contents, Key Features, Why Choose Us" />
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="opFooter">Footer Text</label>
-                <div class="input-wrapper">
-                  <input id="opFooter" type="text" placeholder="e.g. www.celeritech.com | info@celeritech.com" />
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="opLogoUrl">Logo URL <small>(optional)</small></label>
-                <div class="input-wrapper">
-                  <input id="opLogoUrl" type="text" value="https://ik.imagekit.io/kusosheutk/A-color.png" placeholder="https://example.com/logo.png" />
+                  <textarea id="opDescription" rows="6" placeholder="e.g. SAP Business One is a flexible ERP solution for small and midsize businesses. It integrates financials, sales, procurement, inventory, and customer management into one platform. Key benefits include AI-powered automation, flexible deployment options, and industry-specific scalability…" required></textarea>
                 </div>
               </div>
 
@@ -1914,34 +1872,28 @@
                   <label>Header Image</label>
                   <div class="op-toggle-row">
                     <button type="button" class="op-toggle-btn active" data-img="no">No Image</button>
-                    <button type="button" class="op-toggle-btn" data-img="yes">With Image</button>
+                    <button type="button" class="op-toggle-btn" data-img="yes">AI Image</button>
                   </div>
                 </div>
               </div>
 
-              <!-- Image upload area (shown when "With Image" selected) -->
-              <div class="form-group" id="opImageUploadGroup" style="display:none;">
-                <label>Header Image</label>
-                <div class="file-upload-area" id="opImageUploadArea">
-                  <input type="file" id="opImageInput" accept=".png,.jpg,.jpeg,.webp" style="display:none" />
-                  <div class="file-upload-prompt" id="opImageUploadPrompt">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <polyline points="21 15 16 10 5 21" />
-                    </svg>
-                    <span>Drop image here or <strong>click to browse</strong></span>
-                    <small>PNG, JPG, WEBP</small>
-                  </div>
-                  <div id="opImagePreview" style="display:none;">
-                    <img id="opImagePreviewImg" style="max-width:100%;max-height:200px;border-radius:12px;" />
-                    <button type="button" class="btn-small-outline" id="opImageRemoveBtn" style="margin-top:8px;">Remove</button>
-                  </div>
+              <!-- Progress -->
+              <div class="progress-container" id="opProgressContainer" style="display:none; margin-top:8px;">
+                <div class="progress-header">
+                  <span class="spinner-orange"></span>
+                  <span id="opLoadingText">Generating one-pager…</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="opProgressFill" style="width:0%; background: var(--accent-primary);"></div>
                 </div>
               </div>
 
               <button type="submit" class="btn-primary" id="opGenerateBtn">
-                <span class="btn-text">🔄 Generate Preview</span>
+                <span class="btn-text">✨ Generate One Pager</span>
+                <span class="btn-loader" style="display:none;">
+                  <span class="spinner"></span>
+                  Generating…
+                </span>
               </button>
             </form>
           </section>
@@ -1966,7 +1918,7 @@
             <div class="preview-empty" id="opEmpty">
               <div class="preview-empty-icon">📄</div>
               <h3>No preview yet</h3>
-              <p>Fill in the details and click Generate Preview</p>
+              <p>Describe your product and click Generate</p>
             </div>
 
             <!-- The live preview container -->
