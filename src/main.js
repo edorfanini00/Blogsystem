@@ -4372,7 +4372,7 @@ setTimeout(function initOnePager() {
         }
 
         var BG = 'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);';
-        var h = '<div class="op-page" style="width:816px;height:1056px;max-width:816px;margin:0;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;box-sizing:border-box;overflow:hidden;padding:0;">';
+        var h = '<div class="op-page" style="width:816px;max-width:816px;margin:0;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;box-sizing:border-box;padding:0;">';
 
         // ─── HEADER ───
         h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:18px 36px;border-bottom:1px solid rgba(0,0,0,0.06);">';
@@ -4609,16 +4609,15 @@ setTimeout(function initOnePager() {
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-            // Auto-scale to fit exactly one letter page (816x1056 at 96dpi)
-            var origTransform = pageEl.style.transform;
-            var origTransformOrigin = pageEl.style.transformOrigin;
-            var origOverflow = pageEl.style.overflow;
-            pageEl.style.overflow = 'visible';
-            var contentH = pageEl.scrollHeight;
+            // Auto-scale to fit exactly one letter page
             var targetH = 1056; // 11in at 96dpi
             var targetW = 816;  // 8.5in at 96dpi
+            // Measure real content height
+            var contentH = pageEl.scrollHeight;
+            console.log('PDF content height:', contentH, 'target:', targetH);
+            var sf = 1;
             if (contentH > targetH) {
-                var sf = targetH / contentH;
+                sf = targetH / contentH;
                 pageEl.style.transformOrigin = 'top left';
                 pageEl.style.transform = 'scale(' + sf + ')';
             }
@@ -4636,9 +4635,8 @@ setTimeout(function initOnePager() {
                 }).catch(function(e) {
                     console.error('PDF err:', e);
                 }).finally(function() {
-                    pageEl.style.transform = origTransform;
-                    pageEl.style.transformOrigin = origTransformOrigin;
-                    pageEl.style.overflow = origOverflow;
+                    pageEl.style.transform = '';
+                    pageEl.style.transformOrigin = '';
                     downloadBtn.disabled = false;
                     downloadBtn.innerHTML = orig;
                 });

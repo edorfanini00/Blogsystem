@@ -3050,9 +3050,9 @@ Return ONLY a JSON object with this exact structure:
   "companyProduct": "CELERITECH · [EXACT PRODUCT NAME FROM THE TEXT, IN CAPS]",
   "briefFor": "A BRIEF FOR [TARGET AUDIENCE MENTIONED IN THE TEXT, IN CAPS]",
   "tags": "[PRODUCT CATEGORY] · ONE PAGE · THREE MINUTES",
-  "headline": "A bold headline derived from the user's core message (8-14 words). Use their language, make it editorial.",
+  "headline": "A bold headline derived from the user's core message (6-10 words). Use their language, make it editorial.",
   "accentWord": "One powerful word from the headline to emphasize (must appear exactly in headline)",
-  "subtitle": "A 2-3 sentence paragraph using details from the user's text. Mention their specific features, timeframes, or metrics.",
+  "subtitle": "One concise sentence (max 25 words) using the user's core value proposition.",
   "stats": [
     { "value": "[Number from their text or derived]", "label": "[WHAT IT MEANS, CAPS]" },
     { "value": "[Second metric]", "label": "[LABEL]" },
@@ -3063,39 +3063,27 @@ Return ONLY a JSON object with this exact structure:
       "number": "01",
       "title": "A section title using concepts from the user's text",
       "type": "checklist",
-      "items": ["Feature/capability 1 from their text", "Feature 2", "Feature 3", "Feature 4", "Feature 5"],
-      "callout": "A provocative one-liner based on their key value proposition. **Bold the key phrase.**"
+      "items": ["Feature 1 from their text (keep short)", "Feature 2", "Feature 3"],
+      "callout": "A provocative one-liner (max 15 words). **Bold the key phrase.**"
     },
     {
       "number": "02",
       "title": "What changes when [transformation they describe] happens",
       "type": "comparison",
       "items": [
-        { "before": "Pain point from their text", "after": "Solution they describe" },
+        { "before": "Pain point (short)", "after": "Solution (short)" },
         { "before": "Second pain", "after": "Their solution" },
-        { "before": "Third pain", "after": "Their solution" },
-        { "before": "Fourth pain", "after": "Their solution" }
+        { "before": "Third pain", "after": "Their solution" }
       ]
     }
   ],
   "darkBanner": {
-    "headline": "A manifesto line using their core value proposition",
-    "tags": ["Workflow/feature 1 from text", "Feature 2", "Feature 3", "Feature 4", "Feature 5", "Feature 6"]
+    "headline": "A manifesto line using their core value proposition (max 12 words)",
+    "tags": ["Feature 1", "Feature 2", "Feature 3", "Feature 4"]
   },
-  "testimonials": [
-    {
-      "quote": "A realistic testimonial that reflects the benefits described in the text (1-2 sentences)",
-      "name": "A realistic full name",
-      "title": "Relevant title, Relevant company type"
-    }
-  ],
   "cta": {
-    "headline": "Start with the part of [their problem space] that's hurting most.",
-    "description": "A 1-2 sentence low-friction next step, referencing their specific offering.",
-    "options": [
-      { "label": "OPTION 1 — FASTEST", "text": "Reply with **one word**: [keywords from their features separated by ·]" },
-      { "label": "OPTION 2 — 15 MINUTES", "text": "Reply with a time that works this week. 15-minute conversation — **no pitch.**" }
-    ]
+    "headline": "Start with [their problem space] — 15 minutes, no pitch.",
+    "description": "One sentence next step referencing their offering."
   },
   "contact": {
     "email": "info@celeritech.com",
@@ -3105,17 +3093,19 @@ Return ONLY a JSON object with this exact structure:
 }
 
 CRITICAL RULES:
+- EVERYTHING MUST FIT ON A SINGLE PRINTED PAGE — keep all text extremely concise
 - USE THE USER'S EXACT PRODUCT NAME — do not rename or rebrand it
 - USE THE USER'S EXACT TARGET AUDIENCE — do not change who they're targeting
 - EXTRACT features and capabilities from their text — do not invent ones they didn't mention
 - If the user mentions specific numbers/metrics, use them EXACTLY in the stats
 - Generate EXACTLY 3 stats (extract from text or derive logically)
 - accentWord must be a SINGLE word that appears EXACTLY in the headline
-- Checklist items should come directly from features mentioned in the text
-- Comparison before/after should reflect the problems and solutions they describe
-- Dark banner tags should list actual workflows/features from the text
-- The testimonial should reflect the specific benefits they describe
-- Write like a strategist, not a marketer. Stay faithful to their content.
+- Checklist: EXACTLY 3 items, keep each under 8 words
+- Comparison: EXACTLY 3 rows, keep each before/after under 8 words
+- Dark banner tags: EXACTLY 4 tags
+- NO testimonials — skip them entirely to save space
+- CTA: NO options array — just headline and description
+- Every text field should be as concise as possible
 - Return ONLY valid JSON, no markdown fences, no comments`,
             }],
         });
