@@ -4516,7 +4516,6 @@ setTimeout(function initOnePager() {
     function doGenerate() {
         console.log('📄 Generate clicked');
 
-        // Guard against double-invocation (inline onclick + addEventListener, or rapid clicks)
         if (_opGenerating) {
             console.log('⚠ One Pager generation already in progress, skipping');
             return;
@@ -4526,8 +4525,12 @@ setTimeout(function initOnePager() {
         var description = descEl ? descEl.value.trim() : '';
         if (!description) {
             if (typeof showToast === 'function') showToast('Please describe your product or service', 'error');
+            else alert('Please describe your product or service');
             return;
         }
+
+        // Safety: auto-reset _opGenerating after 60s in case of stuck state
+        setTimeout(function() { _opGenerating = false; }, 60000);
 
         _opGenerating = true;
 
@@ -4582,6 +4585,7 @@ setTimeout(function initOnePager() {
         .catch(function(err) {
             console.error('Generate error:', err);
             if (typeof showToast === 'function') showToast('Failed: ' + err.message, 'error');
+            else alert('Generation failed: ' + err.message);
         })
         .finally(function() {
             _opGenerating = false;
