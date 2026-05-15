@@ -2540,28 +2540,14 @@
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
                           var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
-                          var clone = pageEl.cloneNode(true);
-                          clone.style.width = '816px';
-                          clone.style.minHeight = '0';
-                          clone.style.height = 'auto';
-                          clone.style.boxSizing = 'border-box';
-                          clone.style.position = 'absolute';
-                          clone.style.left = '-9999px';
-                          clone.style.top = '0';
-                          clone.style.overflow = 'visible';
-                          clone.style.background = '#fefefe';
-                          document.body.appendChild(clone);
-                          var cH = clone.scrollHeight; var pH = 1056;
-                          if (cH > pH) { var sf = pH/cH; clone.style.transformOrigin='top left'; clone.style.transform='scale('+sf+')'; clone.style.width=(816/sf)+'px'; }
                           html2pdf().set({
                             margin: 0,
                             filename: (headline || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
                             image: { type: 'jpeg', quality: 0.98 },
-                            html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fefefe', width: 816, height: Math.min(cH,pH), scrollY: 0, windowWidth: 816 },
+                            html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fefefe', scrollY: -window.scrollY },
                             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
                             pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-                          }).from(clone).save().then(function() {
-                            document.body.removeChild(clone);
+                          }).from(pageEl).save().then(function() {
                             dlBtn.disabled = false;
                             dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF';
                           });
