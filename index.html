@@ -2551,14 +2551,19 @@
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
                           var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
+                          pageEl.style.height = '1056px';
+                          pageEl.style.overflow = 'hidden';
                           html2pdf().set({
                             margin: 0,
                             filename: (headline || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
                             image: { type: 'jpeg', quality: 0.98 },
                             html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fefefe', scrollY: -window.scrollY },
                             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-                          }).from(pageEl).save().then(function() {
+                          }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
+                            while(pdf.internal.getNumberOfPages()>1) pdf.deletePage(pdf.internal.getNumberOfPages());
+                          }).save().then(function() {
+                            pageEl.style.height = '';
+                            pageEl.style.overflow = '';
                             dlBtn.disabled = false;
                             dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF';
                           });
@@ -2643,13 +2648,19 @@
       var pageEl = pf.querySelector('.op-page') || pf.firstElementChild;
       if (!pageEl || typeof html2pdf === 'undefined') { alert('Cannot generate PDF'); return; }
       var fname = (item.title || 'one-pager').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+      pageEl.style.height = '1056px';
+      pageEl.style.overflow = 'hidden';
       html2pdf().set({
         margin: 0, filename: fname,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fefefe', scrollY: -window.scrollY },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-      }).from(pageEl).save();
+      }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
+        while(pdf.internal.getNumberOfPages()>1) pdf.deletePage(pdf.internal.getNumberOfPages());
+      }).save().then(function() {
+        pageEl.style.height = '';
+        pageEl.style.overflow = '';
+      });
     };
 
     // Delete a saved one-pager

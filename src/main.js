@@ -4603,10 +4603,14 @@ setTimeout(function initOnePager() {
                     margin: 0,
                     filename: fname,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', scrollY: -window.scrollY, width: 816, height: 1056 },
-                    jsPDF: { unit: 'px', format: [816, 1056], orientation: 'portrait', hotfixes: ['px_scaling'] },
-                    pagebreak: { mode: ['avoid-all'] },
-                }).from(pageEl).save().then(function() {
+                    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', scrollY: -window.scrollY },
+                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+                }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
+                    // Remove any extra pages
+                    while (pdf.internal.getNumberOfPages() > 1) {
+                        pdf.deletePage(pdf.internal.getNumberOfPages());
+                    }
+                }).save().then(function() {
                     if (typeof showToast === 'function') showToast('PDF downloaded!');
                 }).catch(function(e) {
                     console.error('PDF err:', e);
