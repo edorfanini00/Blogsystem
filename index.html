@@ -1873,7 +1873,7 @@
                 </div>
               </div>
               <div style="flex:0 0 auto;">
-                <button type="button" class="btn-primary" id="opGenerateBtn" onclick="window._generateOnePager && window._generateOnePager()" style="margin:0; padding:14px 32px;">
+                <button type="button" class="btn-primary" id="opGenerateBtn" onclick="if(window._generateOnePager){window._generateOnePager();}else{alert("Module not loaded. Wait 3s and retry.");}" style="margin:0; padding:14px 32px;">
                   <span class="btn-text">✨ Generate One Pager</span>
                   <span class="btn-loader" style="display:none;">
                     <span class="spinner"></span>
