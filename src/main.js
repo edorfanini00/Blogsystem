@@ -4372,25 +4372,27 @@ setTimeout(function initOnePager() {
         }
 
         var BG = 'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);';
+        var PAD = 'padding-left:32px;padding-right:32px;';
         var h = '<div class="op-page" style="width:816px;max-width:816px;margin:0;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;box-sizing:border-box;padding:0;">';
 
-        // ─── HEADER (compact) ───
-        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 28px;border-bottom:1px solid rgba(0,0,0,0.06);">';
+        // ─── HEADER ───
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 32px;border-bottom:1px solid rgba(0,0,0,0.06);">';
         h += '<div style="display:flex;align-items:center;gap:8px;"><img src="' + logo + '" alt="Celeritech" style="height:28px;" crossorigin="anonymous" />';
         h += '<span style="font-size:0.65rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#1e293b;">' + companyProduct + '</span></div>';
         if (briefFor) h += '<div style="font-size:0.55rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;">' + briefFor + '</div>';
         h += '</div>';
 
-        // ─── HERO (compact) ───
-        h += '<div style="padding:14px 28px 10px;">';
+        // ─── HERO ───
+        h += '<div style="' + PAD + 'padding-top:14px;padding-bottom:10px;">';
         if (tags) h += '<div style="font-size:0.5rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:8px;">' + tags + '</div>';
         h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:6px;letter-spacing:-0.02em;color:#334155;">' + headlineHtml + '</div>';
         if (subtitle) h += '<div style="font-size:0.7rem;line-height:1.5;color:#475569;margin-bottom:10px;">' + subtitle + '</div>';
         if (img) h += '<img src="' + img + '" alt="" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:10px;" />';
+        h += '</div>';
 
-        // ─── STATS (compact) ───
+        // ─── STATS ───
         if (stats.length > 0) {
-            h += '<div style="display:flex;gap:0;margin-bottom:14px;padding:10px 0;border-top:1px solid rgba(0,0,0,0.06);border-bottom:1px solid rgba(0,0,0,0.06);">';
+            h += '<div style="display:flex;gap:0;padding:10px 32px;border-top:1px solid rgba(0,0,0,0.06);border-bottom:1px solid rgba(0,0,0,0.06);margin-bottom:10px;">';
             for (var si = 0; si < stats.length; si++) {
                 h += '<div style="flex:1;text-align:center;' + (si > 0 ? 'border-left:1px solid rgba(0,0,0,0.06);' : '') + '">';
                 h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.4rem;font-weight:900;color:#ea580c;line-height:1;margin-bottom:2px;">' + (stats[si].value || '') + '</div>';
@@ -4399,11 +4401,11 @@ setTimeout(function initOnePager() {
             h += '</div>';
         }
 
-        // ─── SECTIONS (compact) ───
+        // ─── SECTIONS ───
         for (var si2 = 0; si2 < sections.length; si2++) {
             var sec = sections[si2];
             var secNum = sec.number || String(si2 + 1).padStart(2, '0');
-            h += '<div style="margin-bottom:10px;">';
+            h += '<div style="' + PAD + 'margin-bottom:10px;">';
             h += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">';
             h += '<span style="font-size:0.65rem;font-weight:800;color:#ea580c;">' + secNum + '</span>';
             h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.9rem;font-weight:800;font-style:italic;line-height:1.2;color:#334155;">' + (sec.title || '') + '</div></div>';
@@ -4438,9 +4440,9 @@ setTimeout(function initOnePager() {
             h += '</div>';
         }
 
-        // ─── DARK BANNER (compact) ───
+        // ─── DARK BANNER (full width) ───
         if (darkBanner.headline || (darkBanner.tags && darkBanner.tags.length)) {
-            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:8px;padding:14px 20px;margin:8px 0;">';
+            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);padding:14px 32px;margin:8px 0;">';
             if (darkBanner.headline) h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.85rem;font-weight:800;line-height:1.2;margin-bottom:6px;color:#f8fafc;">' + darkBanner.headline + '</div>';
             if (darkBanner.tags && darkBanner.tags.length) {
                 h += '<div style="display:flex;flex-wrap:wrap;gap:4px 10px;">';
@@ -4450,24 +4452,24 @@ setTimeout(function initOnePager() {
             h += '</div>';
         }
 
-        // ─── CTA (compact, no options) ───
+        // ─── CTA (full width) ───
         if (cta.headline) {
-            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:8px;padding:14px 20px;margin:8px 0;">';
+            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);padding:14px 32px;margin:8px 0;">';
             h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.85rem;font-weight:800;line-height:1.2;margin-bottom:4px;color:#f8fafc;">' + cta.headline + '</div>';
             if (cta.description) h += '<div style="font-size:0.68rem;color:#94a3b8;line-height:1.4;">' + cta.description + '</div>';
             h += '</div>';
         }
 
-        // ─── CONTACT (compact) ───
+        // ─── CONTACT ───
         if (contact.email || contact.phone || contact.website) {
-            h += '<div style="display:flex;gap:16px;padding:8px 0 4px;font-size:0.6rem;color:#94a3b8;">';
+            h += '<div style="display:flex;gap:16px;' + PAD + 'padding-top:8px;padding-bottom:4px;font-size:0.6rem;color:#94a3b8;">';
             if (contact.email) h += '<span>✉ ' + contact.email + '</span>';
             if (contact.phone) h += '<span>☎ ' + contact.phone + '</span>';
             if (contact.website) h += '<span>↗ ' + contact.website + '</span>';
             h += '</div>';
         }
 
-        h += '</div></div>'; // close content + page
+        h += '</div>'; // close page
 
         if (previewFrame) previewFrame.innerHTML = h;
         if (previewContainer) previewContainer.style.display = 'block';
