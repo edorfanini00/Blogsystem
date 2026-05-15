@@ -4592,10 +4592,19 @@ setTimeout(function initOnePager() {
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-            // Force exactly one page: clip to letter page height
-            var origH = pageEl.style.height;
-            var origOv = pageEl.style.overflow;
-            pageEl.style.height = '1056px';
+            // Scale content to fit exactly one page using CSS zoom
+            // (html2canvas respects zoom, unlike transform:scale)
+            var targetH = 1056; // 11in at 96dpi
+            var contentH = pageEl.scrollHeight;
+            var origZoom = pageEl.style.zoom || '';
+            var origH = pageEl.style.height || '';
+            var origOv = pageEl.style.overflow || '';
+            
+            if (contentH > targetH) {
+                var zoomFactor = targetH / contentH;
+                pageEl.style.zoom = zoomFactor;
+            }
+            pageEl.style.height = targetH + 'px';
             pageEl.style.overflow = 'hidden';
 
             setTimeout(function() {
@@ -4606,7 +4615,6 @@ setTimeout(function initOnePager() {
                     html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', scrollY: -window.scrollY },
                     jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
                 }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
-                    // Remove any extra pages
                     while (pdf.internal.getNumberOfPages() > 1) {
                         pdf.deletePage(pdf.internal.getNumberOfPages());
                     }
@@ -4615,6 +4623,7 @@ setTimeout(function initOnePager() {
                 }).catch(function(e) {
                     console.error('PDF err:', e);
                 }).finally(function() {
+                    pageEl.style.zoom = origZoom;
                     pageEl.style.height = origH;
                     pageEl.style.overflow = origOv;
                     downloadBtn.disabled = false;

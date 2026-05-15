@@ -2551,6 +2551,7 @@
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
                           var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
+                          var cH = pageEl.scrollHeight; if(cH>1056){pageEl.style.zoom=(1056/cH);}
                           pageEl.style.height = '1056px';
                           pageEl.style.overflow = 'hidden';
                           html2pdf().set({
@@ -2562,6 +2563,7 @@
                           }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
                             while(pdf.internal.getNumberOfPages()>1) pdf.deletePage(pdf.internal.getNumberOfPages());
                           }).save().then(function() {
+                            pageEl.style.zoom = '';
                             pageEl.style.height = '';
                             pageEl.style.overflow = '';
                             dlBtn.disabled = false;
@@ -2648,6 +2650,7 @@
       var pageEl = pf.querySelector('.op-page') || pf.firstElementChild;
       if (!pageEl || typeof html2pdf === 'undefined') { alert('Cannot generate PDF'); return; }
       var fname = (item.title || 'one-pager').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+      var cH2 = pageEl.scrollHeight; if(cH2>1056){pageEl.style.zoom=(1056/cH2);}
       pageEl.style.height = '1056px';
       pageEl.style.overflow = 'hidden';
       html2pdf().set({
@@ -2658,6 +2661,7 @@
       }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
         while(pdf.internal.getNumberOfPages()>1) pdf.deletePage(pdf.internal.getNumberOfPages());
       }).save().then(function() {
+        pageEl.style.zoom = '';
         pageEl.style.height = '';
         pageEl.style.overflow = '';
       });
