@@ -587,6 +587,71 @@ async function generateImageWithGemini(prompt) {
     return null;
 }
 
+// ─── Generate Image via OpenRouter (FLUX) ─────────────────────────
+async function generateImageWithOpenRouter(prompt) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey === 'your_openrouter_api_key' || apiKey === 'placeholder') {
+        console.warn('⚠ OpenRouter API key not set, skipping image generation');
+        return null;
+    }
+
+    try {
+        console.log('   Trying OpenRouter image generation...');
+        const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'openai/dall-e-3',
+                prompt: `Professional marketing banner: ${prompt}. Clean modern corporate design, premium quality, no text, no watermarks, no logos.`,
+                n: 1,
+                size: '1792x1024',
+                response_format: 'b64_json',
+            }),
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`   OpenRouter image HTTP ${response.status}: ${errText.slice(0, 300)}`);
+            return null;
+        }
+
+        const data = await response.json();
+        if (data.data?.[0]?.b64_json) {
+            console.log('   ✅ Got image from OpenRouter');
+            return {
+                buffer: Buffer.from(data.data[0].b64_json, 'base64'),
+                mimeType: 'image/png',
+                alt: prompt,
+            };
+        }
+        // Fallback: URL-based response
+        if (data.data?.[0]?.url) {
+            console.log('   ✅ Got image URL from OpenRouter, fetching...');
+            const imgRes = await fetch(data.data[0].url);
+            const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+            return { buffer: imgBuf, mimeType: 'image/png', alt: prompt };
+        }
+
+        console.log('   OpenRouter returned no image data');
+        return null;
+    } catch (err) {
+        console.error('   OpenRouter image error:', err.message);
+        return null;
+    }
+}
+
+// ─── Generate image with fallback chain ──────────────────────────
+async function generateOnePagerImage(prompt) {
+    // Try OpenRouter first (DALL-E 3), then Gemini
+    let img = await generateImageWithOpenRouter(prompt);
+    if (img) return img;
+    img = await generateImageWithGemini(prompt);
+    return img;
+}
+
 // ─── Upload Image to WordPress Media Library ─────────────────────
 async function uploadImageToWordPress(imageData, altText, filename) {
     const wpUrl = process.env.WORDPRESS_URL;
@@ -3075,7 +3140,7 @@ CRITICAL RULES:
             send({ type: 'progress', step: 2, total: totalSteps, message: 'Generating header image…' });
 
             const imgPrompt = `Professional marketing banner for "${content.headline}". Clean, modern, corporate design with subtle gradients. Premium stock photo quality. Wide aspect ratio. No text, no logos, no watermarks.`;
-            const img = await generateImageWithGemini(imgPrompt);
+            const img = await generateOnePagerImage(imgPrompt);
             if (img && img.buffer) {
                 headerImageDataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
                 console.log('🖼️ Header image generated');

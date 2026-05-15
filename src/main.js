@@ -4372,7 +4372,7 @@ setTimeout(function initOnePager() {
         }
 
         var BG = 'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);';
-        var h = '<div class="op-page" style="width:100%;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;">';
+        var h = '<div class="op-page" style="width:8.5in;min-height:11in;max-width:8.5in;margin:0 auto;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;box-sizing:border-box;overflow:hidden;">';
 
         // ─── HEADER ───
         h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:24px 48px;border-bottom:1px solid rgba(0,0,0,0.06);">';
@@ -4492,6 +4492,16 @@ setTimeout(function initOnePager() {
         if (previewActions) previewActions.style.display = 'flex';
         var previewSection = previewContainer || previewFrame;
         if (previewSection) setTimeout(function() { previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+
+        // Save to history
+        try {
+            var history = JSON.parse(localStorage.getItem('op_history') || '[]');
+            history.unshift({ id: Date.now(), title: headline || 'Untitled', date: new Date().toISOString(), data: d, html: h });
+            if (history.length > 20) history = history.slice(0, 20);
+            localStorage.setItem('op_history', JSON.stringify(history));
+            if (typeof renderOnePagerHistory === 'function') renderOnePagerHistory();
+        } catch(e) { console.warn('Failed to save one-pager history:', e); }
+
         console.log('✅ Preview rendered:', headline);
     }
 
@@ -4599,14 +4609,7 @@ setTimeout(function initOnePager() {
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-            // Render PDF directly from the visible preview element
-            // (off-screen clones cause blank PDFs in html2canvas)
-            var origWidth = pageEl.style.width;
-            var origMaxW = pageEl.style.maxWidth;
-            pageEl.style.width = '816px';
-            pageEl.style.maxWidth = '816px';
-
-            // Small delay to let the browser re-layout
+            // Render from visible .op-page element — already sized at 8.5in
             setTimeout(function() {
                 html2pdf().set({
                     margin: 0,
@@ -4620,8 +4623,6 @@ setTimeout(function initOnePager() {
                 }).catch(function(e) {
                     console.error('PDF err:', e);
                 }).finally(function() {
-                    pageEl.style.width = origWidth;
-                    pageEl.style.maxWidth = origMaxW;
                     downloadBtn.disabled = false;
                     downloadBtn.innerHTML = orig;
                 });
