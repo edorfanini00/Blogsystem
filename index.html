@@ -2548,18 +2548,26 @@
 
                       // Wire up download button
                       var dlBtn = document.getElementById('opDownloadPdfBtn');
-                      if (dlBtn && typeof html2pdf !== 'undefined') {
+                      if (dlBtn) {
                         dlBtn.onclick = function() {
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
                           var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
                           var fn = (headline || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf';
+                          var origHTML = dlBtn.innerHTML;
                           var h2c = window.html2canvas;
-                          if (!h2c) {
-                            html2pdf().set({margin:0,filename:fn,image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#fefefe',scrollY:-window.scrollY},jsPDF:{unit:'in',format:'letter',orientation:'portrait'}}).from(pageEl).save().then(function(){
-                            dlBtn.disabled = false;
-                            dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF';
-                          });
+                          if (h2c) {
+                            h2c(pageEl,{scale:2,useCORS:true,allowTaint:true,logging:false,backgroundColor:'#fefefe',scrollY:-window.scrollY}).then(function(cv){
+                              var J=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
+                              var p=new J({unit:'in',format:'letter',orientation:'portrait'});
+                              var iw=cv.width,ih=cv.height,r=iw/ih,fw=8.5,fh=8.5/r;
+                              if(fh>11){fh=11;fw=11*r;}
+                              p.addImage(cv.toDataURL('image/jpeg',0.95),'JPEG',0,0,fw,fh);
+                              p.save(fn);
+                            }).finally(function(){ dlBtn.disabled=false; dlBtn.textContent='Download PDF'; });
+                          } else {
+                            html2pdf().set({margin:0,filename:fn,image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#fefefe',scrollY:-window.scrollY},jsPDF:{unit:'in',format:'letter',orientation:'portrait'}}).from(pageEl).save().finally(function(){ dlBtn.disabled=false; dlBtn.textContent='Download PDF'; });
+                          }
                         };
                       }
                     }
