@@ -2344,39 +2344,27 @@
 
   <!-- Standalone fallback for One Pager (runs outside module system) -->
   <script>
+    // Set up image toggle and generate function IMMEDIATELY on script parse
+    window._opWithImage = false;
+
+    // Wire up image toggle as soon as DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
-      // Wait 2s for main.js module to load and set window._generateOnePager
-      setTimeout(function() {
-        if (window._generateOnePager) {
-          console.log('✅ One Pager: main.js handler active');
-          return; // main.js already set it up, nothing to do
-        }
+      var imgBtns = document.querySelectorAll('.op-img-btn');
+      for (var ib = 0; ib < imgBtns.length; ib++) {
+        (function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            for (var j = 0; j < imgBtns.length; j++) imgBtns[j].classList.remove('active');
+            btn.classList.add('active');
+            window._opWithImage = btn.getAttribute('data-img') === 'yes';
+            console.log('Image toggle:', window._opWithImage);
+          });
+        })(imgBtns[ib]);
+      }
+    });
 
-        console.warn('⚠ One Pager: main.js handler NOT found, using standalone fallback');
-        console.warn('⚠ main.js load status:', window._mainJsLoaded || 'NOT LOADED (imports may have failed)');
-        if (window._mainJsErrors && window._mainJsErrors.length > 0) {
-          console.error('🔴 main.js errors:', window._mainJsErrors);
-          // Show first error to user so they can report it
-          document.title = 'ERROR: ' + window._mainJsErrors[0];
-        }
-
-        // Wire up image toggle buttons immediately
-        window._opWithImage = false;
-        var imgBtns = document.querySelectorAll('.op-img-btn');
-        for (var ib = 0; ib < imgBtns.length; ib++) {
-          (function(btn) {
-            btn.addEventListener('click', function(e) {
-              e.preventDefault(); e.stopPropagation();
-              for (var j = 0; j < imgBtns.length; j++) imgBtns[j].classList.remove('active');
-              btn.classList.add('active');
-              window._opWithImage = btn.getAttribute('data-img') === 'yes';
-              console.log('🖼️ Image:', window._opWithImage);
-            });
-          })(imgBtns[ib]);
-        }
-
-        // Standalone fallback implementation
-        var _generating = false;
+    // Set _generateOnePager RIGHT NOW so the button always works
+    var _generating = false;
         window._generateOnePager = function() {
           if (_generating) return;
 
@@ -2599,16 +2587,16 @@
           });
         };
 
-        // Also wire up the button click in case onclick attribute was stripped by build
-        var btn = document.getElementById('opGenerateBtn');
-        if (btn) {
-          btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window._generateOnePager) window._generateOnePager();
-          });
-        }
-      }, 2000);
+    // Also wire up the button click after DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+      var btn = document.getElementById('opGenerateBtn');
+      if (btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (window._generateOnePager) window._generateOnePager();
+        });
+      }
     });
   </script>
 </body>
