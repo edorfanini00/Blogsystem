@@ -4374,110 +4374,93 @@ setTimeout(function initOnePager() {
         var BG = 'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);';
         var h = '<div class="op-page" style="width:816px;max-width:816px;margin:0;font-family:Inter,-apple-system,sans-serif;' + BG + 'color:#1e293b;box-sizing:border-box;padding:0;">';
 
-        // ─── HEADER ───
-        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:18px 36px;border-bottom:1px solid rgba(0,0,0,0.06);">';
-        h += '<div style="display:flex;align-items:center;gap:12px;"><img src="' + logo + '" alt="Celeritech" style="height:36px;" crossorigin="anonymous" />';
-        h += '<span style="font-size:0.75rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#1e293b;">' + companyProduct + '</span></div>';
-        if (briefFor) h += '<div style="font-size:0.65rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;">' + briefFor + '</div>';
+        // ─── HEADER (compact) ───
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 28px;border-bottom:1px solid rgba(0,0,0,0.06);">';
+        h += '<div style="display:flex;align-items:center;gap:8px;"><img src="' + logo + '" alt="Celeritech" style="height:28px;" crossorigin="anonymous" />';
+        h += '<span style="font-size:0.65rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#1e293b;">' + companyProduct + '</span></div>';
+        if (briefFor) h += '<div style="font-size:0.55rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;">' + briefFor + '</div>';
         h += '</div>';
 
-        h += '<div style="padding:20px 36px 16px;">';
-        if (tags) h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:14px;">' + tags + '</div>';
-        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.8rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:10px;letter-spacing:-0.02em;color:#7c3aed;">' + headlineHtml + '</div>';
-        if (subtitle) h += '<div style="font-size:0.78rem;line-height:1.6;color:#475569;margin-bottom:16px;max-width:90%;">' + subtitle + '</div>';
-        if (img) h += '<img src="' + img + '" alt="" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.08);" />';
+        // ─── HERO (compact) ───
+        h += '<div style="padding:14px 28px 10px;">';
+        if (tags) h += '<div style="font-size:0.5rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:8px;">' + tags + '</div>';
+        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:6px;letter-spacing:-0.02em;color:#0f172a;">' + headlineHtml + '</div>';
+        if (subtitle) h += '<div style="font-size:0.7rem;line-height:1.5;color:#475569;margin-bottom:10px;">' + subtitle + '</div>';
+        if (img) h += '<img src="' + img + '" alt="" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:10px;" />';
 
-        // Stats
+        // ─── STATS (compact) ───
         if (stats.length > 0) {
-            h += '<div style="display:flex;gap:0;margin-bottom:32px;padding:20px 0;border-top:1px solid rgba(0,0,0,0.06);border-bottom:1px solid rgba(0,0,0,0.06);">';
+            h += '<div style="display:flex;gap:0;margin-bottom:14px;padding:10px 0;border-top:1px solid rgba(0,0,0,0.06);border-bottom:1px solid rgba(0,0,0,0.06);">';
             for (var si = 0; si < stats.length; si++) {
                 h += '<div style="flex:1;text-align:center;' + (si > 0 ? 'border-left:1px solid rgba(0,0,0,0.06);' : '') + '">';
-                h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.8rem;font-weight:900;color:#ea580c;line-height:1.1;margin-bottom:4px;">' + (stats[si].value || '') + '</div>';
-                h += '<div style="font-size:0.55rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">' + (stats[si].label || '') + '</div></div>';
+                h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.4rem;font-weight:900;color:#ea580c;line-height:1;margin-bottom:2px;">' + (stats[si].value || '') + '</div>';
+                h += '<div style="font-size:0.45rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">' + (stats[si].label || '') + '</div></div>';
             }
             h += '</div>';
         }
 
-        // Sections
+        // ─── SECTIONS (compact) ───
         for (var si2 = 0; si2 < sections.length; si2++) {
             var sec = sections[si2];
             var secNum = sec.number || String(si2 + 1).padStart(2, '0');
-            h += '<div style="margin-bottom:24px;">';
-            h += '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px;">';
-            h += '<span style="font-size:0.75rem;font-weight:800;color:#ea580c;">' + secNum + '</span>';
-            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#7c3aed;">' + (sec.title || '') + '</div></div>';
+            h += '<div style="margin-bottom:10px;">';
+            h += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">';
+            h += '<span style="font-size:0.65rem;font-weight:800;color:#ea580c;">' + secNum + '</span>';
+            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.9rem;font-weight:800;font-style:italic;line-height:1.2;color:#0f172a;">' + (sec.title || '') + '</div></div>';
 
             if (sec.type === 'checklist' && sec.items) {
-                h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 28px;margin-bottom:12px;">';
+                h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin-bottom:6px;">';
                 for (var ci = 0; ci < sec.items.length; ci++) {
-                    h += '<div style="display:flex;align-items:flex-start;gap:10px;font-size:0.78rem;color:#334155;line-height:1.5;">';
-                    h += '<div style="flex-shrink:0;width:15px;height:15px;border:1.5px solid #cbd5e1;border-radius:3px;margin-top:2px;"></div>';
+                    h += '<div style="display:flex;align-items:flex-start;gap:6px;font-size:0.68rem;color:#334155;line-height:1.4;">';
+                    h += '<div style="flex-shrink:0;width:12px;height:12px;border:1.5px solid #cbd5e1;border-radius:2px;margin-top:1px;"></div>';
                     h += '<span>' + sec.items[ci] + '</span></div>';
                 }
                 h += '</div>';
                 if (sec.callout) {
-                    h += '<div style="display:flex;align-items:stretch;gap:12px;margin-top:12px;">';
-                    h += '<div style="width:3px;background:linear-gradient(180deg,#f97316,#ea580c);border-radius:2px;flex-shrink:0;"></div>';
-                    h += '<div style="font-size:0.78rem;color:#334155;line-height:1.6;">' + boldify(sec.callout) + '</div></div>';
+                    h += '<div style="display:flex;align-items:stretch;gap:8px;margin-top:4px;">';
+                    h += '<div style="width:2px;background:linear-gradient(180deg,#f97316,#ea580c);border-radius:2px;flex-shrink:0;"></div>';
+                    h += '<div style="font-size:0.68rem;color:#334155;line-height:1.4;">' + boldify(sec.callout) + '</div></div>';
                 }
             } else if (sec.type === 'comparison' && sec.items) {
-                h += '<div style="background:#fff;border-radius:10px;border:1px solid rgba(0,0,0,0.05);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.03);">';
-                h += '<div style="display:grid;grid-template-columns:1fr 36px 1fr;padding:10px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
-                h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">WHERE YOU ARE NOW</div><div></div>';
-                h += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">WHERE YOU\'D BE</div></div>';
+                h += '<div style="background:#fff;border-radius:8px;border:1px solid rgba(0,0,0,0.05);overflow:hidden;">';
+                h += '<div style="display:grid;grid-template-columns:1fr 28px 1fr;padding:6px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
+                h += '<div style="font-size:0.5rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">NOW</div><div></div>';
+                h += '<div style="font-size:0.5rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">AFTER</div></div>';
                 for (var ri = 0; ri < sec.items.length; ri++) {
                     var row = sec.items[ri];
-                    h += '<div style="display:grid;grid-template-columns:1fr 36px 1fr;padding:12px 16px;border-bottom:1px solid #f1f5f9;align-items:center;">';
-                    h += '<div style="font-size:0.78rem;color:#94a3b8;line-height:1.5;">' + (row.before || '') + '</div>';
+                    h += '<div style="display:grid;grid-template-columns:1fr 28px 1fr;padding:6px 12px;border-bottom:1px solid #f1f5f9;align-items:center;">';
+                    h += '<div style="font-size:0.68rem;color:#94a3b8;line-height:1.3;">' + (row.before || '') + '</div>';
                     h += '<div style="display:flex;justify-content:center;">' + arrowSvg() + '</div>';
-                    h += '<div style="font-size:0.78rem;color:#0f172a;font-weight:600;line-height:1.5;">' + (row.after || '') + '</div></div>';
+                    h += '<div style="font-size:0.68rem;color:#0f172a;font-weight:600;line-height:1.3;">' + (row.after || '') + '</div></div>';
                 }
                 h += '</div>';
             }
             h += '</div>';
         }
 
-        // Dark Banner
+        // ─── DARK BANNER (compact) ───
         if (darkBanner.headline || (darkBanner.tags && darkBanner.tags.length)) {
-            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:12px;padding:24px 28px;margin:24px 0;">';
-            if (darkBanner.headline) h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.1rem;font-weight:800;line-height:1.3;margin-bottom:12px;color:#f8fafc;">' + darkBanner.headline + '</div>';
+            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:8px;padding:14px 20px;margin:8px 0;">';
+            if (darkBanner.headline) h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.85rem;font-weight:800;line-height:1.2;margin-bottom:6px;color:#f8fafc;">' + darkBanner.headline + '</div>';
             if (darkBanner.tags && darkBanner.tags.length) {
-                h += '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;">';
-                for (var ti = 0; ti < darkBanner.tags.length; ti++) h += '<span style="font-size:0.65rem;color:#94a3b8;">' + darkBanner.tags[ti] + (ti < darkBanner.tags.length - 1 ? ' ·' : '') + '</span>';
+                h += '<div style="display:flex;flex-wrap:wrap;gap:4px 10px;">';
+                for (var ti = 0; ti < darkBanner.tags.length; ti++) h += '<span style="font-size:0.55rem;color:#94a3b8;">' + darkBanner.tags[ti] + (ti < darkBanner.tags.length - 1 ? ' ·' : '') + '</span>';
                 h += '</div>';
             }
             h += '</div>';
         }
 
-        // Testimonials
-        for (var qi = 0; qi < testimonials.length; qi++) {
-            var t = testimonials[qi];
-            h += '<div style="border-left:3px solid #ea580c;padding:18px 22px;margin:20px 0;background:rgba(249,115,22,0.04);border-radius:0 10px 10px 0;">';
-            h += '<div style="font-size:0.95rem;font-style:italic;font-weight:500;line-height:1.6;color:#1e293b;margin-bottom:8px;">"' + (t.quote || '') + '"</div>';
-            h += '<div style="font-size:0.72rem;color:#64748b;"><strong style="color:#0f172a;">' + (t.name || '') + '</strong> · ' + (t.title || '') + '</div></div>';
-        }
-
-        // CTA
+        // ─── CTA (compact, no options) ───
         if (cta.headline) {
-            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:12px;padding:24px 28px;margin:20px 0;">';
-            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;line-height:1.25;margin-bottom:8px;color:#f8fafc;">' + cta.headline + '</div>';
-            if (cta.description) h += '<div style="font-size:0.78rem;color:#94a3b8;line-height:1.6;margin-bottom:16px;">' + cta.description + '</div>';
-            if (cta.options && cta.options.length) {
-                h += '<div style="display:flex;gap:12px;">';
-                for (var oi = 0; oi < cta.options.length; oi++) {
-                    var opt = cta.options[oi];
-                    h += '<div style="flex:1;background:' + (oi === 0 ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)') + ';border:1px solid ' + (oi === 0 ? 'rgba(249,115,22,0.2)' : 'rgba(255,255,255,0.08)') + ';border-radius:8px;padding:14px 16px;">';
-                    h += '<div style="font-size:0.55rem;font-weight:700;letter-spacing:0.1em;color:#ea580c;margin-bottom:6px;">' + (opt.label || '') + '</div>';
-                    h += '<div style="font-size:0.75rem;color:' + (oi === 0 ? '#f8fafc' : '#cbd5e1') + ';line-height:1.5;">' + boldify(opt.text || '') + '</div></div>';
-                }
-                h += '</div>';
-            }
+            h += '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:8px;padding:14px 20px;margin:8px 0;">';
+            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.85rem;font-weight:800;line-height:1.2;margin-bottom:4px;color:#f8fafc;">' + cta.headline + '</div>';
+            if (cta.description) h += '<div style="font-size:0.68rem;color:#94a3b8;line-height:1.4;">' + cta.description + '</div>';
             h += '</div>';
         }
 
-        // Contact
+        // ─── CONTACT (compact) ───
         if (contact.email || contact.phone || contact.website) {
-            h += '<div style="display:flex;gap:20px;padding:16px 0 8px;font-size:0.68rem;color:#94a3b8;">';
+            h += '<div style="display:flex;gap:16px;padding:8px 0 4px;font-size:0.6rem;color:#94a3b8;">';
             if (contact.email) h += '<span>✉ ' + contact.email + '</span>';
             if (contact.phone) h += '<span>☎ ' + contact.phone + '</span>';
             if (contact.website) h += '<span>↗ ' + contact.website + '</span>';
@@ -4609,34 +4592,27 @@ setTimeout(function initOnePager() {
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-            // Auto-scale to fit exactly one letter page
-            var targetH = 1056; // 11in at 96dpi
-            var targetW = 816;  // 8.5in at 96dpi
-            // Measure real content height
-            var contentH = pageEl.scrollHeight;
-            console.log('PDF content height:', contentH, 'target:', targetH);
-            var sf = 1;
-            if (contentH > targetH) {
-                sf = targetH / contentH;
-                pageEl.style.transformOrigin = 'top left';
-                pageEl.style.transform = 'scale(' + sf + ')';
-            }
+            // Force exactly one page: clip to letter page height
+            var origH = pageEl.style.height;
+            var origOv = pageEl.style.overflow;
+            pageEl.style.height = '1056px';
+            pageEl.style.overflow = 'hidden';
 
             setTimeout(function() {
                 html2pdf().set({
                     margin: 0,
                     filename: fname,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', scrollY: -window.scrollY, width: targetW, height: targetH },
-                    jsPDF: { unit: 'px', format: [targetW, targetH], orientation: 'portrait', hotfixes: ['px_scaling'] },
+                    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', scrollY: -window.scrollY, width: 816, height: 1056 },
+                    jsPDF: { unit: 'px', format: [816, 1056], orientation: 'portrait', hotfixes: ['px_scaling'] },
                     pagebreak: { mode: ['avoid-all'] },
                 }).from(pageEl).save().then(function() {
                     if (typeof showToast === 'function') showToast('PDF downloaded!');
                 }).catch(function(e) {
                     console.error('PDF err:', e);
                 }).finally(function() {
-                    pageEl.style.transform = '';
-                    pageEl.style.transformOrigin = '';
+                    pageEl.style.height = origH;
+                    pageEl.style.overflow = origOv;
                     downloadBtn.disabled = false;
                     downloadBtn.innerHTML = orig;
                 });
