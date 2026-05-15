@@ -4384,7 +4384,7 @@ setTimeout(function initOnePager() {
         // ─── HERO (compact) ───
         h += '<div style="padding:14px 28px 10px;">';
         if (tags) h += '<div style="font-size:0.5rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:8px;">' + tags + '</div>';
-        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:6px;letter-spacing:-0.02em;color:#0f172a;">' + headlineHtml + '</div>';
+        h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.5rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:6px;letter-spacing:-0.02em;color:#334155;">' + headlineHtml + '</div>';
         if (subtitle) h += '<div style="font-size:0.7rem;line-height:1.5;color:#475569;margin-bottom:10px;">' + subtitle + '</div>';
         if (img) h += '<img src="' + img + '" alt="" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:10px;" />';
 
@@ -4406,7 +4406,7 @@ setTimeout(function initOnePager() {
             h += '<div style="margin-bottom:10px;">';
             h += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">';
             h += '<span style="font-size:0.65rem;font-weight:800;color:#ea580c;">' + secNum + '</span>';
-            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.9rem;font-weight:800;font-style:italic;line-height:1.2;color:#0f172a;">' + (sec.title || '') + '</div></div>';
+            h += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:0.9rem;font-weight:800;font-style:italic;line-height:1.2;color:#334155;">' + (sec.title || '') + '</div></div>';
 
             if (sec.type === 'checklist' && sec.items) {
                 h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin-bottom:6px;">';
@@ -4592,44 +4592,51 @@ setTimeout(function initOnePager() {
             downloadBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> Generating PDF…';
             var fname = lastGeneratedTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_one_pager.pdf';
 
-            // Scale content to fit exactly one page using CSS zoom
-            // (html2canvas respects zoom, unlike transform:scale)
-            var targetH = 1056; // 11in at 96dpi
-            var contentH = pageEl.scrollHeight;
-            var origZoom = pageEl.style.zoom || '';
-            var origH = pageEl.style.height || '';
-            var origOv = pageEl.style.overflow || '';
-            
-            if (contentH > targetH) {
-                var zoomFactor = targetH / contentH;
-                pageEl.style.zoom = zoomFactor;
-            }
-            pageEl.style.height = targetH + 'px';
-            pageEl.style.overflow = 'hidden';
-
-            setTimeout(function() {
+            // Capture as image then scale to fit one letter page
+            var h2c = window.html2canvas || (html2pdf && html2pdf().constructor && window.html2canvas);
+            if (!h2c) { 
+                // Fallback: use html2pdf normally
                 html2pdf().set({
-                    margin: 0,
-                    filename: fname,
+                    margin: 0, filename: fname,
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', scrollY: -window.scrollY },
                     jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-                }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
-                    while (pdf.internal.getNumberOfPages() > 1) {
-                        pdf.deletePage(pdf.internal.getNumberOfPages());
-                    }
-                }).save().then(function() {
-                    if (typeof showToast === 'function') showToast('PDF downloaded!');
-                }).catch(function(e) {
-                    console.error('PDF err:', e);
-                }).finally(function() {
-                    pageEl.style.zoom = origZoom;
-                    pageEl.style.height = origH;
-                    pageEl.style.overflow = origOv;
-                    downloadBtn.disabled = false;
-                    downloadBtn.innerHTML = orig;
-                });
-            }, 200);
+                }).from(pageEl).save().finally(function() { downloadBtn.disabled = false; downloadBtn.innerHTML = orig; });
+                return;
+            }
+            h2c(pageEl, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: '#fefefe',
+                scrollY: -window.scrollY,
+            }).then(function(canvas) {
+                var imgData = canvas.toDataURL('image/jpeg', 0.95);
+                var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+                var pdf = new JsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
+                var pageW = 8.5;
+                var pageH = 11;
+                // Scale image to fit page width, then check height
+                var imgW = canvas.width;
+                var imgH = canvas.height;
+                var ratio = imgW / imgH;
+                var fitW = pageW;
+                var fitH = pageW / ratio;
+                // If image is taller than page, scale to fit height instead
+                if (fitH > pageH) {
+                    fitH = pageH;
+                    fitW = pageH * ratio;
+                }
+                pdf.addImage(imgData, 'JPEG', 0, 0, fitW, fitH);
+                pdf.save(fname);
+                if (typeof showToast === 'function') showToast('PDF downloaded!');
+            }).catch(function(e) {
+                console.error('PDF err:', e);
+            }).finally(function() {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = orig;
+            });
         });
     }
 

@@ -2341,6 +2341,8 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
   <!-- Catch any errors from main.js module loading -->
   <script>
@@ -2452,7 +2454,7 @@
                       ph += '</div>';
                       ph += '<div style="padding:32px 48px 28px;">';
                       if (data.tags) ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:14px;">' + data.tags + '</div>';
-                      ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#0f172a;">' + headlineHtml + '</div>';
+                      ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#334155;">' + headlineHtml + '</div>';
                       if (data.subtitle) ph += '<div style="font-size:0.85rem;line-height:1.7;color:#475569;margin-bottom:24px;max-width:90%;">' + data.subtitle + '</div>';
                       var stats = data.stats || [];
                       if (stats.length) {
@@ -2470,7 +2472,7 @@
                         var sec = secs[si2];
                         ph += '<div style="margin-bottom:24px;"><div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">';
                         ph += '<span style="font-size:0.8rem;font-weight:700;color:#ea580c;">' + (sec.number||'0'+(si2+1)) + '</span>';
-                        ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#0f172a;">' + (sec.title||'') + '</div></div>';
+                        ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#334155;">' + (sec.title||'') + '</div></div>';
                         if (sec.type === 'checklist' && sec.items) {
                           ph += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;margin-bottom:12px;">';
                           for (var ci = 0; ci < sec.items.length; ci++) {
@@ -2551,21 +2553,10 @@
                           dlBtn.disabled = true;
                           dlBtn.textContent = 'Downloading…';
                           var pageEl = previewFrame.querySelector('.op-page') || previewFrame.firstElementChild || previewFrame;
-                          var cH = pageEl.scrollHeight; if(cH>1056){pageEl.style.zoom=(1056/cH);}
-                          pageEl.style.height = '1056px';
-                          pageEl.style.overflow = 'hidden';
-                          html2pdf().set({
-                            margin: 0,
-                            filename: (headline || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf',
-                            image: { type: 'jpeg', quality: 0.98 },
-                            html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fefefe', scrollY: -window.scrollY },
-                            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-                          }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
-                            while(pdf.internal.getNumberOfPages()>1) pdf.deletePage(pdf.internal.getNumberOfPages());
-                          }).save().then(function() {
-                            pageEl.style.zoom = '';
-                            pageEl.style.height = '';
-                            pageEl.style.overflow = '';
+                          var fn = (headline || 'one-pager').replace(/[^a-zA-Z0-9]/g, '-') + '.pdf';
+                          var h2c = window.html2canvas;
+                          if (!h2c) {
+                            html2pdf().set({margin:0,filename:fn,image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#fefefe',scrollY:-window.scrollY},jsPDF:{unit:'in',format:'letter',orientation:'portrait'}}).from(pageEl).save().then(function(){
                             dlBtn.disabled = false;
                             dlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF';
                           });
@@ -2650,21 +2641,19 @@
       var pageEl = pf.querySelector('.op-page') || pf.firstElementChild;
       if (!pageEl || typeof html2pdf === 'undefined') { alert('Cannot generate PDF'); return; }
       var fname = (item.title || 'one-pager').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
-      var cH2 = pageEl.scrollHeight; if(cH2>1056){pageEl.style.zoom=(1056/cH2);}
-      pageEl.style.height = '1056px';
-      pageEl.style.overflow = 'hidden';
-      html2pdf().set({
-        margin: 0, filename: fname,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fefefe', scrollY: -window.scrollY },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-      }).from(pageEl).toPdf().get('pdf').then(function(pdf) {
-        while(pdf.internal.getNumberOfPages()>1) pdf.deletePage(pdf.internal.getNumberOfPages());
-      }).save().then(function() {
-        pageEl.style.zoom = '';
-        pageEl.style.height = '';
-        pageEl.style.overflow = '';
-      });
+      var h2c2 = window.html2canvas;
+      if (h2c2) {
+        h2c2(pageEl,{scale:2,useCORS:true,allowTaint:true,logging:false,backgroundColor:'#fefefe',scrollY:-window.scrollY}).then(function(cv){
+          var J=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
+          var p=new J({unit:'in',format:'letter',orientation:'portrait'});
+          var iw=cv.width,ih=cv.height,r=iw/ih,fw=8.5,fh=8.5/r;
+          if(fh>11){fh=11;fw=11*r;}
+          p.addImage(cv.toDataURL('image/jpeg',0.95),'JPEG',0,0,fw,fh);
+          p.save(fname);
+        });
+      } else {
+        html2pdf().set({margin:0,filename:fname,image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#fefefe',scrollY:-window.scrollY},jsPDF:{unit:'in',format:'letter',orientation:'portrait'}}).from(pageEl).save();
+      }
     };
 
     // Delete a saved one-pager

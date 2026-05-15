@@ -3052,7 +3052,7 @@ Return ONLY a JSON object with this exact structure:
   "tags": "[PRODUCT CATEGORY] · ONE PAGE · THREE MINUTES",
   "headline": "A bold headline derived from the user's core message (6-10 words). Use their language, make it editorial.",
   "accentWord": "One powerful word from the headline to emphasize (must appear exactly in headline)",
-  "subtitle": "One concise sentence (max 25 words) using the user's core value proposition.",
+  "subtitle": "A 1-2 sentence paragraph (max 40 words) summarizing the core value proposition with specific details.",
   "stats": [
     { "value": "[Number from their text or derived]", "label": "[WHAT IT MEANS, CAPS]" },
     { "value": "[Second metric]", "label": "[LABEL]" },
@@ -3063,7 +3063,7 @@ Return ONLY a JSON object with this exact structure:
       "number": "01",
       "title": "A section title using concepts from the user's text",
       "type": "checklist",
-      "items": ["Feature 1 from their text (keep short)", "Feature 2", "Feature 3"],
+      "items": ["Feature 1 from their text", "Feature 2", "Feature 3", "Feature 4", "Feature 5"],
       "callout": "A provocative one-liner (max 15 words). **Bold the key phrase.**"
     },
     {
@@ -3100,8 +3100,8 @@ CRITICAL RULES:
 - If the user mentions specific numbers/metrics, use them EXACTLY in the stats
 - Generate EXACTLY 3 stats (extract from text or derive logically)
 - accentWord must be a SINGLE word that appears EXACTLY in the headline
-- Checklist: EXACTLY 3 items, keep each under 8 words
-- Comparison: EXACTLY 3 rows, keep each before/after under 8 words
+- Checklist: 4-5 items, keep each under 10 words
+- Comparison: 3 rows, keep each before/after under 10 words
 - Dark banner tags: EXACTLY 4 tags
 - NO testimonials — skip them entirely to save space
 - CTA: NO options array — just headline and description
