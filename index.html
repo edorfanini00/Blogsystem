@@ -2452,7 +2452,7 @@
                       ph += '</div>';
                       ph += '<div style="padding:32px 48px 28px;">';
                       if (data.tags) ph += '<div style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#ea580c;margin-bottom:14px;">' + data.tags + '</div>';
-                      ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#7c3aed;">' + headlineHtml + '</div>';
+                      ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:2.2rem;font-weight:900;font-style:italic;line-height:1.1;margin-bottom:14px;letter-spacing:-0.02em;color:#0f172a;">' + headlineHtml + '</div>';
                       if (data.subtitle) ph += '<div style="font-size:0.85rem;line-height:1.7;color:#475569;margin-bottom:24px;max-width:90%;">' + data.subtitle + '</div>';
                       var stats = data.stats || [];
                       if (stats.length) {
@@ -2470,7 +2470,7 @@
                         var sec = secs[si2];
                         ph += '<div style="margin-bottom:24px;"><div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">';
                         ph += '<span style="font-size:0.8rem;font-weight:700;color:#ea580c;">' + (sec.number||'0'+(si2+1)) + '</span>';
-                        ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#7c3aed;">' + (sec.title||'') + '</div></div>';
+                        ph += '<div style="font-family:Montserrat,Inter,sans-serif;font-size:1.15rem;font-weight:800;font-style:italic;line-height:1.25;color:#0f172a;">' + (sec.title||'') + '</div></div>';
                         if (sec.type === 'checklist' && sec.items) {
                           ph += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;margin-bottom:12px;">';
                           for (var ci = 0; ci < sec.items.length; ci++) {
