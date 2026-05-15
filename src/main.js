@@ -4601,21 +4601,33 @@ setTimeout(function initOnePager() {
 
             // Clone the element and render at exact letter-page portrait dimensions
             var clone = pageEl.cloneNode(true);
-            clone.style.width = '8.5in';
-            clone.style.minHeight = '11in';
+            clone.style.width = '816px'; // 8.5in at 96dpi
+            clone.style.minHeight = '0';
+            clone.style.maxHeight = 'none';
+            clone.style.height = 'auto';
             clone.style.boxSizing = 'border-box';
-            clone.style.position = 'fixed';
+            clone.style.position = 'absolute';
             clone.style.left = '-9999px';
             clone.style.top = '0';
-            clone.style.zIndex = '-1';
             clone.style.overflow = 'visible';
+            clone.style.background = '#fefefe';
             document.body.appendChild(clone);
+
+            // Scale content to fit on one page (1056px = 11in at 96dpi)
+            var contentH = clone.scrollHeight;
+            var pageH = 1056;
+            if (contentH > pageH) {
+                var scaleFactor = pageH / contentH;
+                clone.style.transformOrigin = 'top left';
+                clone.style.transform = 'scale(' + scaleFactor + ')';
+                clone.style.width = (816 / scaleFactor) + 'px';
+            }
 
             html2pdf().set({
                 margin: 0,
                 filename: fname,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, width: clone.offsetWidth, height: clone.offsetHeight },
+                html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#fefefe', width: 816, height: Math.min(contentH, pageH), scrollY: 0, windowWidth: 816 },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
                 pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
             }).from(clone).save().then(function() {
