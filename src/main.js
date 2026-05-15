@@ -4368,7 +4368,7 @@ setTimeout(function initOnePager() {
 
         var headlineHtml = headline;
         if (accentWord && headline.indexOf(accentWord) >= 0) {
-            headlineHtml = headline.replace(accentWord, '<em style="color:#ea580c;font-style:italic;">' + accentWord + '</em>');
+            // accentWord coloring removed — titles stay dark grey
         }
 
         var BG = 'background:radial-gradient(ellipse at 0% 0%,rgba(234,136,80,0.15) 0%,transparent 50%),radial-gradient(ellipse at 100% 0%,rgba(176,148,220,0.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(200,180,230,0.10) 0%,transparent 50%),linear-gradient(180deg,#fefefe 0%,#f8f4f0 100%);';
