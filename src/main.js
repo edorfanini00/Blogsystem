@@ -4321,24 +4321,8 @@ setTimeout(function initOnePager() {
     }
     console.log('✅ One Pager elements found');
 
-    var opColumns = 2;
     var opWithImage = false;
     var lastGeneratedTitle = 'one-pager';
-
-    // Column buttons
-    var colBtns = document.querySelectorAll('.op-col-btn');
-    for (var ci = 0; ci < colBtns.length; ci++) {
-        (function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                for (var j = 0; j < colBtns.length; j++) colBtns[j].classList.remove('active');
-                btn.classList.add('active');
-                opColumns = parseInt(btn.getAttribute('data-cols'));
-                console.log('📐 Columns:', opColumns);
-            });
-        })(colBtns[ci]);
-    }
 
     // Image toggle buttons
     var imgBtns = document.querySelectorAll('.op-img-btn');
@@ -4551,7 +4535,7 @@ setTimeout(function initOnePager() {
         fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ description: description, withImage: opWithImage, columns: opColumns }),
+            body: JSON.stringify({ description: description, withImage: opWithImage }),
         })
         .then(function(res) {
             if (!res.ok) throw new Error('Server ' + res.status);
