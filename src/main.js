@@ -4617,17 +4617,10 @@ setTimeout(function initOnePager() {
                 var pdf = new JsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
                 var pageW = 8.5;
                 var pageH = 11;
-                // Scale image to fit page width, then check height
-                var imgW = canvas.width;
-                var imgH = canvas.height;
-                var ratio = imgW / imgH;
+                // Always fill full page width, cap height at page
                 var fitW = pageW;
-                var fitH = pageW / ratio;
-                // If image is taller than page, scale to fit height instead
-                if (fitH > pageH) {
-                    fitH = pageH;
-                    fitW = pageH * ratio;
-                }
+                var fitH = pageW * (canvas.height / canvas.width);
+                if (fitH > pageH) fitH = pageH;
                 pdf.addImage(imgData, 'JPEG', 0, 0, fitW, fitH);
                 pdf.save(fname);
                 if (typeof showToast === 'function') showToast('PDF downloaded!');
