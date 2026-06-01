@@ -504,6 +504,7 @@ const pageReddit = document.getElementById('pageReddit');
 const pageCampaign = document.getElementById('pageCampaign');
 const pageScheduler = document.getElementById('pageScheduler');
 const pageOnePager = document.getElementById('pageOnePager');
+const pageLeadgen = document.getElementById('pageLeadgen');
 
 navItems.forEach(item => {
     item.addEventListener('click', e => {
@@ -528,6 +529,7 @@ navItems.forEach(item => {
         if (pageCampaign) pageCampaign.style.display = 'none';
         if (pageScheduler) pageScheduler.style.display = 'none';
         if (pageOnePager) pageOnePager.style.display = 'none';
+        if (pageLeadgen) pageLeadgen.style.display = 'none';
 
         // Show selected page
         if (page === 'blogs') {
@@ -553,6 +555,9 @@ navItems.forEach(item => {
             if (typeof initScheduler === 'function') initScheduler();
         } else if (page === 'onepager') {
             if (pageOnePager) pageOnePager.style.display = '';
+        } else if (page === 'leadgen') {
+            if (pageLeadgen) pageLeadgen.style.display = '';
+            if (typeof initLeadgenPage === 'function') initLeadgenPage();
         }
     });
 });
@@ -4640,3 +4645,875 @@ setTimeout(function initOnePager() {
     console.error('❌ One Pager module init error:', initErr);
   }
 }, 0);
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── SCRAPING LEAD GEN MODULE ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+(function () {
+    let leadgenInitialized = false;
+    let leadgenRefreshInterval = null;
+    let leadgenCampaigns = [];
+    let leadgenCurrentCampaignId = null;
+    let leadgenLeads = [];
+    let leadgenSelectedLeads = new Set();
+
+    // ─── Helper Functions ────────────────────────────────────────
+    function lgFormatDate(dateStr) {
+        if (!dateStr) return '—';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+            d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function lgFormatScore(score) {
+        if (score == null) return '<span class="score-badge score-na">—</span>';
+        const cls = score >= 75 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+        return `<span class="score-badge ${cls}">${score}</span>`;
+    }
+
+    function lgStatusBadge(status) {
+        const map = {
+            running: { icon: '🟢', cls: 'lg-status-running' },
+            paused: { icon: '🟡', cls: 'lg-status-paused' },
+            draft: { icon: '⚫', cls: 'lg-status-draft' },
+            error: { icon: '🔴', cls: 'lg-status-error' },
+        };
+        const s = map[status] || map.draft;
+        return `<span class="campaign-status-badge ${s.cls}">${s.icon} ${status || 'draft'}</span>`;
+    }
+
+    function lgShowToast(message, type) {
+        if (typeof showToast === 'function') showToast(message, type);
+    }
+
+    // ─── Initialize Page ─────────────────────────────────────────
+    window.initLeadgenPage = function () {
+        if (!leadgenInitialized) {
+            setupLeadgenTabSwitcher();
+            setupNewCampaignModal();
+            setupLeadgenResultsEvents();
+            leadgenInitialized = true;
+        }
+        fetchCampaigns();
+
+        // Auto-refresh every 30s
+        if (leadgenRefreshInterval) clearInterval(leadgenRefreshInterval);
+        leadgenRefreshInterval = setInterval(() => {
+            const page = localStorage.getItem('orbit_active_page');
+            if (page === 'leadgen') fetchCampaigns();
+        }, 30000);
+    };
+
+    // ─── Tab Switcher ────────────────────────────────────────────
+    function setupLeadgenTabSwitcher() {
+        const tabs = document.getElementById('leadgenTabs');
+        if (!tabs) return;
+        tabs.addEventListener('click', (e) => {
+            const tab = e.target.closest('.leadgen-tab');
+            if (!tab) return;
+            const target = tab.dataset.tab;
+            tabs.querySelectorAll('.leadgen-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('leadgenCampaignsTab').style.display = target === 'campaigns' ? '' : 'none';
+            document.getElementById('leadgenResultsTab').style.display = target === 'results' ? '' : 'none';
+
+            if (target === 'results') refreshLeadgenCampaignSelector();
+        });
+    }
+
+    // ─── Fetch Campaigns ─────────────────────────────────────────
+    async function fetchCampaigns() {
+        try {
+            const res = await fetch(`${API_BASE}/api/campaigns`);
+            if (res.ok) {
+                leadgenCampaigns = await res.json();
+            } else {
+                leadgenCampaigns = [];
+            }
+        } catch {
+            // Server unavailable — use empty list
+            leadgenCampaigns = [];
+        }
+        renderCampaignCards();
+    }
+
+    // ─── Render Campaign Cards ───────────────────────────────────
+    function renderCampaignCards() {
+        const grid = document.getElementById('campaignCardsGrid');
+        if (!grid) return;
+
+        if (!leadgenCampaigns.length) {
+            grid.innerHTML = `
+                <div class="leadgen-empty-state">
+                    <div class="empty-icon">📡</div>
+                    <h4>No campaigns yet</h4>
+                    <p>Create your first scraping campaign to start finding leads.</p>
+                </div>`;
+            return;
+        }
+
+        grid.innerHTML = leadgenCampaigns.map(c => `
+            <div class="campaign-card" data-id="${c.id || c._id}">
+                <div class="campaign-card-header">
+                    ${lgStatusBadge(c.status)}
+                    <span class="campaign-card-name">${c.name || 'Untitled Campaign'}</span>
+                </div>
+                <div class="campaign-card-stats">
+                    <div class="campaign-stat"><span class="campaign-stat-val">${c.stats?.found || 0}</span><span class="campaign-stat-lbl">Found</span></div>
+                    <div class="campaign-stat"><span class="campaign-stat-val">${c.stats?.qualified || 0}</span><span class="campaign-stat-lbl">Qualified</span></div>
+                    <div class="campaign-stat"><span class="campaign-stat-val">${c.stats?.emailed || 0}</span><span class="campaign-stat-lbl">Emailed</span></div>
+                    <div class="campaign-stat"><span class="campaign-stat-val">${c.stats?.replied || 0}</span><span class="campaign-stat-lbl">Replied</span></div>
+                    <div class="campaign-stat"><span class="campaign-stat-val">${c.stats?.meetings || 0}</span><span class="campaign-stat-lbl">Meetings</span></div>
+                </div>
+                <div class="campaign-card-meta">
+                    <span>Last run: ${lgFormatDate(c.lastRun)}</span>
+                    <span>Next run: ${lgFormatDate(c.nextRun)}</span>
+                </div>
+                <div class="campaign-card-actions">
+                    ${c.status === 'running'
+                ? `<button class="btn-small-outline lg-pause-btn" data-id="${c.id || c._id}">⏸ Pause</button>`
+                : `<button class="btn-small-outline lg-resume-btn" data-id="${c.id || c._id}">▶ Resume</button>`}
+                    <button class="btn-small-outline lg-runnow-btn" data-id="${c.id || c._id}">⚡ Run Now</button>
+                    <button class="btn-small-outline lg-viewresults-btn" data-id="${c.id || c._id}">📊 Results</button>
+                    <button class="btn-small-outline btn-danger-text lg-delete-btn" data-id="${c.id || c._id}">🗑</button>
+                </div>
+            </div>
+        `).join('');
+
+        // Bind campaign card action buttons
+        grid.querySelectorAll('.lg-pause-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); pauseCampaign(btn.dataset.id); });
+        });
+        grid.querySelectorAll('.lg-resume-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); resumeCampaign(btn.dataset.id); });
+        });
+        grid.querySelectorAll('.lg-runnow-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); runNowCampaign(btn.dataset.id); });
+        });
+        grid.querySelectorAll('.lg-viewresults-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                switchToResultsTab(btn.dataset.id);
+            });
+        });
+        grid.querySelectorAll('.lg-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); deleteCampaign(btn.dataset.id); });
+        });
+    }
+
+    // ─── Campaign Actions ────────────────────────────────────────
+    async function pauseCampaign(id) {
+        try {
+            await fetch(`${API_BASE}/api/campaigns/${id}/pause`, { method: 'POST' });
+            lgShowToast('Campaign paused');
+            fetchCampaigns();
+        } catch { lgShowToast('Failed to pause campaign', 'error'); }
+    }
+
+    async function resumeCampaign(id) {
+        try {
+            await fetch(`${API_BASE}/api/campaigns/${id}/resume`, { method: 'POST' });
+            lgShowToast('Campaign resumed');
+            fetchCampaigns();
+        } catch { lgShowToast('Failed to resume campaign', 'error'); }
+    }
+
+    async function runNowCampaign(id) {
+        try {
+            await fetch(`${API_BASE}/api/campaigns/${id}/run-now`, { method: 'POST' });
+            lgShowToast('Campaign running now!');
+            fetchCampaigns();
+        } catch { lgShowToast('Failed to run campaign', 'error'); }
+    }
+
+    async function deleteCampaign(id) {
+        if (!confirm('Delete this campaign? This cannot be undone.')) return;
+        try {
+            await fetch(`${API_BASE}/api/campaigns/${id}`, { method: 'DELETE' });
+            lgShowToast('Campaign deleted');
+            fetchCampaigns();
+        } catch { lgShowToast('Failed to delete campaign', 'error'); }
+    }
+
+    function switchToResultsTab(campaignId) {
+        const tabs = document.getElementById('leadgenTabs');
+        tabs.querySelectorAll('.leadgen-tab').forEach(t => t.classList.remove('active'));
+        tabs.querySelector('[data-tab="results"]').classList.add('active');
+        document.getElementById('leadgenCampaignsTab').style.display = 'none';
+        document.getElementById('leadgenResultsTab').style.display = '';
+        refreshLeadgenCampaignSelector();
+        if (campaignId) {
+            const sel = document.getElementById('leadgenCampaignSelect');
+            sel.value = campaignId;
+            leadgenCurrentCampaignId = campaignId;
+            fetchLeads(campaignId);
+        }
+    }
+
+    // ─── Results Tab Events ──────────────────────────────────────
+    function setupLeadgenResultsEvents() {
+        const sel = document.getElementById('leadgenCampaignSelect');
+        if (sel) sel.addEventListener('change', () => {
+            leadgenCurrentCampaignId = sel.value;
+            if (sel.value) fetchLeads(sel.value);
+        });
+
+        const statusFilter = document.getElementById('leadgenStatusFilter');
+        const scoreFilter = document.getElementById('leadgenMinScore');
+        const searchFilter = document.getElementById('leadgenSearchInput');
+
+        [statusFilter, scoreFilter, searchFilter].forEach(el => {
+            if (el) el.addEventListener('input', () => renderLeadTable());
+        });
+
+        const selectAll = document.getElementById('leadSelectAll');
+        if (selectAll) selectAll.addEventListener('change', () => {
+            const checkboxes = document.querySelectorAll('#leadTableBody .lead-checkbox');
+            checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+            leadgenSelectedLeads.clear();
+            if (selectAll.checked) {
+                leadgenLeads.forEach(l => leadgenSelectedLeads.add(l.id || l._id));
+            }
+            updateBulkActions();
+        });
+
+        // Bulk action buttons
+        document.getElementById('bulkEmailBtn')?.addEventListener('click', bulkEmail);
+        document.getElementById('bulkCallBtn')?.addEventListener('click', bulkCall);
+        document.getElementById('bulkExportBtn')?.addEventListener('click', bulkExportCSV);
+        document.getElementById('bulkGhlBtn')?.addEventListener('click', bulkPushGHL);
+    }
+
+    function refreshLeadgenCampaignSelector() {
+        const sel = document.getElementById('leadgenCampaignSelect');
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">Select a campaign…</option>' +
+            leadgenCampaigns.map(c =>
+                `<option value="${c.id || c._id}">${c.name || 'Untitled'}</option>`
+            ).join('');
+        if (prev && leadgenCampaigns.find(c => (c.id || c._id) === prev)) {
+            sel.value = prev;
+        }
+    }
+
+    // ─── Fetch & Render Leads ────────────────────────────────────
+    async function fetchLeads(campaignId) {
+        try {
+            const res = await fetch(`${API_BASE}/api/campaigns/${campaignId}/leads`);
+            if (res.ok) {
+                leadgenLeads = await res.json();
+                // Update stats bar
+                const campaign = leadgenCampaigns.find(c => (c.id || c._id) === campaignId);
+                if (campaign?.stats) {
+                    document.getElementById('statFound').textContent = campaign.stats.found || 0;
+                    document.getElementById('statQualified').textContent = campaign.stats.qualified || 0;
+                    document.getElementById('statEmailed').textContent = campaign.stats.emailed || 0;
+                    document.getElementById('statReplied').textContent = campaign.stats.replied || 0;
+                    document.getElementById('statMeetings').textContent = campaign.stats.meetings || 0;
+                }
+            } else {
+                leadgenLeads = [];
+            }
+        } catch {
+            leadgenLeads = [];
+        }
+        renderLeadTable();
+    }
+
+    function renderLeadTable() {
+        const tbody = document.getElementById('leadTableBody');
+        const empty = document.getElementById('leadTableEmpty');
+        const table = document.getElementById('leadTable');
+        if (!tbody) return;
+
+        // Apply filters
+        const statusFilter = document.getElementById('leadgenStatusFilter')?.value || 'all';
+        const minScore = parseInt(document.getElementById('leadgenMinScore')?.value) || 0;
+        const search = (document.getElementById('leadgenSearchInput')?.value || '').toLowerCase();
+
+        let filtered = leadgenLeads.filter(lead => {
+            if (statusFilter !== 'all' && lead.status !== statusFilter) return false;
+            if (lead.score != null && lead.score < minScore) return false;
+            if (search && !(lead.company?.name || '').toLowerCase().includes(search) &&
+                !(lead.contact?.name || '').toLowerCase().includes(search)) return false;
+            return true;
+        });
+
+        if (!filtered.length) {
+            tbody.innerHTML = '';
+            if (table) table.style.display = 'none';
+            if (empty) empty.style.display = '';
+            return;
+        }
+
+        if (table) table.style.display = '';
+        if (empty) empty.style.display = 'none';
+
+        tbody.innerHTML = filtered.map(lead => {
+            const id = lead.id || lead._id;
+            const checked = leadgenSelectedLeads.has(id) ? 'checked' : '';
+            const company = lead.company || {};
+            const contact = lead.contact || {};
+
+            // Email status
+            let emailStatus = '❌ Not sent';
+            if (lead.emailStatus === 'sent') emailStatus = `✅ Sent ${lgFormatDate(lead.emailSentAt)}`;
+            else if (lead.emailStatus === 'scheduled') emailStatus = `⏳ Scheduled ${lgFormatDate(lead.emailScheduledAt)}`;
+
+            // Reply status
+            let replyStatus = '— N/A';
+            if (lead.replyStatus === 'replied') replyStatus = `✅ Replied ${lgFormatDate(lead.repliedAt)}`;
+            else if (lead.emailStatus === 'sent') replyStatus = '❌ No reply';
+
+            // Next action
+            let nextAction = '—';
+            if (lead.nextAction === 'email') nextAction = `📧 Email ${lgFormatDate(lead.nextActionDate)}`;
+            else if (lead.nextAction === 'call') nextAction = `📞 Call ${lgFormatDate(lead.nextActionDate)}`;
+            else if (lead.nextAction === 'done') nextAction = '✅ Done';
+
+            return `<tr class="lead-row" data-id="${id}">
+                <td><input type="checkbox" class="lead-checkbox" data-id="${id}" ${checked} /></td>
+                <td>${lgFormatScore(lead.score)}</td>
+                <td>
+                    <div class="lead-company-name">${company.name || '—'}</div>
+                    <div class="lead-company-meta">${company.city || ''}${company.state ? ', ' + company.state : ''}</div>
+                    <div class="lead-company-meta">${company.employees ? '~' + company.employees + ' emp' : ''}${company.revenue ? ' · $' + company.revenue : ''}</div>
+                </td>
+                <td>
+                    <div class="lead-contact-name">${contact.name || '—'}</div>
+                    <div class="lead-contact-meta">${contact.title || ''}</div>
+                    <div class="lead-contact-meta">${contact.email || ''}</div>
+                </td>
+                <td><span class="lead-email-status">${emailStatus}</span></td>
+                <td><span class="lead-reply-status">${replyStatus}</span></td>
+                <td><span class="lead-next-action">${nextAction}</span></td>
+            </tr>`;
+        }).join('');
+
+        // Bind row click → open lead detail modal
+        tbody.querySelectorAll('.lead-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.type === 'checkbox') return;
+                openLeadDetailModal(row.dataset.id);
+            });
+        });
+
+        // Bind checkboxes
+        tbody.querySelectorAll('.lead-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.checked) leadgenSelectedLeads.add(cb.dataset.id);
+                else leadgenSelectedLeads.delete(cb.dataset.id);
+                updateBulkActions();
+            });
+        });
+    }
+
+    function updateBulkActions() {
+        const bar = document.getElementById('leadgenBulkActions');
+        const count = document.getElementById('leadgenSelectedCount');
+        if (leadgenSelectedLeads.size > 0) {
+            bar.style.display = '';
+            count.textContent = `${leadgenSelectedLeads.size} selected`;
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    // ─── Lead Detail Modal ───────────────────────────────────────
+    async function openLeadDetailModal(leadId) {
+        let lead;
+        try {
+            const res = await fetch(`${API_BASE}/api/leads/${leadId}`);
+            if (res.ok) lead = await res.json();
+        } catch { }
+        if (!lead) lead = leadgenLeads.find(l => (l.id || l._id) === leadId);
+        if (!lead) { lgShowToast('Lead not found', 'error'); return; }
+
+        // Remove any existing modal
+        document.getElementById('leadDetailModal')?.remove();
+
+        const company = lead.company || {};
+        const contact = lead.contact || {};
+        const qualification = lead.qualification || {};
+        const outreach = lead.outreachTimeline || [];
+        const contacts = lead.contacts || [contact];
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'leadDetailModal';
+        modal.innerHTML = `
+            <div class="lead-modal" onclick="event.stopPropagation()">
+                <div class="lead-modal-header">
+                    <div class="lead-modal-title">
+                        <h2>${company.name || 'Unknown Company'}</h2>
+                        ${lgFormatScore(lead.score)}
+                    </div>
+                    <button class="lead-modal-close" id="leadModalClose">✕</button>
+                </div>
+
+                <div class="lead-modal-body">
+                    <!-- Company Info -->
+                    <div class="lead-section">
+                        <h4>🏢 Company Info</h4>
+                        <div class="lead-info-grid">
+                            ${company.website ? `<div class="lead-info-item"><span class="lead-info-label">Website</span><a href="${company.website}" target="_blank">${company.website}</a></div>` : ''}
+                            ${company.address ? `<div class="lead-info-item"><span class="lead-info-label">Address</span><span>${company.address}</span></div>` : ''}
+                            ${company.phone ? `<div class="lead-info-item"><span class="lead-info-label">Phone</span><span>${company.phone}</span></div>` : ''}
+                            ${company.employees ? `<div class="lead-info-item"><span class="lead-info-label">Employees</span><span>${company.employees}</span></div>` : ''}
+                            ${company.revenue ? `<div class="lead-info-item"><span class="lead-info-label">Revenue</span><span>$${company.revenue}</span></div>` : ''}
+                            ${company.products ? `<div class="lead-info-item"><span class="lead-info-label">Products</span><span>${company.products}</span></div>` : ''}
+                            ${company.certifications ? `<div class="lead-info-item"><span class="lead-info-label">Certifications</span><span>${company.certifications}</span></div>` : ''}
+                            ${company.software ? `<div class="lead-info-item"><span class="lead-info-label">Software</span><span>${company.software}</span></div>` : ''}
+                            ${company.socialLinks ? `<div class="lead-info-item"><span class="lead-info-label">Social</span><span>${Array.isArray(company.socialLinks) ? company.socialLinks.map(s => `<a href="${s}" target="_blank">${s}</a>`).join(', ') : company.socialLinks}</span></div>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Contacts -->
+                    <div class="lead-section">
+                        <h4>👥 Contacts</h4>
+                        <div class="lead-contacts-list">
+                            ${contacts.map(c => `
+                                <div class="lead-contact-card">
+                                    <div class="lead-contact-name-lg">${c.name || '—'}</div>
+                                    <div class="lead-contact-detail">${c.title || ''}</div>
+                                    <div class="lead-contact-detail">${c.email || ''}</div>
+                                    <div class="lead-contact-detail">${c.phone || ''}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- AI Qualification -->
+                    <div class="lead-section">
+                        <h4>🤖 AI Qualification</h4>
+                        <div class="lead-qual-score">
+                            <div class="lead-qual-bar"><div class="lead-qual-fill" style="width:${qualification.score || lead.score || 0}%; background:${(qualification.score || lead.score || 0) >= 75 ? '#10b981' : (qualification.score || lead.score || 0) >= 50 ? '#f59e0b' : '#ef4444'};"></div></div>
+                            <span class="lead-qual-num">${qualification.score || lead.score || 0}/100</span>
+                        </div>
+                        ${qualification.reasoning ? `<p class="lead-qual-reasoning">${qualification.reasoning}</p>` : ''}
+                        ${qualification.painPoints?.length ? `
+                            <div class="lead-pain-points">
+                                <strong>Pain Points:</strong>
+                                <ul>${qualification.painPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Outreach Timeline -->
+                    <div class="lead-section">
+                        <h4>📬 Outreach Timeline</h4>
+                        <div class="outreach-timeline">
+                            ${outreach.length ? outreach.map(o => `
+                                <div class="outreach-event">
+                                    <span class="outreach-icon">${o.type === 'email_sent' ? '📧' : o.type === 'reply_received' ? '💬' : o.type === 'call_made' ? '📞' : '📌'}</span>
+                                    <div class="outreach-info">
+                                        <span class="outreach-desc">${o.description || o.type}</span>
+                                        <span class="outreach-date">${lgFormatDate(o.date)}</span>
+                                    </div>
+                                </div>
+                            `).join('') : '<p style="color:var(--text-muted);font-size:0.85rem;">No outreach activity yet.</p>'}
+                        </div>
+                    </div>
+
+                    <!-- Email Draft -->
+                    <div class="lead-section">
+                        <h4>✉️ Email Draft</h4>
+                        <div class="lead-email-draft">
+                            <div class="form-group">
+                                <label>To</label>
+                                <input type="text" id="leadEmailTo" value="${contact.email || ''}" class="lead-modal-input" />
+                            </div>
+                            <div class="form-group">
+                                <label>Subject</label>
+                                <input type="text" id="leadEmailSubject" value="${lead.emailDraft?.subject || ''}" class="lead-modal-input" />
+                            </div>
+                            <div class="form-group">
+                                <label>Body</label>
+                                <textarea id="leadEmailBody" class="lead-modal-textarea" rows="6">${lead.emailDraft?.body || ''}</textarea>
+                            </div>
+                            <button class="btn-primary" id="leadSendEmailBtn" style="margin-top:8px; padding:10px 24px; font-size:0.85rem;">📧 Send Now</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="lead-modal-actions">
+                    <button class="btn-small-outline" id="leadActionEmail">📧 Email</button>
+                    <button class="btn-small-outline" id="leadActionCall">📞 AI Call</button>
+                    <button class="btn-small-outline" id="leadActionGHL">→ Push to GHL</button>
+                    <button class="btn-small-outline" id="leadActionEdit">✏️ Edit</button>
+                    <button class="btn-small-outline btn-danger-text" id="leadActionDisqualify">❌ Disqualify</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Close modal
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        document.getElementById('leadModalClose').addEventListener('click', () => modal.remove());
+
+        // Send email
+        document.getElementById('leadSendEmailBtn').addEventListener('click', async () => {
+            const to = document.getElementById('leadEmailTo').value;
+            const subject = document.getElementById('leadEmailSubject').value;
+            const body = document.getElementById('leadEmailBody').value;
+            if (!to || !subject) { lgShowToast('Fill in email and subject', 'error'); return; }
+            try {
+                await fetch(`${API_BASE}/api/leads/${leadId}/email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to, subject, body }),
+                });
+                lgShowToast('Email sent!');
+            } catch { lgShowToast('Failed to send email', 'error'); }
+        });
+
+        // Action buttons
+        document.getElementById('leadActionEmail').addEventListener('click', () => {
+            document.getElementById('leadEmailTo').focus();
+        });
+        document.getElementById('leadActionCall').addEventListener('click', async () => {
+            try {
+                await fetch(`${API_BASE}/api/leads/${leadId}/call`, { method: 'POST' });
+                lgShowToast('AI call initiated');
+            } catch { lgShowToast('Call failed', 'error'); }
+        });
+        document.getElementById('leadActionGHL').addEventListener('click', async () => {
+            try {
+                await fetch(`${API_BASE}/api/leads/${leadId}/push-ghl`, { method: 'POST' });
+                lgShowToast('Pushed to GHL!');
+            } catch { lgShowToast('Push failed', 'error'); }
+        });
+        document.getElementById('leadActionEdit').addEventListener('click', () => {
+            lgShowToast('Edit mode — modify fields directly in the modal');
+        });
+        document.getElementById('leadActionDisqualify').addEventListener('click', async () => {
+            try {
+                await fetch(`${API_BASE}/api/leads/${leadId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'disqualified' }),
+                });
+                lgShowToast('Lead disqualified');
+                modal.remove();
+                if (leadgenCurrentCampaignId) fetchLeads(leadgenCurrentCampaignId);
+            } catch { lgShowToast('Failed to disqualify', 'error'); }
+        });
+    }
+
+    // ─── Bulk Actions ────────────────────────────────────────────
+    async function bulkEmail() {
+        lgShowToast(`Sending emails to ${leadgenSelectedLeads.size} leads…`);
+        for (const id of leadgenSelectedLeads) {
+            try { await fetch(`${API_BASE}/api/leads/${id}/email`, { method: 'POST' }); } catch { }
+        }
+        lgShowToast('Bulk email complete!');
+        leadgenSelectedLeads.clear();
+        updateBulkActions();
+        if (leadgenCurrentCampaignId) fetchLeads(leadgenCurrentCampaignId);
+    }
+
+    async function bulkCall() {
+        lgShowToast(`Initiating calls for ${leadgenSelectedLeads.size} leads…`);
+        for (const id of leadgenSelectedLeads) {
+            try { await fetch(`${API_BASE}/api/leads/${id}/call`, { method: 'POST' }); } catch { }
+        }
+        lgShowToast('Bulk calls initiated!');
+        leadgenSelectedLeads.clear();
+        updateBulkActions();
+    }
+
+    function bulkExportCSV() {
+        const selected = leadgenLeads.filter(l => leadgenSelectedLeads.has(l.id || l._id));
+        if (!selected.length) return;
+        const headers = ['Company', 'Score', 'Contact', 'Email', 'Title', 'City', 'State', 'Status'];
+        const rows = selected.map(l => [
+            l.company?.name || '', l.score || '', l.contact?.name || '', l.contact?.email || '',
+            l.contact?.title || '', l.company?.city || '', l.company?.state || '', l.status || ''
+        ]);
+        const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'leads_export.csv'; a.click();
+        URL.revokeObjectURL(url);
+        lgShowToast('CSV exported!');
+    }
+
+    async function bulkPushGHL() {
+        lgShowToast(`Pushing ${leadgenSelectedLeads.size} leads to GHL…`);
+        for (const id of leadgenSelectedLeads) {
+            try { await fetch(`${API_BASE}/api/leads/${id}/push-ghl`, { method: 'POST' }); } catch { }
+        }
+        lgShowToast('Pushed to GHL!');
+        leadgenSelectedLeads.clear();
+        updateBulkActions();
+    }
+
+    // ─── New Campaign Modal ──────────────────────────────────────
+    function setupNewCampaignModal() {
+        const btn = document.getElementById('newCampaignBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', () => {
+            // Remove existing modal if any
+            document.getElementById('newCampaignModal')?.remove();
+
+            const US_REGIONS = {
+                'Southeast': ['Alabama', 'Arkansas', 'Florida', 'Georgia', 'Kentucky', 'Louisiana', 'Mississippi', 'North Carolina', 'South Carolina', 'Tennessee', 'Virginia', 'West Virginia'],
+                'Northeast': ['Connecticut', 'Delaware', 'Maine', 'Maryland', 'Massachusetts', 'New Hampshire', 'New Jersey', 'New York', 'Pennsylvania', 'Rhode Island', 'Vermont'],
+                'Midwest': ['Illinois', 'Indiana', 'Iowa', 'Kansas', 'Michigan', 'Minnesota', 'Missouri', 'Nebraska', 'North Dakota', 'Ohio', 'South Dakota', 'Wisconsin'],
+                'West': ['Alaska', 'California', 'Colorado', 'Hawaii', 'Idaho', 'Montana', 'Nevada', 'Oregon', 'Utah', 'Washington', 'Wyoming'],
+                'Southwest': ['Arizona', 'New Mexico', 'Oklahoma', 'Texas'],
+            };
+
+            const SUB_CATEGORIES = {
+                'food_beverage': ['Dairy', 'Bakery', 'Meat Processing', 'Seafood', 'Snack Foods', 'Beverage', 'Frozen Foods', 'Condiments/Sauces'],
+                'healthcare': ['Hospitals', 'Clinics', 'Pharma', 'Medical Devices', 'Home Health', 'Mental Health'],
+                'technology': ['SaaS', 'Hardware', 'IT Services', 'Cybersecurity', 'AI/ML', 'Cloud'],
+                'construction': ['General Contractor', 'Specialty Trades', 'Heavy Civil', 'Residential', 'Commercial'],
+                'professional_services': ['Legal', 'Accounting', 'Consulting', 'HR', 'Marketing'],
+                'retail': ['E-commerce', 'Brick & Mortar', 'Wholesale', 'Specialty', 'Grocery'],
+            };
+
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.id = 'newCampaignModal';
+            modal.innerHTML = `
+                <div class="new-campaign-modal" onclick="event.stopPropagation()">
+                    <div class="ncm-header">
+                        <h2>🚀 New Scraping Campaign</h2>
+                        <button class="lead-modal-close" id="ncmClose">✕</button>
+                    </div>
+                    <div class="ncm-body">
+                        <div class="form-group">
+                            <label>Campaign Name</label>
+                            <input type="text" id="ncmName" class="lead-modal-input" placeholder="e.g. Southeast F&B Q1 2026" />
+                        </div>
+
+                        <div class="ncm-form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label>Industry</label>
+                                <select id="ncmIndustry" class="lead-modal-select">
+                                    <option value="food_beverage">Food & Beverage Manufacturing</option>
+                                    <option value="healthcare">Healthcare</option>
+                                    <option value="technology">Technology</option>
+                                    <option value="construction">Construction</option>
+                                    <option value="professional_services">Professional Services</option>
+                                    <option value="retail">Retail</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label>Schedule</label>
+                                <select id="ncmSchedule" class="lead-modal-select">
+                                    <option value="2">Every 2 hours</option>
+                                    <option value="4">Every 4 hours</option>
+                                    <option value="6">Every 6 hours</option>
+                                    <option value="12" selected>Every 12 hours</option>
+                                    <option value="24">Every 24 hours</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Sub-categories</label>
+                            <div class="ncm-subcats" id="ncmSubcats">
+                                ${(SUB_CATEGORIES['food_beverage'] || []).map(sc =>
+                `<label class="ncm-checkbox-label"><input type="checkbox" value="${sc}" />${sc}</label>`
+            ).join('')}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Custom Keywords <small>(comma-separated)</small></label>
+                            <textarea id="ncmKeywords" class="lead-modal-textarea" rows="2" placeholder="ERP, food safety, HACCP, automation…"></textarea>
+                        </div>
+
+                        <div class="ncm-form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label>Employees (min)</label>
+                                <input type="number" id="ncmEmpMin" class="lead-modal-input" value="20" />
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label>Employees (max)</label>
+                                <input type="number" id="ncmEmpMax" class="lead-modal-input" value="500" />
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label>Revenue min ($)</label>
+                                <input type="number" id="ncmRevMin" class="lead-modal-input" value="1000000" />
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label>Revenue max ($)</label>
+                                <input type="number" id="ncmRevMax" class="lead-modal-input" value="50000000" />
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Regions</label>
+                            <div class="ncm-regions" id="ncmRegions">
+                                ${Object.entries(US_REGIONS).map(([region, states]) => `
+                                    <div class="ncm-region-group">
+                                        <label class="ncm-region-header"><input type="checkbox" class="ncm-region-toggle" data-region="${region}" /><strong>${region}</strong></label>
+                                        <div class="ncm-state-list">
+                                            ${states.map(s => `<label class="ncm-checkbox-label ncm-state-cb"><input type="checkbox" value="${s}" class="ncm-state" data-region="${region}" />${s}</label>`).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Cities <small>(comma-separated, optional)</small></label>
+                            <input type="text" id="ncmCities" class="lead-modal-input" placeholder="Miami, Atlanta, Nashville…" />
+                        </div>
+
+                        <div class="ncm-outreach-section">
+                            <h4>📧 Outreach Settings</h4>
+                            <div class="ncm-form-row">
+                                <div class="form-group" style="flex:1;">
+                                    <label>Auto-email</label>
+                                    <label class="toggle-switch"><input type="checkbox" id="ncmAutoEmail" checked /><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="form-group" style="flex:1;">
+                                    <label>Min score for email</label>
+                                    <input type="number" id="ncmMinScoreEmail" class="lead-modal-input" value="70" />
+                                </div>
+                                <div class="form-group" style="flex:1;">
+                                    <label>Follow-up days</label>
+                                    <select id="ncmFollowUpDays" class="lead-modal-select">
+                                        <option value="2">2 days</option>
+                                        <option value="3" selected>3 days</option>
+                                        <option value="5">5 days</option>
+                                        <option value="7">7 days</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex:1;">
+                                    <label>Max emails/lead</label>
+                                    <select id="ncmMaxEmails" class="lead-modal-select">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3" selected>3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="ncm-form-row">
+                                <div class="form-group" style="flex:1;">
+                                    <label>Auto-call</label>
+                                    <label class="toggle-switch"><input type="checkbox" id="ncmAutoCall" /><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="form-group" style="flex:1;">
+                                    <label>Push to GHL</label>
+                                    <label class="toggle-switch"><input type="checkbox" id="ncmAutoGHL" /><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="form-group" style="flex:1;">
+                                    <label>Min score for GHL</label>
+                                    <input type="number" id="ncmMinScoreGHL" class="lead-modal-input" value="80" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ncm-footer">
+                        <button class="btn-outline" id="ncmCancelBtn">Cancel</button>
+                        <button class="btn-primary" id="ncmDeployBtn" style="margin-top:0; padding:12px 28px;">Deploy Agent 🚀</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Close handlers
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            document.getElementById('ncmClose').addEventListener('click', () => modal.remove());
+            document.getElementById('ncmCancelBtn').addEventListener('click', () => modal.remove());
+
+            // Industry change → update sub-categories
+            const industrySelect = document.getElementById('ncmIndustry');
+            industrySelect.addEventListener('change', () => {
+                const subcatsDiv = document.getElementById('ncmSubcats');
+                const subs = SUB_CATEGORIES[industrySelect.value] || [];
+                subcatsDiv.innerHTML = subs.map(sc =>
+                    `<label class="ncm-checkbox-label"><input type="checkbox" value="${sc}" />${sc}</label>`
+                ).join('') || '<span style="color:var(--text-muted);font-size:0.85rem;">No sub-categories for this industry</span>';
+            });
+
+            // Region toggle → select all states in region
+            modal.querySelectorAll('.ncm-region-toggle').forEach(toggle => {
+                toggle.addEventListener('change', () => {
+                    const region = toggle.dataset.region;
+                    const checked = toggle.checked;
+                    modal.querySelectorAll(`.ncm-state[data-region="${region}"]`).forEach(cb => { cb.checked = checked; });
+                });
+            });
+
+            // Deploy button
+            document.getElementById('ncmDeployBtn').addEventListener('click', async () => {
+                const name = document.getElementById('ncmName').value.trim();
+                if (!name) { lgShowToast('Enter a campaign name', 'error'); return; }
+
+                const selectedStates = [...modal.querySelectorAll('.ncm-state:checked')].map(cb => cb.value);
+                const selectedSubcats = [...modal.querySelectorAll('#ncmSubcats input:checked')].map(cb => cb.value);
+
+                const campaignData = {
+                    name,
+                    industry: document.getElementById('ncmIndustry').value,
+                    subCategories: selectedSubcats,
+                    keywords: document.getElementById('ncmKeywords').value.split(',').map(k => k.trim()).filter(Boolean),
+                    employeeRange: {
+                        min: parseInt(document.getElementById('ncmEmpMin').value) || 0,
+                        max: parseInt(document.getElementById('ncmEmpMax').value) || 99999,
+                    },
+                    revenueRange: {
+                        min: parseInt(document.getElementById('ncmRevMin').value) || 0,
+                        max: parseInt(document.getElementById('ncmRevMax').value) || 999999999,
+                    },
+                    regions: selectedStates,
+                    cities: document.getElementById('ncmCities').value.split(',').map(c => c.trim()).filter(Boolean),
+                    schedule: parseInt(document.getElementById('ncmSchedule').value),
+                    outreach: {
+                        autoEmail: document.getElementById('ncmAutoEmail').checked,
+                        minScoreEmail: parseInt(document.getElementById('ncmMinScoreEmail').value) || 70,
+                        followUpDays: parseInt(document.getElementById('ncmFollowUpDays').value) || 3,
+                        maxEmails: parseInt(document.getElementById('ncmMaxEmails').value) || 3,
+                        autoCall: document.getElementById('ncmAutoCall').checked,
+                        autoGHL: document.getElementById('ncmAutoGHL').checked,
+                        minScoreGHL: parseInt(document.getElementById('ncmMinScoreGHL').value) || 80,
+                    },
+                };
+
+                try {
+                    const deployBtn = document.getElementById('ncmDeployBtn');
+                    deployBtn.disabled = true;
+                    deployBtn.textContent = 'Deploying…';
+
+                    const createRes = await fetch(`${API_BASE}/api/campaigns`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(campaignData),
+                    });
+                    const created = await createRes.json();
+                    const campaignId = created.id || created._id;
+
+                    // Deploy the agent
+                    await fetch(`${API_BASE}/api/campaigns/${campaignId}/deploy`, { method: 'POST' });
+
+                    lgShowToast('🚀 Campaign deployed!');
+                    modal.remove();
+                    fetchCampaigns();
+                } catch (err) {
+                    lgShowToast('Failed to deploy campaign: ' + (err.message || 'Unknown error'), 'error');
+                    const deployBtn = document.getElementById('ncmDeployBtn');
+                    if (deployBtn) { deployBtn.disabled = false; deployBtn.textContent = 'Deploy Agent 🚀'; }
+                }
+            });
+        });
+    }
+
+    console.log('✅ Scraping Lead Gen module ready');
+})();

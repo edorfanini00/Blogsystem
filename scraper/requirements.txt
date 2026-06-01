@@ -1,0 +1,9 @@
+# Celeritech Orbit Lead Generation Service — Dependencies
+scrapling[fetchers]
+apscheduler>=3.10,<4
+redis>=5.0
+anthropic>=0.39
+python-dotenv>=1.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27

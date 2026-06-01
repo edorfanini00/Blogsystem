@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev:full": "concurrently \"npm run server\" \"npm run client\" \"npm run scraper\"",
     "server": "node server/server.js",
     "client": "vite",
+    "scraper": "python -m scraper.main",
+    "scraper:setup": "pip install -r scraper/requirements.txt && python -c \"from scrapling.fetchers import StealthyFetcher; print('Scrapling ready')\"",
     "build": "vite build",
     "start": "concurrently \"npm run server\" \"npm run client\""
   },

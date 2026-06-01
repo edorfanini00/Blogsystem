@@ -10,7 +10,8 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
-import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
+// @vercel/blob/client is loaded lazily to avoid hanging in local dev
+let generateClientTokenFromReadWriteToken;
 const require = createRequire(import.meta.url);
 let pdfParse;
 try { pdfParse = require('pdf-parse'); } catch { pdfParse = null; }
@@ -2162,6 +2163,11 @@ app.post('/api/media/upload-token', async (req, res) => {
         }
 
         const pathname = `orbit-media/${Date.now()}-${filename}`;
+        // Lazy-load @vercel/blob/client only when needed
+        if (!generateClientTokenFromReadWriteToken) {
+            const blobModule = await import('@vercel/blob/client');
+            generateClientTokenFromReadWriteToken = blobModule.generateClientTokenFromReadWriteToken;
+        }
         const token = await generateClientTokenFromReadWriteToken({
             token: process.env.BLOB_READ_WRITE_TOKEN,
             pathname,
@@ -3155,6 +3161,872 @@ CRITICAL RULES:
         send({ type: 'error', error: err.message || 'Generation failed' });
     }
     res.end();
+});
+
+// ============================================
+// LEAD GENERATION - Campaigns & Leads API
+// ============================================
+
+const CAMPAIGNS_FILE = isVercel ? '/tmp/campaigns.json' : join(__dirname, 'campaigns.json');
+const LEADS_FILE = isVercel ? '/tmp/leads.json' : join(__dirname, 'leads.json');
+
+// ─── Campaign Storage (Redis + JSON fallback) ──────────────────
+async function loadCampaigns() {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get('orbit_campaigns');
+            return data ? JSON.parse(data) : [];
+        } catch (err) {
+            console.error('Redis loadCampaigns error:', err.message);
+            // Fall through to file
+        }
+    }
+    if (!existsSync(CAMPAIGNS_FILE)) return [];
+    try { return JSON.parse(readFileSync(CAMPAIGNS_FILE, 'utf-8')); } catch { return []; }
+}
+
+async function saveCampaigns(campaigns) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set('orbit_campaigns', JSON.stringify(campaigns));
+        } catch (err) {
+            console.error('Redis saveCampaigns error:', err.message);
+        }
+    }
+    // Always write to file as well (local fallback)
+    try { writeFileSync(CAMPAIGNS_FILE, JSON.stringify(campaigns, null, 2), 'utf-8'); } catch { }
+}
+
+// ─── Lead Storage (Redis + JSON fallback) ───────────────────────
+async function loadLeads() {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get('orbit_leads');
+            return data ? JSON.parse(data) : [];
+        } catch (err) {
+            console.error('Redis loadLeads error:', err.message);
+        }
+    }
+    if (!existsSync(LEADS_FILE)) return [];
+    try { return JSON.parse(readFileSync(LEADS_FILE, 'utf-8')); } catch { return []; }
+}
+
+async function saveLeads(leads) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set('orbit_leads', JSON.stringify(leads));
+        } catch (err) {
+            console.error('Redis saveLeads error:', err.message);
+        }
+    }
+    try { writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2), 'utf-8'); } catch { }
+}
+
+async function loadCampaignLeads(campaignId) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get(`orbit_campaign:${campaignId}:leads`);
+            return data ? JSON.parse(data) : [];
+        } catch (err) {
+            console.error('Redis loadCampaignLeads error:', err.message);
+        }
+    }
+    // Fallback: filter all leads by campaignId
+    const allLeads = await loadLeads();
+    return allLeads.filter(l => l.campaignId === campaignId);
+}
+
+async function saveCampaignLeads(campaignId, leads) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set(`orbit_campaign:${campaignId}:leads`, JSON.stringify(leads));
+        } catch (err) {
+            console.error('Redis saveCampaignLeads error:', err.message);
+        }
+    }
+    // Also sync to global leads file
+    const allLeads = await loadLeads();
+    const otherLeads = allLeads.filter(l => l.campaignId !== campaignId);
+    await saveLeads([...otherLeads, ...leads]);
+}
+
+async function loadLead(leadId) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get(`orbit_lead:${leadId}`);
+            if (data) return JSON.parse(data);
+        } catch (err) {
+            console.error('Redis loadLead error:', err.message);
+        }
+    }
+    const allLeads = await loadLeads();
+    return allLeads.find(l => l.id === leadId) || null;
+}
+
+async function saveLead(lead) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set(`orbit_lead:${lead.id}`, JSON.stringify(lead));
+        } catch (err) {
+            console.error('Redis saveLead error:', err.message);
+        }
+    }
+    // Sync to global leads and campaign leads
+    const allLeads = await loadLeads();
+    const idx = allLeads.findIndex(l => l.id === lead.id);
+    if (idx >= 0) {
+        allLeads[idx] = lead;
+    } else {
+        allLeads.push(lead);
+    }
+    await saveLeads(allLeads);
+
+    // Also update campaign leads array
+    if (lead.campaignId) {
+        const campLeads = await loadCampaignLeads(lead.campaignId);
+        const cIdx = campLeads.findIndex(l => l.id === lead.id);
+        if (cIdx >= 0) {
+            campLeads[cIdx] = lead;
+        } else {
+            campLeads.push(lead);
+        }
+        await saveCampaignLeads(lead.campaignId, campLeads);
+    }
+}
+
+// ─── POST /api/campaigns — Create campaign ─────────────────────
+app.post('/api/campaigns', async (req, res) => {
+    try {
+        const { name, config } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Campaign name is required' });
+        }
+
+        const campaign = {
+            id: 'camp_' + Date.now().toString(36),
+            name,
+            config: {
+                industry: config?.industry || '',
+                subCategories: config?.subCategories || [],
+                customKeywords: config?.customKeywords || [],
+                employeeRange: config?.employeeRange || { min: 10, max: 500 },
+                revenueRange: config?.revenueRange || { min: 0, max: 0 },
+                regions: config?.regions || [],
+                cities: config?.cities || [],
+                scheduleHours: config?.scheduleHours || 24,
+                autoEmail: config?.autoEmail ?? false,
+                minScoreForEmail: config?.minScoreForEmail || 70,
+                minScoreForGHL: config?.minScoreForGHL || 80,
+                autoCall: config?.autoCall ?? false,
+                maxEmailsPerLead: config?.maxEmailsPerLead || 3,
+                followUpDays: config?.followUpDays || [3, 7, 14],
+                emailTemplate: config?.emailTemplate || '',
+            },
+            status: 'draft',
+            stats: {
+                totalFound: 0,
+                qualified: 0,
+                emailed: 0,
+                replied: 0,
+                meetingsBooked: 0,
+                disqualified: 0,
+                lastRunAt: null,
+                nextRunAt: null,
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        const campaigns = await loadCampaigns();
+        campaigns.unshift(campaign);
+        await saveCampaigns(campaigns);
+
+        console.log(`🎯 Campaign created: "${campaign.name}" (${campaign.id})`);
+        res.json(campaign);
+    } catch (err) {
+        console.error('❌ Create campaign error:', err);
+        res.status(500).json({ error: err.message || 'Failed to create campaign' });
+    }
+});
+
+// ─── GET /api/campaigns — List all campaigns ───────────────────
+app.get('/api/campaigns', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        res.json(campaigns);
+    } catch (err) {
+        console.error('❌ List campaigns error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/campaigns/:id — Get single campaign with stats ───
+app.get('/api/campaigns/:id', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const campaign = campaigns.find(c => c.id === req.params.id);
+        if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+        res.json(campaign);
+    } catch (err) {
+        console.error('❌ Get campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── PUT /api/campaigns/:id — Update campaign config ───────────
+app.put('/api/campaigns/:id', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const idx = campaigns.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: 'Campaign not found' });
+
+        const { name, config, status } = req.body;
+        if (name !== undefined) campaigns[idx].name = name;
+        if (status !== undefined) campaigns[idx].status = status;
+        if (config !== undefined) {
+            campaigns[idx].config = { ...campaigns[idx].config, ...config };
+        }
+        campaigns[idx].updatedAt = new Date().toISOString();
+        await saveCampaigns(campaigns);
+
+        res.json(campaigns[idx]);
+    } catch (err) {
+        console.error('❌ Update campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── DELETE /api/campaigns/:id — Delete campaign + its leads ───
+app.delete('/api/campaigns/:id', async (req, res) => {
+    try {
+        const campaignId = req.params.id;
+        const campaigns = await loadCampaigns();
+        const filtered = campaigns.filter(c => c.id !== campaignId);
+        await saveCampaigns(filtered);
+
+        // Delete associated leads from Redis
+        if (useKV) {
+            try {
+                const r = getRedis();
+                await r.connect().catch(() => { });
+                await r.del(`orbit_campaign:${campaignId}:leads`);
+            } catch (err) {
+                console.error('Redis delete campaign leads error:', err.message);
+            }
+        }
+
+        // Remove associated leads from JSON fallback
+        const allLeads = await loadLeads();
+        const remainingLeads = allLeads.filter(l => l.campaignId !== campaignId);
+        await saveLeads(remainingLeads);
+
+        console.log(`🗑️ Campaign deleted: ${campaignId}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Delete campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/campaigns/:id/deploy — Deploy agent ─────────────
+app.post('/api/campaigns/:id/deploy', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const idx = campaigns.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: 'Campaign not found' });
+
+        const campaign = campaigns[idx];
+
+        // Call Python service
+        try {
+            const pyRes = await fetch('http://localhost:3002/agents/deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    campaignId: campaign.id,
+                    name: campaign.name,
+                    config: campaign.config,
+                }),
+            });
+
+            if (!pyRes.ok) {
+                const errText = await pyRes.text();
+                throw new Error(`Python service error (${pyRes.status}): ${errText}`);
+            }
+
+            const pyData = await pyRes.json();
+            campaigns[idx].status = 'running';
+            campaigns[idx].stats.lastRunAt = new Date().toISOString();
+            campaigns[idx].updatedAt = new Date().toISOString();
+            await saveCampaigns(campaigns);
+
+            console.log(`🚀 Campaign deployed: "${campaign.name}" (${campaign.id})`);
+            res.json({ success: true, campaign: campaigns[idx], agentResponse: pyData });
+        } catch (fetchErr) {
+            if (fetchErr.cause?.code === 'ECONNREFUSED' || fetchErr.message?.includes('ECONNREFUSED') || fetchErr.message?.includes('fetch failed')) {
+                console.error('❌ Python scraping service not reachable at http://localhost:3002');
+                return res.status(503).json({
+                    error: 'Lead generation service is not running. Start the Python service on port 3002.',
+                    hint: 'Run: cd scraper && python main.py',
+                });
+            }
+            throw fetchErr;
+        }
+    } catch (err) {
+        console.error('❌ Deploy campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/campaigns/:id/pause — Pause agent ───────────────
+app.post('/api/campaigns/:id/pause', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const idx = campaigns.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: 'Campaign not found' });
+
+        try {
+            const pyRes = await fetch(`http://localhost:3002/agents/${req.params.id}/pause`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!pyRes.ok) {
+                const errText = await pyRes.text();
+                throw new Error(`Python service error (${pyRes.status}): ${errText}`);
+            }
+        } catch (fetchErr) {
+            if (fetchErr.cause?.code === 'ECONNREFUSED' || fetchErr.message?.includes('ECONNREFUSED') || fetchErr.message?.includes('fetch failed')) {
+                return res.status(503).json({ error: 'Lead generation service is not running.' });
+            }
+            throw fetchErr;
+        }
+
+        campaigns[idx].status = 'paused';
+        campaigns[idx].updatedAt = new Date().toISOString();
+        await saveCampaigns(campaigns);
+
+        console.log(`⏸️ Campaign paused: ${req.params.id}`);
+        res.json({ success: true, campaign: campaigns[idx] });
+    } catch (err) {
+        console.error('❌ Pause campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/campaigns/:id/resume — Resume agent ─────────────
+app.post('/api/campaigns/:id/resume', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const idx = campaigns.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: 'Campaign not found' });
+
+        try {
+            const pyRes = await fetch(`http://localhost:3002/agents/${req.params.id}/resume`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!pyRes.ok) {
+                const errText = await pyRes.text();
+                throw new Error(`Python service error (${pyRes.status}): ${errText}`);
+            }
+        } catch (fetchErr) {
+            if (fetchErr.cause?.code === 'ECONNREFUSED' || fetchErr.message?.includes('ECONNREFUSED') || fetchErr.message?.includes('fetch failed')) {
+                return res.status(503).json({ error: 'Lead generation service is not running.' });
+            }
+            throw fetchErr;
+        }
+
+        campaigns[idx].status = 'running';
+        campaigns[idx].updatedAt = new Date().toISOString();
+        await saveCampaigns(campaigns);
+
+        console.log(`▶️ Campaign resumed: ${req.params.id}`);
+        res.json({ success: true, campaign: campaigns[idx] });
+    } catch (err) {
+        console.error('❌ Resume campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/campaigns/:id/run-now — Trigger immediate run ───
+app.post('/api/campaigns/:id/run-now', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const campaign = campaigns.find(c => c.id === req.params.id);
+        if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+        try {
+            const pyRes = await fetch(`http://localhost:3002/agents/${req.params.id}/run-now`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!pyRes.ok) {
+                const errText = await pyRes.text();
+                throw new Error(`Python service error (${pyRes.status}): ${errText}`);
+            }
+
+            const pyData = await pyRes.json();
+            console.log(`⚡ Campaign run-now triggered: ${req.params.id}`);
+            res.json({ success: true, agentResponse: pyData });
+        } catch (fetchErr) {
+            if (fetchErr.cause?.code === 'ECONNREFUSED' || fetchErr.message?.includes('ECONNREFUSED') || fetchErr.message?.includes('fetch failed')) {
+                return res.status(503).json({ error: 'Lead generation service is not running.' });
+            }
+            throw fetchErr;
+        }
+    } catch (err) {
+        console.error('❌ Run-now campaign error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/campaigns/:id/stats — Get campaign statistics ────
+app.get('/api/campaigns/:id/stats', async (req, res) => {
+    try {
+        const campaigns = await loadCampaigns();
+        const campaign = campaigns.find(c => c.id === req.params.id);
+        if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+        // Compute live stats from leads
+        const leads = await loadCampaignLeads(req.params.id);
+        const stats = {
+            ...campaign.stats,
+            totalFound: leads.length,
+            qualified: leads.filter(l => l.status === 'qualified' || l.status === 'emailed' || l.status === 'replied').length,
+            emailed: leads.filter(l => l.outreach?.emailSequence?.length > 0).length,
+            replied: leads.filter(l => l.status === 'replied').length,
+            meetingsBooked: leads.filter(l => l.status === 'meeting_booked').length,
+            disqualified: leads.filter(l => l.status === 'disqualified').length,
+        };
+
+        res.json({ campaignId: campaign.id, name: campaign.name, status: campaign.status, stats });
+    } catch (err) {
+        console.error('❌ Campaign stats error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/campaigns/:id/leads — List leads for campaign ────
+app.get('/api/campaigns/:id/leads', async (req, res) => {
+    try {
+        let leads = await loadCampaignLeads(req.params.id);
+
+        // Apply filters from query params
+        const { status, minScore, search } = req.query;
+
+        if (status) {
+            leads = leads.filter(l => l.status === status);
+        }
+        if (minScore) {
+            const min = parseInt(minScore);
+            if (!isNaN(min)) {
+                leads = leads.filter(l => (l.score || 0) >= min);
+            }
+        }
+        if (search) {
+            const q = search.toLowerCase();
+            leads = leads.filter(l =>
+                (l.company?.name || '').toLowerCase().includes(q) ||
+                (l.contact?.name || '').toLowerCase().includes(q) ||
+                (l.contact?.email || '').toLowerCase().includes(q) ||
+                (l.company?.industry || '').toLowerCase().includes(q)
+            );
+        }
+
+        // Sort by score descending
+        leads.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        res.json(leads);
+    } catch (err) {
+        console.error('❌ List leads error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/campaigns/:id/leads/export — Export leads as JSON ─
+app.post('/api/campaigns/:id/leads/export', async (req, res) => {
+    try {
+        const leads = await loadCampaignLeads(req.params.id);
+        res.json({ campaignId: req.params.id, count: leads.length, leads });
+    } catch (err) {
+        console.error('❌ Export leads error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/leads/:id — Get full lead details ────────────────
+app.get('/api/leads/:id', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+        res.json(lead);
+    } catch (err) {
+        console.error('❌ Get lead error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── PUT /api/leads/:id — Update lead ──────────────────────────
+app.put('/api/leads/:id', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+        const { status, notes, score, contact, company, outreach, tags } = req.body;
+        if (status !== undefined) lead.status = status;
+        if (notes !== undefined) lead.notes = notes;
+        if (score !== undefined) lead.score = score;
+        if (tags !== undefined) lead.tags = tags;
+        if (contact !== undefined) lead.contact = { ...lead.contact, ...contact };
+        if (company !== undefined) lead.company = { ...lead.company, ...company };
+        if (outreach !== undefined) lead.outreach = { ...lead.outreach, ...outreach };
+        lead.updatedAt = new Date().toISOString();
+
+        await saveLead(lead);
+        res.json(lead);
+    } catch (err) {
+        console.error('❌ Update lead error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── DELETE /api/leads/:id — Delete a lead ─────────────────────
+app.delete('/api/leads/:id', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+        // Remove from campaign leads
+        if (lead.campaignId) {
+            const campLeads = await loadCampaignLeads(lead.campaignId);
+            const filtered = campLeads.filter(l => l.id !== lead.id);
+            await saveCampaignLeads(lead.campaignId, filtered);
+        }
+
+        // Remove from global leads
+        const allLeads = await loadLeads();
+        const remaining = allLeads.filter(l => l.id !== lead.id);
+        await saveLeads(remaining);
+
+        // Remove individual lead from Redis
+        if (useKV) {
+            try {
+                const r = getRedis();
+                await r.connect().catch(() => { });
+                await r.del(`orbit_lead:${lead.id}`);
+            } catch (err) {
+                console.error('Redis delete lead error:', err.message);
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Delete lead error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/leads/:id/email — Send email to lead ────────────
+app.post('/api/leads/:id/email', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+        let { to, subject, body } = req.body;
+
+        // Default recipient from lead data
+        to = to || lead.contact?.email;
+        if (!to) {
+            return res.status(400).json({ error: 'No email address available for this lead' });
+        }
+
+        // If no body provided, try to use qualification emailDraft or generate with Claude
+        if (!body) {
+            if (lead.qualification?.emailDraft) {
+                body = lead.qualification.emailDraft;
+                subject = subject || `Following up: ${lead.company?.name || 'Your Business'}`;
+            } else {
+                // Generate personalized email with Claude
+                try {
+                    const emailResponse = await callClaude({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 1024,
+                        messages: [{
+                            role: 'user',
+                            content: `Write a short, professional cold outreach email to ${lead.contact?.name || 'the decision maker'} at ${lead.company?.name || 'their company'}${lead.company?.industry ? ` in the ${lead.company.industry} industry` : ''}.
+
+The email should:
+- Be personalized and reference their company
+- Be under 150 words
+- Have a conversational, non-salesy tone
+- End with a soft CTA (e.g., "Would you be open to a quick call?")
+- Not include a subject line (just the body)
+
+Return ONLY the email body text, no subject line, no greeting header.`,
+                        }],
+                    });
+                    body = emailResponse.content[0].text.trim();
+                } catch (aiErr) {
+                    console.error('Claude email generation error:', aiErr.message);
+                    return res.status(500).json({ error: 'Could not generate email and no body provided' });
+                }
+
+                subject = subject || `Quick question for ${lead.company?.name || 'your team'}`;
+            }
+        }
+
+        // Guard: no email credentials configured
+        if (!emailTransporter) {
+            return res.status(503).json({
+                error: 'Email not configured. Add EMAIL_USER and EMAIL_PASSWORD to server/.env',
+            });
+        }
+
+        // Send email via existing transporter
+        const info = await emailTransporter.sendMail({
+            from: `"Celeritech Orbit" <${EMAIL_USER}>`,
+            to,
+            subject: subject || `Introduction from Celeritech`,
+            text: body,
+            html: `<pre style="font-family:sans-serif;white-space:pre-wrap;">${body}</pre>`,
+        });
+
+        console.log(`📧 Lead email sent to ${to} (messageId: ${info.messageId})`);
+
+        // Update lead outreach history
+        if (!lead.outreach) lead.outreach = {};
+        if (!lead.outreach.emailSequence) lead.outreach.emailSequence = [];
+        lead.outreach.emailSequence.push({
+            sentAt: new Date().toISOString(),
+            to,
+            subject,
+            messageId: info.messageId,
+            type: lead.outreach.emailSequence.length === 0 ? 'initial' : 'follow_up',
+        });
+        lead.outreach.lastEmailAt = new Date().toISOString();
+        if (lead.status === 'new' || lead.status === 'qualified') {
+            lead.status = 'emailed';
+        }
+        lead.updatedAt = new Date().toISOString();
+        await saveLead(lead);
+
+        res.json({ success: true, to, messageId: info.messageId });
+    } catch (err) {
+        console.error('❌ Lead email error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/leads/:id/call — AI call to lead ────────────────
+app.post('/api/leads/:id/call', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+        const phoneNumber = lead.contact?.phone;
+        const contactName = lead.contact?.name || '';
+
+        if (!phoneNumber) {
+            return res.status(400).json({ error: 'No phone number available for this lead' });
+        }
+
+        if (!process.env.VAPI_API_KEY) {
+            return res.status(500).json({ error: 'Vapi API key not configured' });
+        }
+
+        // Normalize to E.164 format (same as existing /api/sales/call)
+        let normalizedPhone = phoneNumber.replace(/[^\d+]/g, '');
+        if (!normalizedPhone.startsWith('+')) {
+            if (normalizedPhone.startsWith('1') && normalizedPhone.length === 11) {
+                normalizedPhone = '+' + normalizedPhone;
+            } else {
+                normalizedPhone = '+1' + normalizedPhone;
+            }
+        }
+
+        console.log(`\n📞 Lead call to ${normalizedPhone} (${contactName} at ${lead.company?.name || 'Unknown'})`);
+
+        const response = await fetch(`${VAPI_BASE}/call`, {
+            method: 'POST',
+            headers: vapiHeaders(),
+            body: JSON.stringify({
+                phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
+                customer: {
+                    number: normalizedPhone,
+                    name: contactName || undefined,
+                },
+                assistantId: 'ec94ead8-b047-4f64-989d-0c96731fbdc2',
+            }),
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            console.error('Vapi call error:', errBody);
+            let userMsg = `Vapi API error: ${response.status}`;
+            try {
+                const parsed = JSON.parse(errBody);
+                if (parsed.message) {
+                    userMsg = Array.isArray(parsed.message) ? parsed.message.join('. ') : parsed.message;
+                }
+            } catch { }
+            throw new Error(userMsg);
+        }
+
+        const callData = await response.json();
+
+        if (callData.endedReason) {
+            const reason = callData.endedReason;
+            console.error(`❌ Vapi call failed immediately: ${reason}`);
+            return res.status(429).json({ error: `Call failed: ${reason}`, endedReason: reason });
+        }
+
+        console.log(`✅ Lead call initiated: ${callData.id}`);
+
+        // Save to calls history (reuse existing pattern)
+        const calls = await loadCalls();
+        calls.unshift({
+            id: callData.id,
+            phoneNumber,
+            contactName,
+            company: lead.company?.name || '',
+            status: 'in_progress',
+            startedAt: new Date().toISOString(),
+            duration: null,
+            recordingUrl: null,
+            transcript: null,
+            analysis: null,
+            leadId: lead.id,
+        });
+        await saveCalls(calls);
+
+        // Update lead outreach history
+        if (!lead.outreach) lead.outreach = {};
+        if (!lead.outreach.calls) lead.outreach.calls = [];
+        lead.outreach.calls.push({
+            callId: callData.id,
+            initiatedAt: new Date().toISOString(),
+            status: 'in_progress',
+        });
+        lead.outreach.lastCallAt = new Date().toISOString();
+        lead.updatedAt = new Date().toISOString();
+        await saveLead(lead);
+
+        res.json({ callId: callData.id, status: 'in_progress' });
+    } catch (err) {
+        console.error('❌ Lead call error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/leads/:id/push-ghl — Push to GoHighLevel CRM ───
+app.post('/api/leads/:id/push-ghl', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+        const name = lead.contact?.name || '';
+        const email = lead.contact?.email || '';
+        const phone = lead.contact?.phone || '';
+
+        if (!phone && !email) {
+            return res.status(400).json({ error: 'Lead must have at least a phone number or email for GHL' });
+        }
+
+        // Get campaign name for tagging
+        let campaignName = '';
+        if (lead.campaignId) {
+            const campaigns = await loadCampaigns();
+            const camp = campaigns.find(c => c.id === lead.campaignId);
+            campaignName = camp?.name || '';
+        }
+
+        console.log(`📇 Pushing lead to GHL: ${name} (${phone || email})`);
+
+        const contactId = await ghlFindOrCreateContact(
+            phone,
+            name,
+            email
+        );
+
+        if (!contactId) {
+            throw new Error('Could not create or find contact in GoHighLevel');
+        }
+
+        // Save GHL contact ID back to lead
+        if (!lead.integrations) lead.integrations = {};
+        lead.integrations.ghlContactId = contactId;
+        lead.integrations.ghlPushedAt = new Date().toISOString();
+        lead.updatedAt = new Date().toISOString();
+        await saveLead(lead);
+
+        console.log(`✅ Lead pushed to GHL: ${contactId}`);
+        res.json({ success: true, ghlContactId: contactId });
+    } catch (err) {
+        console.error('❌ Push to GHL error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/leads/:id/reply — Mark reply received ───────────
+app.post('/api/leads/:id/reply', async (req, res) => {
+    try {
+        const lead = await loadLead(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+        const { replySnippet } = req.body;
+
+        lead.status = 'replied';
+        if (!lead.outreach) lead.outreach = {};
+        lead.outreach.repliedAt = new Date().toISOString();
+        lead.outreach.replySnippet = replySnippet || '';
+
+        // Cancel pending follow-up emails by marking them
+        if (lead.outreach.pendingFollowUps) {
+            lead.outreach.pendingFollowUps = lead.outreach.pendingFollowUps.map(f => ({
+                ...f,
+                cancelled: true,
+                cancelledAt: new Date().toISOString(),
+                cancelReason: 'lead_replied',
+            }));
+        }
+
+        // Update email sequence with reply event
+        if (!lead.outreach.emailSequence) lead.outreach.emailSequence = [];
+        lead.outreach.emailSequence.push({
+            type: 'reply_received',
+            receivedAt: new Date().toISOString(),
+            snippet: replySnippet || '',
+        });
+
+        lead.updatedAt = new Date().toISOString();
+        await saveLead(lead);
+
+        console.log(`💬 Reply received for lead: ${lead.id} (${lead.contact?.name || 'Unknown'})`);
+        res.json({ success: true, lead });
+    } catch (err) {
+        console.error('❌ Mark reply error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ─── Start Server ────────────────────────────────────────────────

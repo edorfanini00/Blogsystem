@@ -135,6 +135,21 @@
           <span>Full Campaign</span>
         </a>
 
+        <!-- SCRAPING LEAD GEN -->
+        <a href="#" class="nav-item" data-page="leadgen">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="6" />
+            <circle cx="12" cy="12" r="2" />
+            <line x1="12" y1="2" x2="12" y2="6" />
+            <line x1="12" y1="18" x2="12" y2="22" />
+            <line x1="2" y1="12" x2="6" y2="12" />
+            <line x1="18" y1="12" x2="22" y2="12" />
+          </svg>
+          <span>Lead Gen</span>
+        </a>
+
         <div style="flex-grow: 1;"></div>
 
         <a href="#" class="nav-item" id="logoutBtn" style="margin-top: auto; filter: grayscale(1);">
@@ -1933,6 +1948,104 @@
           </div>
         </section>
 
+      </div>
+
+      <!-- ═══ PAGE: SCRAPING LEAD GEN ═══════════════════ -->
+      <div class="page" id="pageLeadgen" style="display:none;">
+        <div class="dashboard-header">
+          <div>
+            <h1>Scraping Lead Gen</h1>
+            <p class="subtitle">AI-powered prospecting — scrape, qualify, and outreach on autopilot.</p>
+          </div>
+          <button class="btn-primary" id="newCampaignBtn" style="margin-top:0; padding: 12px 24px;">
+            + New Campaign
+          </button>
+        </div>
+
+        <!-- Sub-tab switcher -->
+        <div class="leadgen-tabs" id="leadgenTabs">
+          <button class="leadgen-tab active" data-tab="campaigns">📡 Campaigns</button>
+          <button class="leadgen-tab" data-tab="results">📊 Results</button>
+        </div>
+
+        <!-- Campaigns Tab Content -->
+        <div class="leadgen-tab-content" id="leadgenCampaignsTab">
+          <div class="campaign-cards-grid" id="campaignCardsGrid">
+            <div class="leadgen-empty-state">
+              <div class="empty-icon">📡</div>
+              <h4>No campaigns yet</h4>
+              <p>Create your first scraping campaign to start finding leads.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Tab Content -->
+        <div class="leadgen-tab-content" id="leadgenResultsTab" style="display:none;">
+          <!-- Campaign selector -->
+          <div class="leadgen-campaign-selector">
+            <label>Campaign:</label>
+            <select id="leadgenCampaignSelect">
+              <option value="">Select a campaign…</option>
+            </select>
+          </div>
+
+          <!-- Stats bar -->
+          <div class="leadgen-stats-bar" id="leadgenStatsBar">
+            <div class="stat-box"><span class="stat-value" id="statFound">0</span><span class="stat-label">Found</span></div>
+            <div class="stat-box"><span class="stat-value" id="statQualified">0</span><span class="stat-label">Qualified</span></div>
+            <div class="stat-box"><span class="stat-value" id="statEmailed">0</span><span class="stat-label">Emailed</span></div>
+            <div class="stat-box"><span class="stat-value" id="statReplied">0</span><span class="stat-label">Replied</span></div>
+            <div class="stat-box"><span class="stat-value" id="statMeetings">0</span><span class="stat-label">Meetings</span></div>
+          </div>
+
+          <!-- Filter bar -->
+          <div class="leadgen-filter-bar">
+            <select id="leadgenStatusFilter">
+              <option value="all">All Statuses</option>
+              <option value="new">New</option>
+              <option value="emailed">Emailed</option>
+              <option value="replied">Replied</option>
+              <option value="meeting_booked">Meeting Booked</option>
+              <option value="disqualified">Disqualified</option>
+            </select>
+            <input type="number" id="leadgenMinScore" placeholder="Min Score" min="0" max="100" />
+            <input type="text" id="leadgenSearchInput" placeholder="Search companies…" />
+          </div>
+
+          <!-- Lead table -->
+          <div class="leadgen-table-wrap">
+            <table class="lead-table" id="leadTable">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="leadSelectAll" /></th>
+                  <th>Score</th>
+                  <th>Company</th>
+                  <th>Key Contact</th>
+                  <th>Email Status</th>
+                  <th>Reply</th>
+                  <th>Next Action</th>
+                </tr>
+              </thead>
+              <tbody id="leadTableBody"></tbody>
+            </table>
+            <div class="leadgen-empty-state" id="leadTableEmpty">
+              <div class="empty-icon">📋</div>
+              <h4>No leads yet</h4>
+              <p>Select a campaign to view its leads.</p>
+            </div>
+          </div>
+
+          <!-- Bulk actions -->
+          <div class="leadgen-bulk-actions" id="leadgenBulkActions" style="display:none;">
+            <span id="leadgenSelectedCount">0 selected</span>
+            <div class="bulk-buttons">
+              <button class="btn-small-outline" id="bulkEmailBtn">📧 Email Selected</button>
+              <button class="btn-small-outline" id="bulkCallBtn">📞 Call Selected</button>
+              <button class="btn-small-outline" id="bulkExportBtn">📤 Export CSV</button>
+              <button class="btn-small-outline" id="bulkGhlBtn">→ Push to GHL</button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </main>
