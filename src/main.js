@@ -5255,7 +5255,7 @@ setTimeout(function initOnePager() {
 
     // ─── New Campaign Modal ──────────────────────────────────────
     function setupNewCampaignModal() {
-        const btn = document.getElementById('newCampaignBtn');
+        const btn = document.getElementById('lgNewCampaignBtn');
         if (!btn) return;
 
         btn.addEventListener('click', () => {
