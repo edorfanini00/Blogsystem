@@ -463,7 +463,7 @@ publishBtn.addEventListener('click', async () => {
         publishResult.className = 'publish-result success';
         publishResult.innerHTML = `
       ${successMsg}<br/>
-      <a href="https://celeritech.biz/ent_reg/" target="_blank">Edit in WordPress →</a>
+      <a href="https://celeritech.biz/wp-admin/" target="_blank">Edit in WordPress →</a>
     `;
         publishResult.style.display = 'block';
 
