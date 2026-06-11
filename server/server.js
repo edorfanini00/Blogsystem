@@ -596,6 +596,10 @@ async function generateImageWithOpenRouter(prompt) {
         return null;
     }
 
+    const TIMEOUT_MS = 60000; // hard timeout so a hung request can't stall the whole generation
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
     try {
         console.log('   Trying OpenRouter image generation...');
         const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
@@ -611,7 +615,9 @@ async function generateImageWithOpenRouter(prompt) {
                 size: '1792x1024',
                 response_format: 'b64_json',
             }),
+            signal: controller.signal,
         });
+        clearTimeout(timer);
 
         if (!response.ok) {
             const errText = await response.text();
@@ -639,7 +645,12 @@ async function generateImageWithOpenRouter(prompt) {
         console.log('   OpenRouter returned no image data');
         return null;
     } catch (err) {
-        console.error('   OpenRouter image error:', err.message);
+        clearTimeout(timer);
+        if (err.name === 'AbortError') {
+            console.error(`   ⏱ OpenRouter timed out after ${TIMEOUT_MS / 1000}s — skipping`);
+        } else {
+            console.error('   OpenRouter image error:', err.message);
+        }
         return null;
     }
 }
@@ -653,7 +664,7 @@ async function generateImageWithFal(prompt, options = {}) {
     }
 
     const model = options.model || 'fal-ai/flux/schnell';
-    const TIMEOUT_MS = options.timeoutMs || 90000;
+    const TIMEOUT_MS = options.timeoutMs || 45000;
 
     try {
         console.log(`   Trying Fal.ai model: ${model}`);
@@ -712,6 +723,15 @@ async function generateImageWithFal(prompt, options = {}) {
         }
         return null;
     }
+}
+
+// ─── Helper: resolve null if a promise takes too long ────────────
+function withTimeout(promise, ms) {
+    let timer;
+    return Promise.race([
+        promise,
+        new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); }),
+    ]).finally(() => clearTimeout(timer));
 }
 
 // ─── Generate image with fallback chain ──────────────────────────
@@ -993,10 +1013,20 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         const uploadedImages = [];
         const hasWpCredentials = process.env.WORDPRESS_URL && process.env.WORDPRESS_USERNAME && process.env.WORDPRESS_APP_PASSWORD;
 
+        // Time budgets so the blog ALWAYS finishes, even if an image provider stalls.
+        // Vercel maxDuration is 300s — leave room for research/writing/translation.
+        const PER_IMAGE_TIMEOUT_MS = 75000;
+        const IMAGE_TOTAL_BUDGET_MS = 160000;
+        const imageLoopStart = Date.now();
+
         for (let i = 0; i < imagePrompts.length; i++) {
+            if (Date.now() - imageLoopStart > IMAGE_TOTAL_BUDGET_MS) {
+                console.warn(`⏱ Image time budget exceeded — skipping remaining ${imagePrompts.length - i} image(s) so the blog can finish`);
+                break;
+            }
             sendProgress(4 + i, TOTAL_STEPS, `Generating image ${i + 1} of ${imagePrompts.length} for section: "${sectionTitles[i] || 'blog'}"…`);
             console.log(`🎨 Image ${i + 1}/${imagePrompts.length}: "${imagePrompts[i].slice(0, 80)}…"`);
-            const img = await generateBlogImage(imagePrompts[i]);
+            const img = await withTimeout(generateBlogImage(imagePrompts[i]), PER_IMAGE_TIMEOUT_MS);
             if (img) {
                 if (hasWpCredentials) {
                     console.log(`📤 Uploading image ${i + 1} to WordPress…`);
@@ -1168,19 +1198,42 @@ app.post('/api/publish', async (req, res) => {
 
 const BLOGS_FILE = isVercel ? '/tmp/blogs.json' : join(__dirname, 'blogs.json');
 
-function loadBlogs() {
+// Blog history is stored in Redis (persistent across deploys/cold starts),
+// with the JSON file as a local-dev fallback. /tmp on Vercel is ephemeral.
+async function loadBlogs() {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get('orbit_blogs');
+            if (data) return JSON.parse(data);
+        } catch (err) {
+            console.error('Redis loadBlogs error:', err.message);
+            // Fall through to file
+        }
+    }
     if (!existsSync(BLOGS_FILE)) return [];
     try { return JSON.parse(readFileSync(BLOGS_FILE, 'utf-8')); } catch { return []; }
 }
 
-function saveBlogs(blogs) {
-    writeFileSync(BLOGS_FILE, JSON.stringify(blogs, null, 2), 'utf-8');
+async function saveBlogs(blogs) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set('orbit_blogs', JSON.stringify(blogs));
+        } catch (err) {
+            console.error('Redis saveBlogs error:', err.message);
+        }
+    }
+    // Always write to file as well (local fallback)
+    try { writeFileSync(BLOGS_FILE, JSON.stringify(blogs, null, 2), 'utf-8'); } catch { }
 }
 
 // ─── POST /api/blogs — Save a generated blog ───────────────────
-app.post('/api/blogs', (req, res) => {
+app.post('/api/blogs', async (req, res) => {
     const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount, userName, spanishHtml, spanishTitle } = req.body;
-    const blogs = loadBlogs();
+    const blogs = await loadBlogs();
     const blog = {
         id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
         userName: userName || 'Unknown',
@@ -1200,27 +1253,27 @@ app.post('/api/blogs', (req, res) => {
         published: false,
     };
     blogs.unshift(blog);
-    saveBlogs(blogs);
+    await saveBlogs(blogs);
     console.log(`📝 Blog saved: "${blog.title}" (${blog.id})`);
     res.json(blog);
 });
 
 // ─── GET /api/blogs — List all blogs ────────────────────────────
-app.get('/api/blogs', (req, res) => {
-    res.json(loadBlogs());
+app.get('/api/blogs', async (req, res) => {
+    res.json(await loadBlogs());
 });
 
 // ─── GET /api/blogs/:id — Get a single blog ────────────────────
-app.get('/api/blogs/:id', (req, res) => {
-    const blogs = loadBlogs();
+app.get('/api/blogs/:id', async (req, res) => {
+    const blogs = await loadBlogs();
     const blog = blogs.find(b => b.id === req.params.id);
     if (!blog) return res.status(404).json({ error: 'Blog not found' });
     res.json(blog);
 });
 
 // ─── PUT /api/blogs/:id — Update a blog ────────────────────────
-app.put('/api/blogs/:id', (req, res) => {
-    const blogs = loadBlogs();
+app.put('/api/blogs/:id', async (req, res) => {
+    const blogs = await loadBlogs();
     const idx = blogs.findIndex(b => b.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Blog not found' });
     const { html, markdown, title, seoTitle, seoDescription, published } = req.body;
@@ -1231,15 +1284,15 @@ app.put('/api/blogs/:id', (req, res) => {
     if (seoDescription !== undefined) blogs[idx].seoDescription = seoDescription;
     if (published !== undefined) blogs[idx].published = published;
     blogs[idx].updatedAt = new Date().toISOString();
-    saveBlogs(blogs);
+    await saveBlogs(blogs);
     res.json(blogs[idx]);
 });
 
 // ─── DELETE /api/blogs/:id — Delete a blog ─────────────────────
-app.delete('/api/blogs/:id', (req, res) => {
-    const blogs = loadBlogs();
+app.delete('/api/blogs/:id', async (req, res) => {
+    const blogs = await loadBlogs();
     const filtered = blogs.filter(b => b.id !== req.params.id);
-    saveBlogs(filtered);
+    await saveBlogs(filtered);
     res.json({ success: true });
 });
 
