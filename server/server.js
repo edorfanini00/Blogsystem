@@ -539,7 +539,7 @@ async function generateImageWithGemini(prompt) {
                 },
                 body: JSON.stringify({
                     contents: [{
-                        parts: [{ text: `Generate a professional, photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.` }],
+                        parts: [{ text: prompt }],
                     }],
                     generationConfig: {
                         responseModalities: ['IMAGE', 'TEXT'],
@@ -606,7 +606,7 @@ async function generateImageWithOpenRouter(prompt) {
             },
             body: JSON.stringify({
                 model: 'openai/dall-e-3',
-                prompt: `Professional marketing banner: ${prompt}. Clean modern corporate design, premium quality, no text, no watermarks, no logos.`,
+                prompt,
                 n: 1,
                 size: '1792x1024',
                 response_format: 'b64_json',
@@ -644,13 +644,144 @@ async function generateImageWithOpenRouter(prompt) {
     }
 }
 
+// ─── Generate Image via Fal.ai (FLUX) ────────────────────────────
+async function generateImageWithFal(prompt, options = {}) {
+    const falKey = process.env.FAL_KEY;
+    if (!falKey) {
+        console.warn('⚠ FAL_KEY not set, skipping Fal.ai image generation');
+        return null;
+    }
+
+    const model = options.model || 'fal-ai/flux/schnell';
+    const TIMEOUT_MS = options.timeoutMs || 90000;
+
+    try {
+        console.log(`   Trying Fal.ai model: ${model}`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+        const response = await fetch(`https://fal.run/${model}`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Key ${falKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt,
+                image_size: options.imageSize || { width: 1280, height: 720 },
+                num_inference_steps: options.inferenceSteps || 4,
+                enable_safety_checker: true,
+            }),
+            signal: controller.signal,
+        });
+
+        clearTimeout(timer);
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`   Fal.ai HTTP ${response.status}: ${errText.slice(0, 300)}`);
+            return null;
+        }
+
+        const data = await response.json();
+        const imageUrl = data.images?.[0]?.url || data.image?.url;
+        if (!imageUrl) {
+            console.log('   Fal.ai returned no image URL');
+            return null;
+        }
+
+        console.log('   ✅ Got image from Fal.ai');
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) {
+            console.error(`   Failed to download Fal.ai image: HTTP ${imgRes.status}`);
+            return null;
+        }
+
+        const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+        return {
+            buffer: imgBuf,
+            mimeType: imgRes.headers.get('content-type') || 'image/png',
+            alt: prompt,
+            url: imageUrl,
+        };
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            console.error(`   ⏱ Fal.ai timed out after ${TIMEOUT_MS / 1000}s — skipping`);
+        } else {
+            console.error('   Fal.ai image error:', err.message);
+        }
+        return null;
+    }
+}
+
 // ─── Generate image with fallback chain ──────────────────────────
-async function generateOnePagerImage(prompt) {
-    // Try OpenRouter first (DALL-E 3), then Gemini
-    let img = await generateImageWithOpenRouter(prompt);
+async function generateImageWithFallback(prompt, options = {}) {
+    let img = await generateImageWithFal(prompt, options);
     if (img) return img;
-    img = await generateImageWithGemini(prompt);
-    return img;
+    img = await generateImageWithOpenRouter(prompt);
+    if (img) return img;
+    return generateImageWithGemini(prompt);
+}
+
+async function generateBlogImage(prompt) {
+    const wrappedPrompt = `Professional photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.`;
+    return generateImageWithFallback(wrappedPrompt);
+}
+
+async function generateOnePagerImage(prompt) {
+    const wrappedPrompt = `Professional marketing banner: ${prompt}. Clean modern corporate design, premium quality, no text, no watermarks, no logos.`;
+    return generateImageWithFallback(wrappedPrompt, {
+        imageSize: { width: 1792, height: 1024 },
+    });
+}
+
+function injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles) {
+    if (!uploadedImages.length) return htmlContent;
+
+    const imgStyle = 'width:100%;height:auto;margin:32px 0 24px;display:block;border-radius:12px;';
+    const buildImgTag = (image, sectionTitle, index) =>
+        `\n<img src="${image.url}" alt="${sectionTitle || image.alt || `Blog image ${index + 1}`}" style="${imgStyle}" />\n`;
+
+    if (h2Matches.length > 0) {
+        const insertionPoints = [];
+        for (let i = 0; i < Math.min(uploadedImages.length, h2Matches.length); i++) {
+            const h2End = h2Matches[i].index + h2Matches[i][0].length;
+            insertionPoints.push({ position: h2End, image: uploadedImages[i], sectionTitle: sectionTitles[i], index: i });
+        }
+
+        let updatedHtml = htmlContent;
+        for (let i = insertionPoints.length - 1; i >= 0; i--) {
+            const { position, image, sectionTitle, index } = insertionPoints[i];
+            updatedHtml = updatedHtml.slice(0, position) + buildImgTag(image, sectionTitle, index) + updatedHtml.slice(position);
+        }
+        console.log(`🖼 Injected ${insertionPoints.length} images into blog HTML after H2 headings`);
+        return updatedHtml;
+    }
+
+    const unusedImages = uploadedImages.slice();
+    let updatedHtml = htmlContent;
+
+    const h1Match = updatedHtml.match(/<h1[^>]*>[\s\S]*?<\/h1>/i);
+    if (h1Match) {
+        const insertPos = h1Match.index + h1Match[0].length;
+        const imgTags = unusedImages.map((image, index) => buildImgTag(image, sectionTitles[index], index)).join('');
+        updatedHtml = updatedHtml.slice(0, insertPos) + imgTags + updatedHtml.slice(insertPos);
+        console.log(`🖼 Injected ${unusedImages.length} images into blog HTML after H1 (no H2 headings found)`);
+        return updatedHtml;
+    }
+
+    const divMatch = updatedHtml.match(/<div[^>]*>/i);
+    if (divMatch) {
+        const insertPos = divMatch.index + divMatch[0].length;
+        const imgTags = unusedImages.map((image, index) => buildImgTag(image, sectionTitles[index], index)).join('');
+        updatedHtml = updatedHtml.slice(0, insertPos) + imgTags + updatedHtml.slice(insertPos);
+        console.log(`🖼 Injected ${unusedImages.length} images into blog HTML at content start (no headings found)`);
+        return updatedHtml;
+    }
+
+    const imgTags = unusedImages.map((image, index) => buildImgTag(image, sectionTitles[index], index)).join('');
+    console.log(`🖼 Appended ${unusedImages.length} images to blog HTML`);
+    return updatedHtml + imgTags;
 }
 
 // ─── Upload Image to WordPress Media Library ─────────────────────
@@ -858,14 +989,14 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
             imagePrompts = fallbacks.slice(0, imageCount);
         }
 
-        // Step 4-6: Generate images with Gemini
+        // Step 4-6: Generate images (Fal.ai → OpenRouter → Gemini)
         const uploadedImages = [];
         const hasWpCredentials = process.env.WORDPRESS_URL && process.env.WORDPRESS_USERNAME && process.env.WORDPRESS_APP_PASSWORD;
 
         for (let i = 0; i < imagePrompts.length; i++) {
             sendProgress(4 + i, TOTAL_STEPS, `Generating image ${i + 1} of ${imagePrompts.length} for section: "${sectionTitles[i] || 'blog'}"…`);
             console.log(`🎨 Image ${i + 1}/${imagePrompts.length}: "${imagePrompts[i].slice(0, 80)}…"`);
-            const img = await generateImageWithGemini(imagePrompts[i]);
+            const img = await generateBlogImage(imagePrompts[i]);
             if (img) {
                 if (hasWpCredentials) {
                     console.log(`📤 Uploading image ${i + 1} to WordPress…`);
@@ -886,24 +1017,15 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         }
 
         console.log(`✅ ${uploadedImages.length} images generated`);
-
-        // Step after images: Inject images into blog HTML after H2 headings
-        sendProgress(insertStep, TOTAL_STEPS, 'Inserting images into blog…');
-        if (uploadedImages.length > 0 && h2Matches.length > 0) {
-            // Work backwards so insertion doesn't shift positions
-            const insertionPoints = [];
-            for (let i = 0; i < Math.min(uploadedImages.length, h2Matches.length); i++) {
-                const h2End = h2Matches[i].index + h2Matches[i][0].length;
-                insertionPoints.push({ position: h2End, image: uploadedImages[i], sectionTitle: sectionTitles[i] });
-            }
-            // Insert backwards
-            for (let i = insertionPoints.length - 1; i >= 0; i--) {
-                const { position, image, sectionTitle } = insertionPoints[i];
-                const imgTag = `\n<img src="${image.url}" alt="${sectionTitle || image.alt}" style="width:100%;height:auto;margin:32px 0 24px;display:block;border-radius:12px;" />\n`;
-                htmlContent = htmlContent.slice(0, position) + imgTag + htmlContent.slice(position);
-            }
-            console.log(`🖼 Injected ${insertionPoints.length} images into blog HTML`);
+        if (imageCount > 0 && uploadedImages.length === 0) {
+            console.warn(`⚠ No blog images were generated (requested ${imageCount}). Check FAL_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY.`);
+        } else if (imageCount > 0 && uploadedImages.length < imageCount) {
+            console.warn(`⚠ Only ${uploadedImages.length}/${imageCount} blog images were generated.`);
         }
+
+        // Step after images: Inject images into blog HTML
+        sendProgress(insertStep, TOTAL_STEPS, 'Inserting images into blog…');
+        htmlContent = injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles);
 
         // SEO step
         sendProgress(insertStep + 1, TOTAL_STEPS, 'Extracting SEO metadata…');
@@ -1220,7 +1342,7 @@ Return ONLY a JSON array of 3 strings, nothing else. Example: ["prompt 1", "prom
             send({ type: 'progress', text: `Generating image ${i + 1} of ${imagePrompts.length}…`, pct: 20 + (i * 25) });
             console.log(`   Image ${i + 1}: "${imagePrompts[i].slice(0, 60)}…"`);
 
-            const img = await generateImageWithGemini(imagePrompts[i]);
+            const img = await generateBlogImage(imagePrompts[i]);
             if (img && img.buffer) {
                 const dataUrl = `data:${img.mimeType};base64,${img.buffer.toString('base64')}`;
                 send({ type: 'image', dataUrl, prompt: imagePrompts[i].slice(0, 80), index: i });
