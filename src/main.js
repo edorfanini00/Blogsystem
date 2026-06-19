@@ -5803,8 +5803,257 @@ setTimeout(function initOnePager() {
         document.querySelectorAll('#pageTrends .trend-subtab').forEach((t) =>
             t.classList.toggle('active', t.dataset.subtab === name));
         document.getElementById('trendPanelDashboard').style.display = name === 'dashboard' ? '' : 'none';
+        document.getElementById('trendPanelSolutions').style.display = name === 'solutions' ? '' : 'none';
         document.getElementById('trendPanelTopics').style.display = name === 'topics' ? '' : 'none';
         document.getElementById('trendPanelRoadmap').style.display = name === 'roadmap' ? '' : 'none';
+        if (name === 'solutions') loadSolutions();
+    }
+
+    // ─── Solutions knowledge base ───────────────────────────────
+    const solState = { items: [], openId: null };
+
+    function selectedSolutionId() {
+        return localStorage.getItem('trend_selected_solution') || '';
+    }
+
+    function setSelectedSolution(id) {
+        if (id) localStorage.setItem('trend_selected_solution', id);
+        else localStorage.removeItem('trend_selected_solution');
+        // Exposed for the generation pipeline (step 6).
+        window.trendSelectedSolutionId = id || null;
+    }
+
+    function showSolForm(sol) {
+        const form = document.getElementById('solForm');
+        document.getElementById('solFormTitle').textContent = sol ? 'Edit solution' : 'New solution';
+        document.getElementById('solFormId').value = sol ? sol.id : '';
+        document.getElementById('solName').value = sol ? (sol.name || '') : '';
+        document.getElementById('solDescription').value = sol ? (sol.description || '') : '';
+        document.getElementById('solBuyer').value = sol ? (sol.buyer || '') : '';
+        document.getElementById('solHooks').value = sol ? (sol.hooks || '') : '';
+        document.getElementById('solPains').value = sol ? (sol.pains || '') : '';
+        form.style.display = '';
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideSolForm() {
+        document.getElementById('solForm').style.display = 'none';
+    }
+
+    async function saveSolution() {
+        const id = document.getElementById('solFormId').value;
+        const payload = {
+            name: document.getElementById('solName').value.trim(),
+            description: document.getElementById('solDescription').value.trim(),
+            buyer: document.getElementById('solBuyer').value.trim(),
+            hooks: document.getElementById('solHooks').value.trim(),
+            pains: document.getElementById('solPains').value.trim(),
+        };
+        if (!payload.name) { toast('Give the solution a name', 'error'); return; }
+        try {
+            const res = await fetch(tApi(id ? `/api/trends/solutions/${id}` : '/api/trends/solutions'), {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Save failed', 'error'); return; }
+            toast(id ? 'Solution updated' : 'Solution created');
+            hideSolForm();
+            await loadSolutions();
+        } catch (err) {
+            toast('Save failed: ' + err.message, 'error');
+        }
+    }
+
+    async function loadSolutions() {
+        const setup = document.getElementById('solSetup');
+        const empty = document.getElementById('solEmpty');
+        const loading = document.getElementById('solLoading');
+        const list = document.getElementById('solList');
+        setup.style.display = 'none';
+        empty.style.display = 'none';
+        list.innerHTML = '';
+
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) { setup.style.display = ''; return; }
+
+        loading.style.display = '';
+        try {
+            const res = await fetch(tApi('/api/trends/solutions'));
+            if (!res.ok) throw new Error('load failed');
+            solState.items = await res.json();
+        } catch (err) {
+            solState.items = [];
+            toast('Could not load solutions', 'error');
+        } finally {
+            loading.style.display = 'none';
+        }
+
+        if (!solState.items.length) { empty.style.display = ''; return; }
+        renderSolutions();
+    }
+
+    function renderSolutions() {
+        const list = document.getElementById('solList');
+        const sel = selectedSolutionId();
+        list.innerHTML = solState.items.map((s) => {
+            const isSel = s.id === sel;
+            const isOpen = s.id === solState.openId;
+            return `
+            <div class="trend-sol-card ${isSel ? 'selected' : ''} ${isOpen ? 'open' : ''}" data-sol="${esc(s.id)}">
+              <div class="trend-sol-head" data-toggle="${esc(s.id)}">
+                <div class="trend-sol-head-main">
+                  <div class="trend-sol-name">${esc(s.name)}${isSel ? '<span class="trend-sol-selected-badge">Selected</span>' : ''}</div>
+                  ${s.description ? `<div class="trend-sol-desc">${esc(s.description)}</div>` : ''}
+                </div>
+                <span class="trend-sol-meta">${s.file_count || 0} file${s.file_count === 1 ? '' : 's'}</span>
+                <svg class="trend-sol-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div class="trend-sol-body" data-body="${esc(s.id)}">
+                <div class="trend-sol-loading-files" style="color:var(--text-muted);font-size:0.85rem;">Loading files…</div>
+              </div>
+            </div>`;
+        }).join('');
+
+        // Header toggles
+        list.querySelectorAll('[data-toggle]').forEach((h) => {
+            h.addEventListener('click', () => toggleSolution(h.dataset.toggle));
+        });
+    }
+
+    async function toggleSolution(id) {
+        if (solState.openId === id) { solState.openId = null; renderSolutions(); return; }
+        solState.openId = id;
+        renderSolutions();
+        // Load detail (files) into the open body
+        const body = document.querySelector(`#solList [data-body="${CSS.escape(id)}"]`);
+        if (!body) return;
+        try {
+            const res = await fetch(tApi(`/api/trends/solutions/${id}`));
+            const sol = await res.json();
+            if (!res.ok) throw new Error(sol.error || 'load failed');
+            renderSolutionBody(body, sol);
+        } catch (err) {
+            body.innerHTML = `<div style="color:#b91c1c;font-size:0.85rem;">${esc(err.message)}</div>`;
+        }
+    }
+
+    function renderSolutionBody(body, sol) {
+        const sel = selectedSolutionId();
+        const isSel = sol.id === sel;
+        const fields = [];
+        if (sol.buyer) fields.push(`<div><b>Buyer:</b> ${esc(sol.buyer)}</div>`);
+        if (sol.hooks) fields.push(`<div><b>Hooks:</b> ${esc(sol.hooks)}</div>`);
+        if (sol.pains) fields.push(`<div><b>Core pains:</b> ${esc(sol.pains)}</div>`);
+
+        const files = (sol.files || []).map((f) => `
+            <div class="trend-sol-file">
+              <span class="trend-sol-file-icon">📄</span>
+              <span class="trend-sol-file-name">${esc(f.filename)}</span>
+              <span class="trend-sol-file-size">${f.size_bytes ? fmtBytes(f.size_bytes) : ''}</span>
+              <button class="trend-sol-file-del" data-delfile="${esc(f.id)}" data-sol="${esc(sol.id)}" title="Remove">✕</button>
+            </div>`).join('');
+
+        body.innerHTML = `
+            ${fields.length ? `<div class="trend-sol-fields">${fields.join('')}</div>` : ''}
+            <div class="trend-sol-files">${files || '<div style="color:var(--text-muted);font-size:0.85rem;">No files yet.</div>'}</div>
+            <div class="trend-sol-dropzone" data-drop="${esc(sol.id)}">
+              Drop files here or <strong>click to browse</strong><br/>
+              <span style="font-size:0.75rem;">PDF, text, markdown, CSV</span>
+            </div>
+            <div class="trend-sol-actions">
+              <button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-select="${esc(sol.id)}">
+                ${isSel ? '✓ Selected for video' : 'Select for video'}
+              </button>
+              <button class="btn-ghost" data-edit="${esc(sol.id)}">Edit</button>
+              <button class="btn-ghost danger" data-delsol="${esc(sol.id)}">Delete</button>
+            </div>`;
+
+        // Dropzone → hidden file input
+        const dz = body.querySelector('[data-drop]');
+        dz.addEventListener('click', () => triggerUpload(sol.id));
+        dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+        dz.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dz.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files.length) uploadFiles(sol.id, e.dataTransfer.files);
+        });
+
+        body.querySelectorAll('[data-delfile]').forEach((b) =>
+            b.addEventListener('click', () => deleteSolFile(b.dataset.sol, b.dataset.delfile)));
+        body.querySelector('[data-select]').addEventListener('click', () => {
+            const newSel = isSel ? '' : sol.id;
+            setSelectedSolution(newSel);
+            renderSolutions();
+            setTimeout(() => toggleSolution(sol.id), 0);
+            toast(newSel ? `"${sol.name}" selected for video generation` : 'Selection cleared');
+        });
+        body.querySelector('[data-edit]').addEventListener('click', () => {
+            const full = solState.items.find((x) => x.id === sol.id) || sol;
+            showSolForm({ ...full, ...sol });
+        });
+        body.querySelector('[data-delsol]').addEventListener('click', () => deleteSol(sol.id, sol.name));
+    }
+
+    function fmtBytes(n) {
+        const v = Number(n);
+        if (v >= 1e6) return (v / 1e6).toFixed(1) + ' MB';
+        if (v >= 1e3) return (v / 1e3).toFixed(0) + ' KB';
+        return v + ' B';
+    }
+
+    function triggerUpload(solId) {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.multiple = true;
+        inp.accept = '.pdf,.txt,.md,.csv,.json,text/*,application/pdf';
+        inp.addEventListener('change', () => { if (inp.files.length) uploadFiles(solId, inp.files); });
+        inp.click();
+    }
+
+    async function uploadFiles(solId, fileList) {
+        const fd = new FormData();
+        for (const f of fileList) fd.append('files', f);
+        toast('Uploading…');
+        try {
+            const res = await fetch(tApi(`/api/trends/solutions/${solId}/files`), { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return; }
+            toast(`${data.files.length} file${data.files.length === 1 ? '' : 's'} added`);
+            await loadSolutions();
+            solState.openId = solId;
+            renderSolutions();
+            toggleSolution(solId);
+        } catch (err) {
+            toast('Upload failed: ' + err.message, 'error');
+        }
+    }
+
+    async function deleteSolFile(solId, fileId) {
+        try {
+            await fetch(tApi(`/api/trends/solutions/${solId}/files/${fileId}`), { method: 'DELETE' });
+            toast('File removed');
+            await loadSolutions();
+            solState.openId = solId;
+            renderSolutions();
+            toggleSolution(solId);
+        } catch (err) {
+            toast('Could not remove file', 'error');
+        }
+    }
+
+    async function deleteSol(id, name) {
+        if (!confirm(`Delete "${name}" and its files? This cannot be undone.`)) return;
+        try {
+            await fetch(tApi(`/api/trends/solutions/${id}`), { method: 'DELETE' });
+            if (selectedSolutionId() === id) setSelectedSolution('');
+            toast('Solution deleted');
+            await loadSolutions();
+        } catch (err) {
+            toast('Delete failed', 'error');
+        }
     }
 
     function bindOnce() {
@@ -5831,11 +6080,20 @@ setTimeout(function initOnePager() {
 
         const ingest = document.getElementById('trendIngestBtn');
         if (ingest) ingest.addEventListener('click', runIngest);
+
+        // Solutions form
+        const addBtn = document.getElementById('solAddBtn');
+        if (addBtn) addBtn.addEventListener('click', () => showSolForm(null));
+        const cancelBtn = document.getElementById('solCancelBtn');
+        if (cancelBtn) cancelBtn.addEventListener('click', hideSolForm);
+        const saveBtn = document.getElementById('solSaveBtn');
+        if (saveBtn) saveBtn.addEventListener('click', saveSolution);
     }
 
     window.initTrendsPage = async function initTrendsPage() {
         bindOnce();
         markRoadmap();
+        window.trendSelectedSolutionId = selectedSolutionId() || null;
         await loadHealth();
         await loadCandidates();
     };

@@ -2096,6 +2096,7 @@
         <!-- Sub-tabs -->
         <div class="trend-subtabs">
           <button class="trend-subtab active" data-subtab="dashboard">Dashboard</button>
+          <button class="trend-subtab" data-subtab="solutions">🧠 Solutions</button>
           <button class="trend-subtab" data-subtab="topics">Topics</button>
           <button class="trend-subtab" data-subtab="roadmap">Roadmap</button>
         </div>
@@ -2161,6 +2162,71 @@
             <span>Below threshold</span>
           </div>
           <div class="trend-cards trend-cards-discard" id="trendCardsDiscard"></div>
+        </div>
+
+        <!-- ─── Sub-tab: Solutions (knowledge base) ─── -->
+        <div class="trend-subpanel" id="trendPanelSolutions" style="display:none;">
+          <div class="trend-solutions-intro">
+            <p>
+              Your <strong>brain</strong>. Add each solution you sell, attach knowledge files
+              (PDF, text, markdown), then pick a solution when you generate a video. The scorer and
+              generator read the selected solution and its files as context.
+            </p>
+            <button type="button" class="btn-primary" id="solAddBtn" style="margin:0;padding:10px 20px;white-space:nowrap;">+ New solution</button>
+          </div>
+
+          <!-- New / edit solution form -->
+          <section class="card trend-sol-form" id="solForm" style="display:none;margin-bottom:24px;">
+            <h3 id="solFormTitle" style="margin-top:0;">New solution</h3>
+            <input type="hidden" id="solFormId" value="" />
+            <div class="form-group">
+              <label for="solName">Name</label>
+              <input type="text" id="solName" placeholder="e.g. EZ Solutions — Food &amp; Beverage" />
+            </div>
+            <div class="form-group">
+              <label for="solDescription">Description</label>
+              <textarea id="solDescription" rows="3" placeholder="What this solution is and what it does."></textarea>
+            </div>
+            <div class="trend-sol-form-row">
+              <div class="form-group">
+                <label for="solBuyer">Buyer (optional)</label>
+                <input type="text" id="solBuyer" placeholder="Who it's for" />
+              </div>
+              <div class="form-group">
+                <label for="solHooks">Hooks (optional)</label>
+                <input type="text" id="solHooks" placeholder="Key angles, comma separated" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="solPains">Core pains (optional)</label>
+              <textarea id="solPains" rows="2" placeholder="The problems this solution removes."></textarea>
+            </div>
+            <div class="trend-sol-form-actions">
+              <button type="button" class="btn-ghost" id="solCancelBtn">Cancel</button>
+              <button type="button" class="btn-primary" id="solSaveBtn" style="margin:0;">Save solution</button>
+            </div>
+          </section>
+
+          <!-- Setup state (DB not configured) -->
+          <section class="card trend-setup" id="solSetup" style="display:none;">
+            <div class="trend-setup-icon">🔌</div>
+            <h3>Connect the trend engine</h3>
+            <p>The knowledge base lives in the same database as the trend engine. Set <code>DATABASE_URL</code> and run the migration to start adding solutions.</p>
+          </section>
+
+          <!-- Empty state -->
+          <section class="card trend-empty" id="solEmpty" style="display:none;">
+            <div class="trend-setup-icon">🧠</div>
+            <h3>No solutions yet</h3>
+            <p>Add your first solution, then attach the files that describe it.</p>
+          </section>
+
+          <div class="trend-loading" id="solLoading" style="display:none;">
+            <span class="spinner-orange"></span> Loading solutions…
+          </div>
+
+          <!-- Solutions list -->
+          <div class="trend-sol-list" id="solList"></div>
         </div>
 
         <!-- ─── Sub-tab: Topics ─── -->

@@ -6210,6 +6210,195 @@ body.light-theme .campaign-stat {
   border-radius: 6px;
 }
 
+/* Solutions knowledge base */
+.trend-solutions-intro {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+
+.trend-solutions-intro p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.trend-sol-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.trend-sol-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.trend-sol-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trend-sol-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.trend-sol-card.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.trend-sol-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  cursor: pointer;
+}
+
+.trend-sol-head-main { flex: 1; min-width: 0; }
+
+.trend-sol-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trend-sol-selected-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--accent-light);
+  color: var(--accent-hover);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.trend-sol-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.trend-sol-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.trend-sol-chevron {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.trend-sol-card.open .trend-sol-chevron { transform: rotate(180deg); }
+
+.trend-sol-body {
+  border-top: 1px solid var(--border-light);
+  padding: 20px 22px;
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trend-sol-card.open .trend-sol-body { display: flex; }
+
+.trend-sol-fields {
+  display: grid;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.trend-sol-fields b { color: var(--text-primary); }
+
+.trend-sol-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trend-sol-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.trend-sol-file-icon { font-size: 1.1rem; }
+.trend-sol-file-name { flex: 1; color: var(--text-primary); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-sol-file-size { color: var(--text-muted); font-size: 0.75rem; }
+
+.trend-sol-file-del {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 6px;
+}
+
+.trend-sol-file-del:hover { color: #b91c1c; }
+
+.trend-sol-dropzone {
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 22px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.trend-sol-dropzone:hover,
+.trend-sol-dropzone.drag-over {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-light);
+}
+
+.trend-sol-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.trend-sol-actions .btn-ghost.danger:hover {
+  border-color: #fca5a5;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
 @media (max-width: 640px) {
   .trend-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .trend-sol-form-row { grid-template-columns: 1fr; }
+  .trend-solutions-intro { flex-direction: column; align-items: flex-start; }
 }

@@ -101,3 +101,39 @@ create table if not exists generations (
 
 create index if not exists idx_generations_candidate on generations (candidate_id);
 create index if not exists idx_generations_status on generations (status);
+
+-- ─── solutions (the "brain" / knowledge base) ───────────────────
+-- Each solution is a sellable offering with its own context. Replaces the
+-- single hardcoded message bank: the scorer and the generator read the
+-- selected solution's profile + attached files when producing video.
+create table if not exists solutions (
+    id          uuid primary key default gen_random_uuid(),
+    name        text not null,
+    description text,
+    -- optional overrides; fall back to the global message bank when null
+    buyer       text,
+    pains       text,
+    hooks       text,
+    created_at  timestamptz not null default now(),
+    updated_at  timestamptz not null default now()
+);
+
+-- ─── solution_files ─────────────────────────────────────────────
+-- Knowledge files attached to a solution. We store extracted text so the
+-- generator can feed it to the LLM as context. blob_url optionally points
+-- at the original file when Vercel Blob is configured.
+create table if not exists solution_files (
+    id             uuid primary key default gen_random_uuid(),
+    solution_id    uuid not null references solutions (id) on delete cascade,
+    filename       text not null,
+    mime_type      text,
+    size_bytes     bigint,
+    extracted_text text,
+    blob_url       text,
+    created_at     timestamptz not null default now()
+);
+
+create index if not exists idx_solution_files_solution on solution_files (solution_id);
+
+-- Link a generation to the solution it was created for.
+alter table generations add column if not exists solution_id uuid references solutions (id) on delete set null;

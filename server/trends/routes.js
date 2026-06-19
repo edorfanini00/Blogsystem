@@ -5,9 +5,14 @@
 // is never affected.
 // ═══════════════════════════════════════════════════════════════════
 import express from 'express';
+import multer from 'multer';
 import { isDbConfigured, migrate, pingDb } from './db.js';
 import { isEnsembleConfigured } from './ensembledata.js';
 import { runIngestCycle, listCandidates, getCandidateSnapshots } from './ingest.js';
+import {
+    createSolution, listSolutions, getSolution, updateSolution, deleteSolution,
+    addFile, deleteFile, extractText,
+} from './solutions.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -17,6 +22,9 @@ import {
 } from './config.js';
 
 const router = express.Router();
+
+// In-memory upload (text gets extracted then discarded; max 15MB/file).
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 function requireDb(res) {
     if (!isDbConfigured) {
@@ -109,6 +117,110 @@ router.get('/candidates/:id/snapshots', async (req, res) => {
 // ─── GET /api/trends/message-bank ───────────────────────────────
 router.get('/message-bank', (req, res) => {
     res.json(MESSAGE_BANK);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ─── Solutions knowledge base ("the brain") ────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+// GET /api/trends/solutions — list with file counts
+router.get('/solutions', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json(await listSolutions());
+    } catch (err) {
+        console.error('❌ Solutions list error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/trends/solutions — create
+router.post('/solutions', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const { name, description, buyer, pains, hooks } = req.body || {};
+        if (!name || !name.trim()) return res.status(400).json({ error: 'Solution name is required' });
+        const sol = await createSolution({ name: name.trim(), description, buyer, pains, hooks });
+        res.json(sol);
+    } catch (err) {
+        console.error('❌ Solution create error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/trends/solutions/:id — one with files
+router.get('/solutions/:id', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const sol = await getSolution(req.params.id);
+        if (!sol) return res.status(404).json({ error: 'Solution not found' });
+        res.json(sol);
+    } catch (err) {
+        console.error('❌ Solution get error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/trends/solutions/:id — update
+router.put('/solutions/:id', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const sol = await updateSolution(req.params.id, req.body || {});
+        if (!sol) return res.status(404).json({ error: 'Solution not found' });
+        res.json(sol);
+    } catch (err) {
+        console.error('❌ Solution update error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/trends/solutions/:id
+router.delete('/solutions/:id', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        await deleteSolution(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Solution delete error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/trends/solutions/:id/files — upload knowledge files
+router.post('/solutions/:id/files', upload.array('files', 10), async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const sol = await getSolution(req.params.id);
+        if (!sol) return res.status(404).json({ error: 'Solution not found' });
+
+        const saved = [];
+        for (const file of req.files || []) {
+            const text = await extractText(file.buffer, file.originalname, file.mimetype);
+            const row = await addFile(req.params.id, {
+                filename: file.originalname,
+                mimeType: file.mimetype,
+                sizeBytes: file.size,
+                extractedText: text,
+            });
+            saved.push(row);
+        }
+        res.json({ success: true, files: saved });
+    } catch (err) {
+        console.error('❌ Solution file upload error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/trends/solutions/:id/files/:fileId
+router.delete('/solutions/:id/files/:fileId', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        await deleteFile(req.params.id, req.params.fileId);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Solution file delete error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;
