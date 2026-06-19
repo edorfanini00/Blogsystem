@@ -13,6 +13,7 @@ import {
     SURFACE_THRESHOLD,
     SCORE_WEIGHTS,
     MESSAGE_BANK,
+    TOPIC_KEYWORDS,
 } from './config.js';
 
 const router = express.Router();
@@ -33,6 +34,7 @@ router.get('/health', async (req, res) => {
         db: { configured: isDbConfigured, ok: false },
         ensembleData: { configured: isEnsembleConfigured },
         seedHashtags: SEED_HASHTAGS,
+        topicKeywords: TOPIC_KEYWORDS,
         surfaceThreshold: SURFACE_THRESHOLD,
         weights: SCORE_WEIGHTS,
     };

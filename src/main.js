@@ -562,6 +562,7 @@ navItems.forEach(item => {
             if (typeof initLeadgenPage === 'function') initLeadgenPage();
         } else if (page === 'trends') {
             if (pageTrends) pageTrends.style.display = '';
+            if (typeof initTrendsPage === 'function') initTrendsPage();
         }
     });
 });
@@ -5520,4 +5521,324 @@ setTimeout(function initOnePager() {
     }
 
     console.log('✅ Scraping Lead Gen module ready');
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// ─── TREND ANALYSIS ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+(function () {
+    const state = {
+        bound: false,
+        subtab: 'dashboard',
+        bucket: 'all',
+        sort: 'composite',
+        candidates: [],
+        health: null,
+        dismissed: new Set(),
+    };
+
+    const tApi = (path) => `${typeof API_BASE !== 'undefined' ? API_BASE : ''}${path}`;
+    const toast = (m, t) => { if (typeof showToast === 'function') showToast(m, t); };
+
+    function fmtNum(n) {
+        if (n === null || n === undefined) return '—';
+        const v = Number(n);
+        if (isNaN(v)) return '—';
+        if (v >= 1e9) return (v / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+        if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+        return String(v);
+    }
+
+    function ageStr(iso) {
+        if (!iso) return '—';
+        const ms = Date.now() - new Date(iso).getTime();
+        if (isNaN(ms)) return '—';
+        const h = ms / 3.6e6;
+        if (h < 1) return Math.max(1, Math.round(h * 60)) + 'm';
+        if (h < 24) return Math.round(h) + 'h';
+        return Math.round(h / 24) + 'd';
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    const PLATFORM_GLYPH = { tiktok: '🎵', instagram: '📸', youtube: '▶' };
+
+    function bucketMeta(bucket) {
+        switch (bucket) {
+            case 'trendjack': return { cls: 'trend-bucket-trendjack', label: 'Trendjack' };
+            case 'clone_format': return { cls: 'trend-bucket-clone', label: 'Clone format' };
+            case 'discard': return { cls: 'trend-bucket-discard', label: 'Discard' };
+            default: return { cls: 'trend-bucket-unscored', label: 'Unscored' };
+        }
+    }
+
+    async function loadHealth() {
+        const dbPill = document.getElementById('trendDbPill');
+        const edPill = document.getElementById('trendEdPill');
+        const meta = document.getElementById('trendStatusMeta');
+        try {
+            const res = await fetch(tApi('/api/trends/health'));
+            const h = await res.json();
+            state.health = h;
+
+            const dbOk = h.db && h.db.ok;
+            dbPill.className = 'trend-status-pill ' + (dbOk ? 'ok' : 'off');
+            dbPill.innerHTML = `<span class="trend-dot"></span> Database: ${dbOk ? 'connected' : (h.db && h.db.configured ? 'error' : 'not configured')}`;
+
+            const edOk = h.ensembleData && h.ensembleData.configured;
+            edPill.className = 'trend-status-pill ' + (edOk ? 'ok' : 'off');
+            edPill.innerHTML = `<span class="trend-dot"></span> EnsembleData: ${edOk ? 'ready' : 'no key'}`;
+
+            if (meta) {
+                const seeds = (h.seedHashtags || []).length;
+                meta.textContent = `${seeds} seed hashtags · surface threshold ${h.surfaceThreshold ?? '—'}`;
+            }
+            renderKeywordChips(h);
+            return h;
+        } catch (err) {
+            dbPill.className = 'trend-status-pill off';
+            dbPill.innerHTML = '<span class="trend-dot"></span> Database: unreachable';
+            edPill.className = 'trend-status-pill off';
+            edPill.innerHTML = '<span class="trend-dot"></span> EnsembleData: unknown';
+            return null;
+        }
+    }
+
+    function renderKeywordChips(h) {
+        const wrap = document.getElementById('trendKeywordChips');
+        if (!wrap) return;
+        const kws = (h && h.topicKeywords) || [
+            'FSMA 204', 'food traceability', 'recall', 'cold chain', 'supply chain disruption',
+            'food and beverage demand', 'inventory shrink', 'plant downtime',
+            'oil and gas operations', 'cross-border logistics',
+        ];
+        wrap.innerHTML = kws.map((k) => `<span class="trend-keyword-chip">${esc(k)}</span>`).join('');
+    }
+
+    function markRoadmap() {
+        const done = [1, 5];
+        const current = [2];
+        document.querySelectorAll('#trendRoadmap li').forEach((li) => {
+            const step = parseInt(li.dataset.step);
+            li.classList.toggle('done', done.includes(step));
+            li.classList.toggle('current', current.includes(step));
+        });
+    }
+
+    async function loadCandidates() {
+        const setup = document.getElementById('trendSetup');
+        const empty = document.getElementById('trendEmpty');
+        const loading = document.getElementById('trendLoading');
+        const cards = document.getElementById('trendCards');
+        const discard = document.getElementById('trendCardsDiscard');
+        const divider = document.getElementById('trendDiscardDivider');
+
+        setup.style.display = 'none';
+        empty.style.display = 'none';
+        cards.innerHTML = '';
+        discard.innerHTML = '';
+        divider.style.display = 'none';
+
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) {
+            setup.style.display = '';
+            updateStats([]);
+            return;
+        }
+
+        loading.style.display = '';
+        try {
+            const res = await fetch(tApi('/api/trends/candidates?limit=100'));
+            if (!res.ok) throw new Error('Failed to load candidates');
+            state.candidates = await res.json();
+        } catch (err) {
+            state.candidates = [];
+            toast('Could not load candidates', 'error');
+        } finally {
+            loading.style.display = 'none';
+        }
+
+        updateStats(state.candidates);
+
+        if (!state.candidates.length) {
+            empty.style.display = '';
+            return;
+        }
+        renderCandidates();
+    }
+
+    function updateStats(list) {
+        const surfaced = list.filter((c) => Number(c.composite_score) >= (state.health?.surfaceThreshold ?? 0.6));
+        const scored = list.filter((c) => c.composite_score != null);
+        const snaps = list.reduce((a, c) => a + (Number(c.snapshot_count) || 0), 0);
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('trendStatCandidates', list.length);
+        set('trendStatSurfaced', surfaced.length);
+        set('trendStatSnapshots', fmtNum(snaps));
+        set('trendStatScored', scored.length);
+    }
+
+    function renderCandidates() {
+        const cards = document.getElementById('trendCards');
+        const discardWrap = document.getElementById('trendCardsDiscard');
+        const divider = document.getElementById('trendDiscardDivider');
+
+        let list = state.candidates.filter((c) => !state.dismissed.has(c.id));
+
+        if (state.bucket !== 'all') {
+            list = list.filter((c) => (c.bucket || 'unscored') === state.bucket);
+        }
+
+        list.sort((a, b) => {
+            if (state.sort === 'views') return (Number(b.play_count) || 0) - (Number(a.play_count) || 0);
+            if (state.sort === 'snapshots') return (Number(b.snapshot_count) || 0) - (Number(a.snapshot_count) || 0);
+            if (state.sort === 'recent') return new Date(b.first_seen_at) - new Date(a.first_seen_at);
+            // composite: scored desc, then most recent
+            const cs = (Number(b.composite_score) || -1) - (Number(a.composite_score) || -1);
+            if (cs !== 0) return cs;
+            return new Date(b.first_seen_at) - new Date(a.first_seen_at);
+        });
+
+        const surfaced = [];
+        const discarded = [];
+        for (const c of list) {
+            if (c.bucket === 'discard') discarded.push(c);
+            else surfaced.push(c);
+        }
+
+        cards.innerHTML = surfaced.map(buildCard).join('');
+        discardWrap.innerHTML = discarded.map(buildCard).join('');
+        divider.style.display = discarded.length ? '' : 'none';
+
+        bindCardActions();
+    }
+
+    function buildCard(c) {
+        const bm = bucketMeta(c.bucket);
+        const glyph = PLATFORM_GLYPH[c.platform] || '🎬';
+        const fit = c.bridge_score != null ? Number(c.bridge_score) : null;
+        const fitPct = fit != null ? Math.max(0, Math.min(10, fit)) * 10 : 0;
+        const author = c.author_id ? `@${esc(c.author_id)}` : 'unknown';
+        const followers = c.author_followers != null ? `${fmtNum(c.author_followers)} followers` : '';
+        const scored = c.composite_score != null;
+
+        return `
+        <div class="trend-card" data-id="${esc(c.id)}">
+          <div class="trend-card-media">
+            <span class="trend-platform-glyph">${glyph}</span>
+            <span class="trend-card-bucket ${bm.cls}">${bm.label}</span>
+            <span class="trend-card-age">${ageStr(c.created_at)}</span>
+          </div>
+          <div class="trend-card-body">
+            <div class="trend-card-author">${author}${followers ? ' · ' + followers : ''}</div>
+            <div class="trend-card-caption">${esc(c.caption) || '<span style="color:var(--text-muted)">No caption</span>'}</div>
+            <div class="trend-card-statbar">
+              <div><b>${fmtNum(c.play_count)}</b><span>Views</span></div>
+              <div><b>${fmtNum(c.like_count)}</b><span>Likes</span></div>
+              <div><b>${fmtNum(c.comment_count)}</b><span>Comments</span></div>
+              <div><b>${fmtNum(c.snapshot_count)}</b><span>Snaps</span></div>
+            </div>
+            <div class="trend-fit">
+              <div class="trend-fit-head"><span>CeleriTech fit</span><span>${fit != null ? fit.toFixed(1) + '/10' : '—'}</span></div>
+              <div class="trend-fit-track"><div class="trend-fit-fill" style="width:${fitPct}%"></div></div>
+            </div>
+            <div class="trend-bridge ${scored ? '' : 'pending'}">${scored ? esc(c.bridge_line || '') : 'Pending scoring (step 4)'}</div>
+            <div class="trend-card-actions">
+              <button class="trend-btn-recreate" data-recreate="${esc(c.id)}" ${scored ? '' : 'disabled title="Available after the generation pipeline ships (step 6)"'}>
+                Recreate
+              </button>
+              <button class="trend-btn-dismiss" data-dismiss="${esc(c.id)}" title="Dismiss">✕</button>
+              <a class="trend-btn-dismiss" href="${esc(c.url)}" target="_blank" rel="noopener" title="Open source" style="text-decoration:none;">↗</a>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function bindCardActions() {
+        document.querySelectorAll('#pageTrends [data-dismiss]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                state.dismissed.add(btn.dataset.dismiss);
+                renderCandidates();
+                toast('Dismissed from feed');
+            });
+        });
+        document.querySelectorAll('#pageTrends [data-recreate]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (btn.disabled) return;
+                toast('Generation pipeline ships in step 6');
+            });
+        });
+    }
+
+    async function runIngest() {
+        const btn = document.getElementById('trendIngestBtn');
+        if (!btn) return;
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.4);border-top-color:#fff;"></span> Ingesting…';
+        try {
+            const res = await fetch(tApi('/api/trends/ingest'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const data = await res.json();
+            if (!res.ok) {
+                toast(data.error || 'Ingest unavailable', 'error');
+            } else {
+                toast(`Ingest complete: ${data.totalCandidates || 0} candidates, ${data.totalSnapshots || 0} snapshots`);
+                await loadHealth();
+                await loadCandidates();
+            }
+        } catch (err) {
+            toast('Ingest failed: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    }
+
+    function switchSubtab(name) {
+        state.subtab = name;
+        document.querySelectorAll('#pageTrends .trend-subtab').forEach((t) =>
+            t.classList.toggle('active', t.dataset.subtab === name));
+        document.getElementById('trendPanelDashboard').style.display = name === 'dashboard' ? '' : 'none';
+        document.getElementById('trendPanelTopics').style.display = name === 'topics' ? '' : 'none';
+        document.getElementById('trendPanelRoadmap').style.display = name === 'roadmap' ? '' : 'none';
+    }
+
+    function bindOnce() {
+        if (state.bound) return;
+        const page = document.getElementById('pageTrends');
+        if (!page) return;
+        state.bound = true;
+
+        page.querySelectorAll('.trend-subtab').forEach((t) =>
+            t.addEventListener('click', () => switchSubtab(t.dataset.subtab)));
+
+        page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((c) =>
+            c.addEventListener('click', () => {
+                state.bucket = c.dataset.bucket;
+                page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((x) => x.classList.toggle('active', x === c));
+                renderCandidates();
+            }));
+
+        const sortSel = document.getElementById('trendSort');
+        if (sortSel) sortSel.addEventListener('change', () => { state.sort = sortSel.value; renderCandidates(); });
+
+        const refresh = document.getElementById('trendRefreshBtn');
+        if (refresh) refresh.addEventListener('click', async () => { await loadHealth(); await loadCandidates(); });
+
+        const ingest = document.getElementById('trendIngestBtn');
+        if (ingest) ingest.addEventListener('click', runIngest);
+    }
+
+    window.initTrendsPage = async function initTrendsPage() {
+        bindOnce();
+        markRoadmap();
+        await loadHealth();
+        await loadCandidates();
+    };
+
+    console.log('✅ Trend Analysis module ready');
 })();

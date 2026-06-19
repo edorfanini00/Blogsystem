@@ -2063,170 +2063,183 @@
         <div class="dashboard-header">
           <div>
             <h1>Trend Analysis</h1>
-            <p class="subtitle">CeleriTech Trend Engine — scan social for accelerating content, score the bridge to EZ solutions, recreate branded video on one click.</p>
+            <p class="subtitle">Scan social for accelerating content, score the bridge to EZ solutions, recreate branded video on one click.</p>
+          </div>
+          <div class="trend-toolbar">
+            <button type="button" class="btn-ghost" id="trendRefreshBtn" title="Refresh feed">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+              </svg>
+              Refresh
+            </button>
+            <button type="button" class="btn-primary" id="trendIngestBtn" style="margin:0;padding:10px 20px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+                <path d="M12 2v6m0 0l3-3m-3 3L9 5" /><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              </svg>
+              Run ingest
+            </button>
           </div>
         </div>
 
-        <!-- What this is -->
-        <section class="card" style="margin-bottom:24px;">
-          <h3 style="margin-top:0;">What this is</h3>
-          <p style="color:var(--text-secondary);line-height:1.7;">
-            A trend engine with two intelligence layers feeding one scorer. The
-            <strong>listening layer</strong> tracks which topics are rising in the buyer's world.
-            The <strong>velocity layer</strong> tracks which specific videos and formats are
-            accelerating right now. The scorer merges both, assigns each candidate a bucket and a
-            bridge to a CeleriTech message, and scores fit 0 to 10. Strong candidates surface in the
-            dashboard with a Recreate button that fires a generation pipeline into a human review
-            queue before posting. The bridge to manufacturing ops is the irreplaceable part.
-          </p>
-        </section>
-
-        <!-- Editorial rules callout -->
-        <section class="card" style="margin-bottom:24px;border-left:4px solid var(--accent-primary);">
-          <h3 style="margin-top:0;">Editorial rules</h3>
-          <ul style="color:var(--text-secondary);line-height:1.8;margin:0;padding-left:20px;">
-            <li>No em dashes, no exclamation points, no AI-sounding phrasing.</li>
-            <li>Mechanism first. Concise and human.</li>
-            <li>The product is always called <strong>"EZ solutions"</strong> in buyer-facing text.</li>
-            <li>Never "ERP". Never "SAP partner".</li>
-            <li>Hugo the Hippo delivers the lines. Dry, plain, mechanism first.</li>
-          </ul>
-        </section>
-
-        <!-- Build roadmap -->
-        <section class="card" style="margin-bottom:24px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="margin:0;">Build roadmap</h3>
-            <span class="trend-badge trend-badge-pending">Not started</span>
-          </div>
-          <ol id="trendBuildSteps" style="color:var(--text-secondary);line-height:1.9;margin:0;padding-left:20px;">
-            <li>Postgres schema, EnsembleData ingest, snapshots. Prove the time series builds.</li>
-            <li>Derived metrics: velocity, acceleration, baseline_ratio.</li>
-            <li>Clustering by audio_id and caption embedding.</li>
-            <li>Scorer LLM step and the CeleriTech message bank. Composite score.</li>
-            <li>Dashboard read view with the cards.</li>
-            <li>Recreate to generation pipeline, ending in the review queue.</li>
-            <li>Review and post.</li>
-            <li>Listening layer and topic linkage (add after v1 works end to end).</li>
-          </ol>
-        </section>
-
-        <!-- Two layers -->
-        <div class="trend-grid">
-          <section class="card">
-            <span class="trend-badge trend-badge-velocity">Velocity layer · depth</span>
-            <h3>Which videos are accelerating</h3>
-            <p style="color:var(--text-secondary);line-height:1.7;">
-              Every 2 to 4 hours, pull recent posts per seed hashtag from EnsembleData and store a
-              candidate plus a snapshot. Re-pull the same candidates each cycle so the snapshot table
-              builds a time series. The signal is the slope across snapshots, not a single scrape.
-            </p>
-            <p style="color:var(--text-secondary);line-height:1.7;margin-bottom:4px;"><strong>Derived metrics per cycle:</strong></p>
-            <ul style="color:var(--text-secondary);line-height:1.7;margin:0;padding-left:20px;">
-              <li><code>velocity</code> = Δ play_count / hours between snapshots</li>
-              <li><code>acceleration</code> = Δ velocity / hours between snapshots</li>
-              <li><code>baseline_ratio</code> = play_count / median of author's last 20 posts</li>
-              <li><code>age_hours</code> = now − created_at</li>
-            </ul>
-            <p style="color:var(--text-secondary);line-height:1.7;margin-top:12px;">
-              baseline_ratio is the early signal. Pre-peak detection means high baseline_ratio plus
-              positive acceleration plus low age_hours. A trend is a cluster (audio_id match, caption
-              embedding similarity, hashtag co-occurrence), not a single video.
-            </p>
-          </section>
-
-          <section class="card">
-            <span class="trend-badge trend-badge-listening">Listening layer · breadth</span>
-            <h3>Which topics are rising</h3>
-            <p style="color:var(--text-secondary);line-height:1.7;">
-              Runs on its own schedule. Tracks mention volume and sentiment over time for buyer-world
-              keywords: FSMA 204, food traceability, recall, cold chain, supply chain disruption,
-              food and beverage demand, inventory shrink, plant downtime, oil and gas operations,
-              cross-border logistics. Plus cultural moments that touch buyer demand.
-            </p>
-            <p style="color:var(--text-secondary);line-height:1.7;margin-bottom:4px;"><strong>Wave score:</strong></p>
-            <pre class="trend-formula">wave_score = normalized_acceleration(mention_volume)
-           * sentiment_weight
-           * buyer_relevance_weight</pre>
-            <p style="color:var(--text-secondary);line-height:1.7;margin-top:12px;">
-              Surface topics where the wave is rising and buyer relevance is high. A rising topic with
-              no buyer bridge scores low and stays out of the way.
-            </p>
-          </section>
+        <!-- Connection status strip -->
+        <div class="trend-status-strip" id="trendStatusStrip">
+          <span class="trend-status-pill loading" id="trendDbPill">
+            <span class="trend-dot"></span> Database: checking…
+          </span>
+          <span class="trend-status-pill loading" id="trendEdPill">
+            <span class="trend-dot"></span> EnsembleData: checking…
+          </span>
+          <span class="trend-status-meta" id="trendStatusMeta"></span>
         </div>
 
-        <!-- The scorer -->
-        <section class="card" style="margin:24px 0;">
-          <span class="trend-badge trend-badge-scorer">The merge · irreplaceable</span>
-          <h3>The scorer</h3>
-          <p style="color:var(--text-secondary);line-height:1.7;">
-            One LLM step per candidate. Inputs: the candidate (caption, cluster label, velocity
-            metrics, baseline ratio) and any linked topic wave. Outputs a bucket, a one-line bridge,
-            and a bridge score 0 to 10. Be strict — most candidates score low.
-          </p>
-          <div class="trend-bucket-row">
-            <div class="trend-bucket">
-              <strong>trendjack</strong>
-              <span>Rides a cultural moment the buyer lives in. Make original content tying the message to the moment.</span>
-            </div>
-            <div class="trend-bucket">
-              <strong>clone_format</strong>
-              <span>Structure (hook, reveal, close) transfers even though the topic does not. Steal the skeleton, inject an ops pain point.</span>
-            </div>
-            <div class="trend-bucket">
-              <strong>discard</strong>
-              <span>No honest bridge to a manufacturing or ops message exists.</span>
-            </div>
+        <!-- Sub-tabs -->
+        <div class="trend-subtabs">
+          <button class="trend-subtab active" data-subtab="dashboard">Dashboard</button>
+          <button class="trend-subtab" data-subtab="topics">Topics</button>
+          <button class="trend-subtab" data-subtab="roadmap">Roadmap</button>
+        </div>
+
+        <!-- ─── Sub-tab: Dashboard ─── -->
+        <div class="trend-subpanel" id="trendPanelDashboard">
+
+          <!-- Summary stats -->
+          <div class="trend-stats-row" id="trendStatsRow">
+            <div class="trend-stat-card"><span class="trend-stat-val" id="trendStatCandidates">—</span><span class="trend-stat-lbl">Candidates</span></div>
+            <div class="trend-stat-card"><span class="trend-stat-val" id="trendStatSurfaced">—</span><span class="trend-stat-lbl">Surfaced</span></div>
+            <div class="trend-stat-card"><span class="trend-stat-val" id="trendStatSnapshots">—</span><span class="trend-stat-lbl">Snapshots</span></div>
+            <div class="trend-stat-card"><span class="trend-stat-val" id="trendStatScored">—</span><span class="trend-stat-lbl">Scored</span></div>
           </div>
-          <p style="color:var(--text-secondary);line-height:1.7;margin-bottom:4px;"><strong>Composite score (weights are config, not hardcoded):</strong></p>
-          <pre class="trend-formula">composite_score = (bridge_score / 10) * 0.50
-                + normalize(baseline_ratio) * 0.25
-                + normalize(acceleration)   * 0.15
-                + normalize(topic_wave)     * 0.10</pre>
-          <p style="color:var(--text-secondary);line-height:1.7;margin-top:12px;">
-            Surface candidates above a threshold (start at 0.6, tune from real data). Everything below
-            drops to the greyed bottom of the dashboard.
-          </p>
-        </section>
 
-        <!-- Message bank -->
-        <section class="card" style="margin-bottom:24px;">
-          <h3 style="margin-top:0;">CeleriTech message bank</h3>
-          <ul style="color:var(--text-secondary);line-height:1.8;margin:0;padding-left:20px;">
-            <li><strong>Product:</strong> EZ solutions. Software giving food and beverage manufacturers and oil and gas operators visibility they do not get from spreadsheets.</li>
-            <li><strong>Buyer:</strong> food and beverage manufacturers, oil and gas operators, cross-border US to Venezuela operations.</li>
-            <li><strong>Core pains:</strong> demand surges they cannot see coming, manual inventory and reconciliation, no real-time plant-floor visibility, FSMA 204 traceability pressure, finding out about a problem when they run out.</li>
-            <li><strong>Hooks:</strong> FSMA 204 compliance, demand surge visibility, the plant running blind on spreadsheets.</li>
-          </ul>
-        </section>
+          <!-- Controls -->
+          <div class="trend-controls" id="trendControls">
+            <div class="trend-filter-group" id="trendBucketFilter">
+              <button class="trend-chip active" data-bucket="all">All</button>
+              <button class="trend-chip" data-bucket="trendjack">Trendjack</button>
+              <button class="trend-chip" data-bucket="clone_format">Clone format</button>
+              <button class="trend-chip" data-bucket="unscored">Unscored</button>
+              <button class="trend-chip" data-bucket="discard">Discard</button>
+            </div>
+            <select class="trend-sort" id="trendSort">
+              <option value="composite">Sort: Composite score</option>
+              <option value="recent">Sort: Most recent</option>
+              <option value="views">Sort: Most views</option>
+              <option value="snapshots">Sort: Most snapshots</option>
+            </select>
+          </div>
 
-        <!-- Generation pipeline + guardrails -->
-        <div class="trend-grid">
-          <section class="card">
-            <h3 style="margin-top:0;">Generation pipeline · the Recreate action</h3>
-            <ol style="color:var(--text-secondary);line-height:1.8;margin:0;padding-left:20px;">
-              <li><strong>Script:</strong> LLM writes a new script in the candidate's structure, mapped to the bridge_line, in Hugo's voice, following the editorial rules. Never reuse the source video's words or assets.</li>
-              <li><strong>Video:</strong> Higgsfield generates the clip from the script.</li>
-              <li><strong>Voiceover:</strong> ElevenLabs.</li>
-              <li><strong>Captions:</strong> caption layer so it reads native to the platform.</li>
-              <li><strong>Review:</strong> draft posted to a Telegram or Slack approval step. One tap approves.</li>
-              <li><strong>Post:</strong> on approval, publish through Blotato or Postiz. On rejection, mark killed.</li>
+          <!-- Setup state (DB not configured) -->
+          <section class="card trend-setup" id="trendSetup" style="display:none;">
+            <div class="trend-setup-icon">🔌</div>
+            <h3>Connect the trend engine</h3>
+            <p>The backend is built and waiting. Add credentials to start ingesting accelerating content.</p>
+            <ol class="trend-setup-steps">
+              <li>Create a Supabase project and set <code>DATABASE_URL</code> to the pooled connection string.</li>
+              <li>Run the migration: <code>POST /api/trends/migrate</code> (creates the schema).</li>
+              <li>Add <code>ENSEMBLEDATA_API_KEY</code>, then hit <strong>Run ingest</strong> above.</li>
+              <li>Re-run ingest each cycle. Snapshot counts climbing per candidate proves the time series is building.</li>
             </ol>
           </section>
 
+          <!-- Empty state (DB ok, no candidates) -->
+          <section class="card trend-empty" id="trendEmpty" style="display:none;">
+            <div class="trend-setup-icon">📡</div>
+            <h3>No candidates yet</h3>
+            <p>The database is connected. Run an ingest cycle to pull accelerating posts from your seed hashtags.</p>
+          </section>
+
+          <!-- Loading -->
+          <div class="trend-loading" id="trendLoading" style="display:none;">
+            <span class="spinner-orange"></span> Loading candidates…
+          </div>
+
+          <!-- Candidate cards -->
+          <div class="trend-cards" id="trendCards"></div>
+
+          <!-- Discard divider + greyed pile -->
+          <div class="trend-discard-divider" id="trendDiscardDivider" style="display:none;">
+            <span>Below threshold</span>
+          </div>
+          <div class="trend-cards trend-cards-discard" id="trendCardsDiscard"></div>
+        </div>
+
+        <!-- ─── Sub-tab: Topics ─── -->
+        <div class="trend-subpanel" id="trendPanelTopics" style="display:none;">
           <section class="card">
-            <h3 style="margin-top:0;">Guardrails</h3>
-            <ul style="color:var(--text-secondary);line-height:1.8;margin:0;padding-left:20px;">
-              <li>Never repost or re-upload a source video. Clone format only. Generate original assets every time.</li>
-              <li>Human approval is mandatory before any post.</li>
-              <li>Brand safety check on the generated script before it reaches the review queue.</li>
-              <li>Keep weights, thresholds, seeds, and the message bank in config so they tune without code changes.</li>
-            </ul>
-            <h3 style="margin-top:20px;">Acceptance criteria</h3>
-            <ul style="color:var(--text-secondary);line-height:1.8;margin:0;padding-left:20px;">
-              <li><strong>v1 (steps 1–7):</strong> a candidate ingested, scored, surfaced, recreated into a Higgsfield draft, approved in Telegram, posted — no source asset reused.</li>
-              <li><strong>v2 (step 8):</strong> a rising topic wave links to candidates and lifts their composite score, visible on the dashboard.</li>
-            </ul>
+            <span class="trend-badge trend-badge-listening">Listening layer · breadth</span>
+            <h3 style="margin-top:8px;">Buyer-world topics</h3>
+            <p style="color:var(--text-secondary);line-height:1.7;">
+              Tracks mention volume, sentiment, and a normalized wave score across the keywords below,
+              independent of any single video. A rising topic with a real buyer bridge lifts the
+              composite score of linked candidates. Wired in step 8.
+            </p>
+            <div class="trend-keyword-chips" id="trendKeywordChips"></div>
+            <pre class="trend-formula" style="margin-top:16px;">wave_score = normalized_acceleration(mention_volume)
+           * sentiment_weight
+           * buyer_relevance_weight</pre>
+          </section>
+        </div>
+
+        <!-- ─── Sub-tab: Roadmap ─── -->
+        <div class="trend-subpanel" id="trendPanelRoadmap" style="display:none;">
+          <section class="card" style="margin-bottom:24px;">
+            <h3 style="margin-top:0;">Build roadmap</h3>
+            <ol class="trend-roadmap" id="trendRoadmap">
+              <li data-step="1">Postgres schema, EnsembleData ingest, snapshots. Prove the time series builds.</li>
+              <li data-step="2">Derived metrics: velocity, acceleration, baseline_ratio.</li>
+              <li data-step="3">Clustering by audio_id and caption embedding.</li>
+              <li data-step="4">Scorer LLM step and the CeleriTech message bank. Composite score.</li>
+              <li data-step="5">Dashboard read view with the cards.</li>
+              <li data-step="6">Recreate to generation pipeline, ending in the review queue.</li>
+              <li data-step="7">Review and post.</li>
+              <li data-step="8">Listening layer and topic linkage.</li>
+            </ol>
+          </section>
+
+          <div class="trend-grid">
+            <section class="card">
+              <span class="trend-badge trend-badge-scorer">The merge · irreplaceable</span>
+              <h3>The scorer</h3>
+              <p style="color:var(--text-secondary);line-height:1.7;">
+                One LLM step per candidate assigns a bucket, writes a one-line bridge, and scores fit
+                0 to 10. Be strict — most candidates score low.
+              </p>
+              <div class="trend-bucket-row">
+                <div class="trend-bucket"><strong>trendjack</strong><span>Rides a cultural moment the buyer lives in.</span></div>
+                <div class="trend-bucket"><strong>clone_format</strong><span>Structure transfers even though the topic does not.</span></div>
+                <div class="trend-bucket"><strong>discard</strong><span>No honest bridge to an ops message exists.</span></div>
+              </div>
+              <pre class="trend-formula">composite_score = (bridge_score / 10) * 0.50
+                + normalize(baseline_ratio) * 0.25
+                + normalize(acceleration)   * 0.15
+                + normalize(topic_wave)     * 0.10</pre>
+            </section>
+
+            <section class="card">
+              <h3 style="margin-top:0;">Generation pipeline · Recreate</h3>
+              <ol style="color:var(--text-secondary);line-height:1.8;margin:0 0 16px;padding-left:20px;">
+                <li>Script in the candidate's structure, mapped to the bridge line, in Hugo's voice.</li>
+                <li>Higgsfield video, ElevenLabs voiceover, native captions.</li>
+                <li>Telegram or Slack approval. One tap approves.</li>
+                <li>Post through Blotato or Postiz. On rejection, mark killed.</li>
+              </ol>
+              <h3>Guardrails</h3>
+              <ul style="color:var(--text-secondary);line-height:1.8;margin:0;padding-left:20px;">
+                <li>Never repost a source video. Clone format only, original assets every time.</li>
+                <li>Human approval mandatory before any post.</li>
+                <li>Brand safety check before the review queue.</li>
+                <li>Weights, thresholds, seeds, and the message bank stay in config.</li>
+              </ul>
+            </section>
+          </div>
+
+          <section class="card" style="margin-top:24px;border-left:4px solid var(--accent-primary);">
+            <h3 style="margin-top:0;">Editorial rules</h3>
+            <p style="color:var(--text-secondary);line-height:1.7;margin:0;">
+              No em dashes. No exclamation points. No AI-sounding phrasing. Mechanism first, concise
+              and human. The product is always <strong>"EZ solutions"</strong>, never "ERP", never
+              "SAP partner". Hugo the Hippo delivers the lines.
+            </p>
           </section>
         </div>
       </div>
