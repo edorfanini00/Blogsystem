@@ -4204,6 +4204,10 @@ app.post('/api/leads/:id/reply', async (req, res) => {
     }
 });
 
+// ─── Trend Engine routes (mounted under /api/trends) ────────────
+import trendRoutes from './trends/routes.js';
+app.use('/api/trends', trendRoutes);
+
 // ─── Start Server ────────────────────────────────────────────────
 if (!isVercel) {
     app.listen(PORT, () => {
