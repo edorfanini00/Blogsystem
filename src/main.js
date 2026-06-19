@@ -505,6 +505,7 @@ const pageCampaign = document.getElementById('pageCampaign');
 const pageScheduler = document.getElementById('pageScheduler');
 const pageOnePager = document.getElementById('pageOnePager');
 const pageLeadgen = document.getElementById('pageLeadgen');
+const pageTrends = document.getElementById('pageTrends');
 
 navItems.forEach(item => {
     item.addEventListener('click', e => {
@@ -530,6 +531,7 @@ navItems.forEach(item => {
         if (pageScheduler) pageScheduler.style.display = 'none';
         if (pageOnePager) pageOnePager.style.display = 'none';
         if (pageLeadgen) pageLeadgen.style.display = 'none';
+        if (pageTrends) pageTrends.style.display = 'none';
 
         // Show selected page
         if (page === 'blogs') {
@@ -558,6 +560,8 @@ navItems.forEach(item => {
         } else if (page === 'leadgen') {
             if (pageLeadgen) pageLeadgen.style.display = '';
             if (typeof initLeadgenPage === 'function') initLeadgenPage();
+        } else if (page === 'trends') {
+            if (pageTrends) pageTrends.style.display = '';
         }
     });
 });

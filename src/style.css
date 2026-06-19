@@ -5579,3 +5579,92 @@ body.light-theme .outreach-event {
 body.light-theme .campaign-stat {
   background: #f1f5f9;
 }
+
+/* ─── Trend Analysis ──────────────────────────────────────────── */
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+}
+
+.trend-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.trend-badge-pending {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-secondary);
+}
+
+.trend-badge-velocity {
+  background: rgba(234, 88, 12, 0.12);
+  color: var(--accent-primary);
+}
+
+.trend-badge-listening {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+.trend-badge-scorer {
+  background: rgba(168, 85, 247, 0.14);
+  color: #9333ea;
+}
+
+.trend-formula {
+  background: var(--bg-secondary, #f8fafc);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre;
+  overflow-x: auto;
+  margin: 4px 0;
+}
+
+.trend-bucket-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.trend-bucket {
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trend-bucket strong {
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--accent-primary);
+}
+
+.trend-bucket span {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+#pageTrends code {
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 0.82rem;
+  background: rgba(234, 88, 12, 0.1);
+  color: var(--accent-primary);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
