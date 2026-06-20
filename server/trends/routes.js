@@ -310,6 +310,17 @@ router.get('/generations/:id/voiceover', async (req, res) => {
 // Accepts GET (Vercel cron default) and POST. Each stage degrades on its
 // own so a missing key never breaks the rest.
 async function runCron(req, res) {
+    // When CRON_SECRET is set (Vercel sends it as a Bearer token on scheduled
+    // invocations), require it. Without it configured, stay open so manual
+    // triggering keeps working.
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+        const auth = req.headers.authorization || '';
+        const token = auth.replace(/^Bearer\s+/i, '');
+        if (token !== cronSecret && req.query.secret !== cronSecret) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+    }
     if (!isDbConfigured) return res.status(503).json({ error: 'DATABASE_URL not configured' });
     const out = { startedAt: new Date().toISOString(), stages: {} };
     try {

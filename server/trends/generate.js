@@ -96,6 +96,15 @@ export async function createGeneration(candidateId, { solutionId = null } = {}) 
     const candidate = rows[0];
     if (!candidate) throw new Error('Candidate not found');
 
+    // Don't spawn a second render while one is already in flight for this
+    // candidate; hand back the in-progress one instead.
+    const active = await query(
+        `select * from generations where candidate_id = $1 and status = 'rendering'
+         order by created_at desc limit 1`,
+        [candidateId]
+    );
+    if (active.rows[0]) return active.rows[0];
+
     const metrics = await getCandidateMetrics(candidateId);
     const solutionContext = solutionId ? await getSolutionContext(solutionId) : null;
     const script = await writeScript(candidate, metrics, solutionContext);
@@ -157,19 +166,40 @@ export async function refreshGeneration(id) {
     if (g.status !== 'rendering' || !g.status_url || !FAL_KEY) return g;
 
     const sres = await fetch(g.status_url, { headers: { Authorization: `Key ${FAL_KEY}` } });
+    if (!sres.ok) {
+        // Transient status error — leave it rendering so the next poll retries.
+        return g;
+    }
     const sdata = await sres.json().catch(() => ({}));
 
     if (sdata.status === 'COMPLETED') {
         const rres = await fetch(g.response_url, { headers: { Authorization: `Key ${FAL_KEY}` } });
+        if (!rres.ok) {
+            const body = await rres.text().catch(() => '');
+            const upd = await query(
+                `update generations set status = 'failed', error = $2 where id = $1 returning *`,
+                [id, `result fetch ${rres.status}: ${body.slice(0, 200)}`]
+            );
+            return upd.rows[0];
+        }
         const rdata = await rres.json().catch(() => ({}));
         const url = pickVideoUrl(rdata);
+        if (!url) {
+            // Completed but no asset URL — treat as a failure rather than a
+            // "ready" review item with nothing to show.
+            const upd = await query(
+                `update generations set status = 'failed', error = $2 where id = $1 returning *`,
+                [id, 'render completed but no video URL in response']
+            );
+            return upd.rows[0];
+        }
         const upd = await query(
             `update generations set status = 'review', asset_url = $2 where id = $1 returning *`,
             [id, url]
         );
         return { ...upd.rows[0], _justReady: true };
     }
-    if (sdata.status === 'FAILED') {
+    if (sdata.status === 'FAILED' || sdata.status === 'ERROR') {
         const upd = await query(
             `update generations set status = 'failed', error = $2 where id = $1 returning *`,
             [id, JSON.stringify(sdata).slice(0, 300)]

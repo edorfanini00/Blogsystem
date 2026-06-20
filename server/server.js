@@ -185,7 +185,9 @@ async function getUsers() {
         const r = getRedis();
         await r.connect().catch(() => { });
         const data = await r.get('orbit_users');
-        return data ? JSON.parse(data) : [];
+        if (!data) return [];
+        try { return JSON.parse(data); }
+        catch (err) { console.error('Corrupt orbit_users in Redis:', err.message); return []; }
     }
     try {
         return JSON.parse(readFileSync(usersFile, 'utf-8'));
@@ -2728,7 +2730,7 @@ app.get('/api/reddit/callback', async (req, res) => {
 
         const redditUsername = meResponse.data.name;
 
-        if (!redisCreds) {
+        if (!useKV) {
             return res.status(500).send('<h2>OAuth Error</h2><p>No Redis credentials configured.</p>');
         }
 

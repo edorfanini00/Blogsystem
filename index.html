@@ -2100,12 +2100,12 @@
         </div>
 
         <!-- Sub-tabs -->
-        <div class="trend-subtabs">
-          <button class="trend-subtab active" data-subtab="dashboard">Dashboard</button>
-          <button class="trend-subtab" data-subtab="queue">🎬 Queue <span class="trend-subtab-badge" id="trendQueueBadge" style="display:none;">0</span></button>
-          <button class="trend-subtab" data-subtab="solutions">🧠 Solutions</button>
-          <button class="trend-subtab" data-subtab="topics">Topics</button>
-          <button class="trend-subtab" data-subtab="roadmap">Roadmap</button>
+        <div class="trend-subtabs" role="tablist" aria-label="Trend Analysis sections">
+          <button class="trend-subtab active" data-subtab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+          <button class="trend-subtab" data-subtab="queue" role="tab" aria-selected="false">🎬 Queue <span class="trend-subtab-badge" id="trendQueueBadge" style="display:none;">0</span></button>
+          <button class="trend-subtab" data-subtab="solutions" role="tab" aria-selected="false">🧠 Solutions</button>
+          <button class="trend-subtab" data-subtab="topics" role="tab" aria-selected="false">Topics</button>
+          <button class="trend-subtab" data-subtab="roadmap" role="tab" aria-selected="false">Roadmap</button>
         </div>
 
         <!-- ─── Sub-tab: Dashboard ─── -->
@@ -2128,7 +2128,7 @@
               <button class="trend-chip" data-bucket="unscored">Unscored</button>
               <button class="trend-chip" data-bucket="discard">Discard</button>
             </div>
-            <select class="trend-sort" id="trendSort">
+            <select class="trend-sort" id="trendSort" aria-label="Sort candidates">
               <option value="composite">Sort: Composite score</option>
               <option value="recent">Sort: Most recent</option>
               <option value="views">Sort: Most views</option>
@@ -2178,12 +2178,14 @@
               Every <strong>Recreate</strong> lands here. Claude writes the script, fal.ai renders the
               video, then it waits for your review. Approve to greenlight for posting, or kill it.
             </p>
-            <div class="trend-queue-filter" id="trendQueueFilter">
+            <div class="trend-queue-filter" id="trendQueueFilter" role="group" aria-label="Filter queue by status">
               <button class="trend-chip active" data-qstatus="all">All</button>
               <button class="trend-chip" data-qstatus="rendering">Rendering</button>
               <button class="trend-chip" data-qstatus="review">Review</button>
               <button class="trend-chip" data-qstatus="approved">Approved</button>
               <button class="trend-chip" data-qstatus="posted">Posted</button>
+              <button class="trend-chip" data-qstatus="script_only">Script only</button>
+              <button class="trend-chip" data-qstatus="failed">Failed</button>
             </div>
           </div>
 

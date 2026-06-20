@@ -53,7 +53,7 @@ export async function runTopicCycle({ keywords = TOPIC_KEYWORDS } = {}) {
 // Latest snapshot per keyword, sorted by how hot it is right now.
 export async function listTopics() {
     const r = await query(
-        `select distinct on (keyword) keyword, mention_volume, wave_score, captured_at
+        `select distinct on (keyword) id, keyword, mention_volume, wave_score, captured_at
          from topics order by keyword, captured_at desc`
     );
     return r.rows.sort(
@@ -63,21 +63,41 @@ export async function listTopics() {
     );
 }
 
+// Whole-word(ish) containment so "recall" doesn't match inside another word.
+function mentions(text, keyword) {
+    const kw = String(keyword).toLowerCase().trim();
+    if (!kw) return false;
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const boundary = /[a-z0-9]$/.test(kw) ? '\\b' : '';
+    const re = new RegExp(`${/^[a-z0-9]/.test(kw) ? '\\b' : ''}${escaped}${boundary}`, 'i');
+    return re.test(text);
+}
+
+// Best matching topic for a candidate's text. Returns { wave, topicId }.
+// Pass a pre-fetched topics array (from listTopics) to avoid re-querying
+// per candidate inside a scoring batch.
+export function bestTopicMatch(caption, hashtags, topics) {
+    const text = `${caption || ''} ${(hashtags || []).join(' ')}`;
+    if (!text.trim() || !Array.isArray(topics) || !topics.length) return { wave: 0, topicId: null };
+    // Longest keyword first so the most specific topic wins.
+    const sorted = [...topics].sort((a, b) => String(b.keyword).length - String(a.keyword).length);
+    let best = { wave: 0, topicId: null };
+    for (const t of sorted) {
+        if (mentions(text, t.keyword)) {
+            const wave = Number(t.wave_score) || 0;
+            if (wave >= best.wave) best = { wave, topicId: t.id || null };
+        }
+    }
+    return best;
+}
+
 // Best wave score among topics matched by a candidate's caption/hashtags.
-// Used by the scorer to boost time-relevant candidates.
+// (Single-candidate convenience; loads topics itself.)
 export async function matchTopicWave(caption, hashtags) {
-    const text = `${caption || ''} ${(hashtags || []).join(' ')}`.toLowerCase();
-    if (!text.trim()) return 0;
-    let best = 0;
     try {
         const topics = await listTopics();
-        for (const t of topics) {
-            if (text.includes(String(t.keyword).toLowerCase())) {
-                best = Math.max(best, Number(t.wave_score) || 0);
-            }
-        }
+        return bestTopicMatch(caption, hashtags, topics).wave;
     } catch {
         return 0;
     }
-    return best;
 }

@@ -41,6 +41,14 @@ let englishBlogHtml = null;
 let currentPreviewLang = 'en';
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
 
+// Escape a string for safe interpolation into innerHTML. Use for any value
+// that originates from an API/user before placing it in a template literal.
+function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+window.escHtml = escHtml;
+
 // ─── Configure marked ────────────────────────────────────────────
 marked.setOptions({
     breaks: true,
@@ -172,8 +180,12 @@ function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     const icon = type === 'success' ? '✓' : '✕';
-    toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
-    toastContainer.appendChild(toast);
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icon;
+    const msgSpan = document.createElement('span');
+    msgSpan.textContent = String(message == null ? '' : message);
+    toast.append(iconSpan, msgSpan);
+    if (toastContainer) toastContainer.appendChild(toast);
 
     setTimeout(() => {
         toast.classList.add('leaving');
@@ -246,6 +258,11 @@ blogForm.addEventListener('submit', async (e) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keywords, description, wordCount, imageCount, target, product, trends, tone, language }),
         });
+
+        if (!res.ok || !res.body) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Generation failed (HTTP ${res.status})`);
+        }
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -1741,6 +1758,11 @@ adForm.addEventListener('submit', async e => {
             body: JSON.stringify({ product, description, platforms, videoDuration, postCount, ctaGoal, userName }),
         });
 
+        if (!res.ok || !res.body) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Ad generation failed (HTTP ${res.status})`);
+        }
+
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -2327,6 +2349,9 @@ window.closeMediaViewer = function () {
 // Generate
 async function handleMediaGeneration(e) {
     e.preventDefault();
+
+    // Guard against double-submits launching parallel (costly) generations.
+    if (mediaGenerateBtn && mediaGenerateBtn.disabled) return;
 
     const prompt = mediaPrompt.value.trim();
     if (!prompt) {
@@ -3471,8 +3496,12 @@ const redditStatReplies = document.getElementById('redditStatReplies');
 const redditStatEngagement = document.getElementById('redditStatEngagement');
 
 // State
-let redditAgents = JSON.parse(localStorage.getItem('orbit_reddit_agents') || '[]');
-let redditActivity = JSON.parse(localStorage.getItem('orbit_reddit_activity') || '[]');
+function safeParseLS(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+    catch { return fallback; }
+}
+let redditAgents = safeParseLS('orbit_reddit_agents', []);
+let redditActivity = safeParseLS('orbit_reddit_activity', []);
 
 // Toggle Form
 if (redditCreateAgentBtn) {
@@ -4219,7 +4248,7 @@ function renderAccountsStatus() {
                 if (isConnected) {
                     statusEl.className = 'sched-account-status connected-status';
                     const userName = accounts[p].name || 'Connected';
-                    statusEl.innerHTML = `<span class="status-dot"></span><span>Connected as ${userName}</span>`;
+                    statusEl.innerHTML = `<span class="status-dot"></span><span>Connected as ${escHtml(userName)}</span>`;
                 } else {
                     statusEl.className = 'sched-account-status disconnected';
                     statusEl.innerHTML = '<span class="status-dot"></span><span>Not connected</span>';
@@ -4258,50 +4287,12 @@ function renderAccountsStatus() {
 }
 
 function initAccountConnections() {
-    // Listen for OAuth callback postMessage from popup
-    window.addEventListener('message', (event) => {
-        if (event.data?.type === 'oauth_result') {
-            const { status, platform, detail } = event.data;
-            if (status === 'success') {
-                showToast(`${PLATFORM_META[platform]?.name || platform} connected as ${detail}!`);
-            } else {
-                showToast(`${PLATFORM_META[platform]?.name || platform} connection failed: ${detail}`, 'error');
-            }
-            // Refresh status from server
-            renderAccountsStatus();
-        }
-    });
-
-    const connectBtns = document.querySelectorAll('.sched-connect-btn');
-    console.log(`🔌 Found ${connectBtns.length} connect buttons`);
-    connectBtns.forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const platform = btn.dataset.platform;
-            console.log(`🔌 Connect clicked for: ${platform}`);
-            if (!platform) return;
-
-            const isConnected = cachedAccountStatus[platform]?.connected === true;
-
-            if (isConnected) {
-                // Disconnect via server
-                try {
-                    const res = await fetch(`${API_BASE}/api/oauth/${platform}/disconnect`, { method: 'POST' });
-                    if (res.ok) {
-                        showToast(`${PLATFORM_META[platform]?.name || platform} disconnected`);
-                        renderAccountsStatus();
-                    }
-                } catch (err) {
-                    showToast('Disconnect failed: ' + err.message, 'error');
-                }
-            } else {
-                // Open OAuth popup via server
-                const platformName = PLATFORM_META[platform]?.name || platform;
-                showToast(`Opening ${platformName} authorization…`);
-                const oauthUrl = `${API_BASE}/api/oauth/${platform}/connect`;
-                window.open(oauthUrl, `oauth_${platform}`, 'width=600,height=700,left=300,top=100');
-            }
-        });
-    });
+    // OAuth popup messages and connect/disconnect clicks are handled once,
+    // globally, via the delegated listeners defined near the top of this file
+    // (window 'message' + document 'click' on .sched-connect-btn). Binding them
+    // again here caused duplicate toasts and double requests, so we only need
+    // to render the initial status.
+    renderAccountsStatus();
 }
 
 
@@ -4808,37 +4799,35 @@ setTimeout(function initOnePager() {
     }
 
     // ─── Campaign Actions ────────────────────────────────────────
-    async function pauseCampaign(id) {
+    async function campaignAction(id, path, method, okMsg, failMsg) {
         try {
-            await fetch(`${API_BASE}/api/campaigns/${id}/pause`, { method: 'POST' });
-            lgShowToast('Campaign paused');
+            const res = await fetch(`${API_BASE}/api/campaigns/${id}${path}`, { method });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `HTTP ${res.status}`);
+            }
+            lgShowToast(okMsg);
             fetchCampaigns();
-        } catch { lgShowToast('Failed to pause campaign', 'error'); }
+        } catch (err) {
+            lgShowToast(`${failMsg}: ${err.message}`, 'error');
+        }
+    }
+
+    async function pauseCampaign(id) {
+        return campaignAction(id, '/pause', 'POST', 'Campaign paused', 'Failed to pause campaign');
     }
 
     async function resumeCampaign(id) {
-        try {
-            await fetch(`${API_BASE}/api/campaigns/${id}/resume`, { method: 'POST' });
-            lgShowToast('Campaign resumed');
-            fetchCampaigns();
-        } catch { lgShowToast('Failed to resume campaign', 'error'); }
+        return campaignAction(id, '/resume', 'POST', 'Campaign resumed', 'Failed to resume campaign');
     }
 
     async function runNowCampaign(id) {
-        try {
-            await fetch(`${API_BASE}/api/campaigns/${id}/run-now`, { method: 'POST' });
-            lgShowToast('Campaign running now!');
-            fetchCampaigns();
-        } catch { lgShowToast('Failed to run campaign', 'error'); }
+        return campaignAction(id, '/run-now', 'POST', 'Campaign running now!', 'Failed to run campaign');
     }
 
     async function deleteCampaign(id) {
         if (!confirm('Delete this campaign? This cannot be undone.')) return;
-        try {
-            await fetch(`${API_BASE}/api/campaigns/${id}`, { method: 'DELETE' });
-            lgShowToast('Campaign deleted');
-            fetchCampaigns();
-        } catch { lgShowToast('Failed to delete campaign', 'error'); }
+        return campaignAction(id, '', 'DELETE', 'Campaign deleted', 'Failed to delete campaign');
     }
 
     function switchToResultsTab(campaignId) {
@@ -5857,8 +5846,11 @@ setTimeout(function initOnePager() {
 
     function switchSubtab(name) {
         state.subtab = name;
-        document.querySelectorAll('#pageTrends .trend-subtab').forEach((t) =>
-            t.classList.toggle('active', t.dataset.subtab === name));
+        document.querySelectorAll('#pageTrends .trend-subtab').forEach((t) => {
+            const sel = t.dataset.subtab === name;
+            t.classList.toggle('active', sel);
+            t.setAttribute('aria-selected', sel ? 'true' : 'false');
+        });
         const panels = {
             dashboard: 'trendPanelDashboard',
             queue: 'trendPanelQueue',
@@ -6053,9 +6045,12 @@ setTimeout(function initOnePager() {
     }
 
     const polling = new Set();
+    const pollAttempts = {};
+    const MAX_POLLS = 40; // ~8 min at 12s intervals, then stop
     async function pollGeneration(id, once = false) {
         if (polling.has(id) && !once) return;
         polling.add(id);
+        pollAttempts[id] = (pollAttempts[id] || 0) + 1;
         try {
             const res = await fetch(tApi(`/api/trends/generations/${id}/refresh`), { method: 'POST' });
             const data = await res.json();
@@ -6064,8 +6059,12 @@ setTimeout(function initOnePager() {
                 if (idx !== -1) state.generations[idx] = { ...state.generations[idx], ...data };
                 if (state.subtab === 'queue') { updateQueueBadge(); renderGenerations(); }
                 if (data.status === 'rendering' && !once) {
-                    setTimeout(() => { polling.delete(id); pollGeneration(id); }, 12000);
-                    return;
+                    if (pollAttempts[id] >= MAX_POLLS) {
+                        toast('A render is taking unusually long — check back later', 'error');
+                    } else {
+                        setTimeout(() => { polling.delete(id); pollGeneration(id); }, 12000);
+                        return;
+                    }
                 }
                 if (data.status === 'review') toast('A video finished rendering — ready for review', 'success');
             }
@@ -6386,7 +6385,11 @@ setTimeout(function initOnePager() {
         page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((c) =>
             c.addEventListener('click', () => {
                 state.bucket = c.dataset.bucket;
-                page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((x) => x.classList.toggle('active', x === c));
+                page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((x) => {
+                    const on = x === c;
+                    x.classList.toggle('active', on);
+                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
                 renderCandidates();
             }));
 
@@ -6406,7 +6409,11 @@ setTimeout(function initOnePager() {
         page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((c) =>
             c.addEventListener('click', () => {
                 state.queueStatus = c.dataset.qstatus;
-                page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((x) => x.classList.toggle('active', x === c));
+                page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((x) => {
+                    const on = x === c;
+                    x.classList.toggle('active', on);
+                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
                 renderGenerations();
             }));
 
@@ -6429,6 +6436,10 @@ setTimeout(function initOnePager() {
         window.trendSelectedSolutionId = selectedSolutionId() || null;
         await loadHealth();
         await loadCandidates();
+        // Resume polling any in-flight renders even if the user hasn't opened
+        // the Queue tab yet, and keep the queue badge accurate.
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (dbOk) loadGenerations();
     };
 
     console.log('✅ Trend Analysis module ready');

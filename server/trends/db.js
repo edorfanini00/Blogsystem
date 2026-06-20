@@ -31,6 +31,13 @@ for (const key of DB_ENV_VARS) {
     }
 }
 
+// A direct (non-pooling) URL for DDL: the Supabase transaction pooler can
+// reject multi-statement migrations, so prefer a direct connection if present.
+const MIGRATION_URL =
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.SUPABASE_DB_URL ||
+    DATABASE_URL;
+
 export const isDbConfigured = !!DATABASE_URL;
 export const dbSource = DB_SOURCE;
 
@@ -58,11 +65,41 @@ export async function query(text, params) {
     return p.query(text, params);
 }
 
-// Run the schema migration (idempotent).
+// Split a SQL file into individual statements (our schema has no functions
+// or dollar-quoted bodies, so splitting on semicolons is safe). Comments are
+// stripped so they don't swallow following statements.
+function splitStatements(sql) {
+    return sql
+        .split('\n')
+        // Strip line and inline comments (our schema has no -- inside strings).
+        .map((line) => line.replace(/--.*$/, ''))
+        .join('\n')
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+// Run the schema migration (idempotent). Uses a dedicated direct connection
+// and applies statements one at a time so it works through pgBouncer too.
 export async function migrate() {
+    if (!MIGRATION_URL) throw new Error('DATABASE_URL not configured');
     const sql = readFileSync(join(__dirname, 'schema.sql'), 'utf-8');
-    await query(sql);
-    return { ok: true };
+    const statements = splitStatements(sql);
+
+    const client = new pg.Client({
+        connectionString: MIGRATION_URL,
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 10000,
+    });
+    await client.connect();
+    try {
+        for (const stmt of statements) {
+            await client.query(stmt);
+        }
+    } finally {
+        await client.end().catch(() => {});
+    }
+    return { ok: true, statements: statements.length };
 }
 
 export async function pingDb() {

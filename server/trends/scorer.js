@@ -9,7 +9,7 @@
 import { query } from './db.js';
 import { getCandidateMetrics, squash } from './metrics.js';
 import { getSolutionContext } from './solutions.js';
-import { matchTopicWave } from './topics.js';
+import { listTopics, bestTopicMatch } from './topics.js';
 import { claudeJSON, isLlmConfigured } from './llm.js';
 import { SCORE_WEIGHTS, MESSAGE_BANK, EDITORIAL_RULES } from './config.js';
 
@@ -58,7 +58,7 @@ Write a "bridge_line": one plain sentence stating the CeleriTech angle for this 
 
 Return ONLY JSON: {"bridge_score": <number 0-10>, "bucket": "<trendjack|clone_format|discard>", "bridge_line": "<one sentence>", "reason": "<short>"}`;
 
-export async function scoreCandidate(candidate, { solutionContext = null } = {}) {
+export async function scoreCandidate(candidate, { solutionContext = null, topics = null } = {}) {
     const metrics = await getCandidateMetrics(candidate.id);
 
     let llm = { bridge_score: 0, bucket: 'discard', bridge_line: '', reason: 'LLM not configured' };
@@ -77,12 +77,15 @@ export async function scoreCandidate(candidate, { solutionContext = null } = {})
         try {
             const parsed = await claudeJSON(SYSTEM, user, { maxTokens: 500 });
             if (parsed) llm = parsed;
+            else llm = { bridge_score: 0, bucket: 'discard', bridge_line: '', reason: 'parse_failed' };
         } catch (err) {
-            llm.reason = `scorer error: ${err.message}`;
+            llm = { bridge_score: 0, bucket: 'discard', bridge_line: '', reason: `scorer_error: ${err.message}` };
         }
     }
 
-    const topicWave = await matchTopicWave(candidate.caption, candidate.hashtags);
+    // Topics are loaded once per batch; fall back to a fresh read if not passed.
+    const topicList = topics || (await listTopics().catch(() => []));
+    const { wave: topicWave, topicId } = bestTopicMatch(candidate.caption, candidate.hashtags, topicList);
 
     const bridge10 = Math.max(0, Math.min(10, Number(llm.bridge_score) || 0));
     const bridgeN = bridge10 / 10;
@@ -96,13 +99,14 @@ export async function scoreCandidate(candidate, { solutionContext = null } = {})
         w.acceleration * accelN +
         w.topicWave * topicWave;
 
-    let bucket = VALID_BUCKETS.includes(llm.bucket) ? llm.bucket : 'clone_format';
+    // Default unrecognised buckets to discard (fail safe, not surface).
+    let bucket = VALID_BUCKETS.includes(llm.bucket) ? llm.bucket : 'discard';
     if (bridge10 < 3) bucket = 'discard';
 
     await query(
-        `insert into scores (candidate_id, bucket, bridge_score, bridge_line, composite_score)
-         values ($1,$2,$3,$4,$5)`,
-        [candidate.id, bucket, bridge10, (llm.bridge_line || '').trim(), Number(composite.toFixed(4))]
+        `insert into scores (candidate_id, bucket, bridge_score, bridge_line, composite_score, topic_id)
+         values ($1,$2,$3,$4,$5,$6)`,
+        [candidate.id, bucket, bridge10, (llm.bridge_line || '').trim(), Number(composite.toFixed(4)), topicId]
     );
 
     return {
@@ -112,6 +116,7 @@ export async function scoreCandidate(candidate, { solutionContext = null } = {})
         bridgeLine: (llm.bridge_line || '').trim(),
         composite: Number(composite.toFixed(4)),
         topicWave,
+        reason: llm.reason,
         ...metrics,
     };
 }
@@ -120,6 +125,8 @@ export async function scoreCandidate(candidate, { solutionContext = null } = {})
 // pass rescore=true to re-rate everything (e.g. after changing the solution).
 export async function scoreBatch({ limit = 20, rescore = false, solutionId = null } = {}) {
     const solutionContext = solutionId ? await getSolutionContext(solutionId) : null;
+    // Load topic waves once for the whole batch (avoids an N+1 read per candidate).
+    const topics = await listTopics().catch(() => []);
 
     const sql = rescore
         ? 'select * from candidates order by first_seen_at desc limit $1'
@@ -131,7 +138,7 @@ export async function scoreBatch({ limit = 20, rescore = false, solutionId = nul
     const results = [];
     for (const c of rows) {
         try {
-            results.push(await scoreCandidate(c, { solutionContext }));
+            results.push(await scoreCandidate(c, { solutionContext, topics }));
         } catch (err) {
             results.push({ id: c.id, error: err.message });
         }
