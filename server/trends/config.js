@@ -8,18 +8,21 @@
 // ─── Velocity layer seeds ───────────────────────────────────────
 // Seed with the buyer's adjacent world, not consumer hashtags, so
 // candidates are bridgeable before any scoring runs.
+// Trimmed to the 4 most on-brand tags to conserve EnsembleData quota (each
+// tag = 1 API request per ingest cycle). Re-add the commented tags below once
+// on a paid plan with more headroom.
 export const SEED_HASHTAGS = [
     'manufacturing',
     'supplychain',
     'foodmanufacturing',
-    'plantmanager',
-    'operations',
-    'inventorymanagement',
-    'erphumor',
-    'corporatehumor',
-    'smallbusinessowner',
     'oilandgas',
-    'logistics',
+    // 'plantmanager',
+    // 'operations',
+    // 'inventorymanagement',
+    // 'erphumor',
+    // 'corporatehumor',
+    // 'smallbusinessowner',
+    // 'logistics',
 ];
 
 // Watchlist of B2B and ops creator accounts (expand later).
