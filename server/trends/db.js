@@ -41,13 +41,32 @@ const MIGRATION_URL =
 export const isDbConfigured = !!DATABASE_URL;
 export const dbSource = DB_SOURCE;
 
+// Strip sslmode/ssl query params from a Postgres URL. Supabase's pooler uses a
+// cert that Node doesn't trust ("self-signed certificate in certificate
+// chain"); a connection-string sslmode can override the explicit ssl option we
+// pass, so we remove it and rely on ssl: { rejectUnauthorized: false }.
+function stripSslParams(u) {
+    if (!u) return u;
+    try {
+        const url = new URL(u);
+        url.searchParams.delete('sslmode');
+        url.searchParams.delete('ssl');
+        return url.toString();
+    } catch {
+        return u.replace(/([?&])sslmode=[^&]*/gi, '$1').replace(/([?&])ssl=[^&]*/gi, '$1')
+            .replace(/[?&]$/, '');
+    }
+}
+
+const POOL_URL = stripSslParams(DATABASE_URL);
+
 let pool = null;
 
 export function getPool() {
-    if (!DATABASE_URL) return null;
+    if (!POOL_URL) return null;
     if (!pool) {
         pool = new pg.Pool({
-            connectionString: DATABASE_URL,
+            connectionString: POOL_URL,
             // Supabase requires TLS; relax cert check for the pooler endpoint.
             ssl: { rejectUnauthorized: false },
             max: 5,
@@ -87,7 +106,7 @@ export async function migrate() {
     const statements = splitStatements(sql);
 
     const client = new pg.Client({
-        connectionString: MIGRATION_URL,
+        connectionString: stripSslParams(MIGRATION_URL),
         ssl: { rejectUnauthorized: false },
         connectionTimeoutMillis: 10000,
     });
