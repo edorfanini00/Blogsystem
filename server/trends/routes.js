@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import express from 'express';
 import multer from 'multer';
-import { isDbConfigured, migrate, pingDb } from './db.js';
+import { isDbConfigured, dbSource, migrate, pingDb } from './db.js';
 import { isEnsembleConfigured } from './ensembledata.js';
 import { runIngestCycle, listCandidates, getCandidateSnapshots } from './ingest.js';
 import {
@@ -39,7 +39,7 @@ function requireDb(res) {
 // ─── GET /api/trends/health ─────────────────────────────────────
 router.get('/health', async (req, res) => {
     const out = {
-        db: { configured: isDbConfigured, ok: false },
+        db: { configured: isDbConfigured, ok: false, source: dbSource },
         ensembleData: { configured: isEnsembleConfigured },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
