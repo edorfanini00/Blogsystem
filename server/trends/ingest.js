@@ -81,13 +81,30 @@ export async function runIngestCycle({ hashtags = SEED_HASHTAGS, days = INGEST_D
     return summary;
 }
 
-// List candidates with their latest snapshot and snapshot count, so the
-// dashboard / a quick check can confirm time series are accumulating.
+// List candidates joined with their latest snapshot, snapshot count,
+// derived velocity / baseline ratio (step 2), and their latest score
+// (step 4) + latest generation status (step 6). One query powers the
+// whole dashboard so the cards have everything they need.
 export async function listCandidates({ limit = 50 } = {}) {
     const r = await query(
         `select c.*,
                 s.play_count, s.like_count, s.comment_count, s.share_count, s.captured_at,
-                sc.snapshot_count
+                sc.snapshot_count,
+                -- velocity: plays gained per hour across the last two snapshots
+                case
+                    when s2.captured_at is not null
+                         and s.captured_at > s2.captured_at
+                    then (s.play_count - s2.play_count)
+                         / greatest(extract(epoch from (s.captured_at - s2.captured_at)) / 3600.0, 0.01)
+                    else null
+                end as velocity,
+                -- baseline ratio: plays relative to the creator's follower base
+                case when c.author_followers > 0
+                    then round(s.play_count::numeric / c.author_followers, 2)
+                    else null
+                end as baseline_ratio,
+                sco.bucket, sco.bridge_score, sco.bridge_line, sco.composite_score, sco.scored_at,
+                gen.gen_status, gen.gen_id
          from candidates c
          left join lateral (
             select play_count, like_count, comment_count, share_count, captured_at
@@ -95,9 +112,24 @@ export async function listCandidates({ limit = 50 } = {}) {
             order by captured_at desc limit 1
          ) s on true
          left join lateral (
+            select play_count, captured_at
+            from snapshots where candidate_id = c.id
+            order by captured_at desc offset 1 limit 1
+         ) s2 on true
+         left join lateral (
             select count(*)::int as snapshot_count
             from snapshots where candidate_id = c.id
          ) sc on true
+         left join lateral (
+            select bucket, bridge_score, bridge_line, composite_score, scored_at
+            from scores where candidate_id = c.id
+            order by scored_at desc limit 1
+         ) sco on true
+         left join lateral (
+            select status as gen_status, id as gen_id
+            from generations where candidate_id = c.id
+            order by created_at desc limit 1
+         ) gen on true
          order by c.first_seen_at desc
          limit $1`,
         [limit]

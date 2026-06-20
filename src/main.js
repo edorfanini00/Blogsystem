@@ -5535,6 +5535,9 @@ setTimeout(function initOnePager() {
         candidates: [],
         health: null,
         dismissed: new Set(),
+        generations: [],
+        queueStatus: 'all',
+        recreating: new Set(),
     };
 
     const tApi = (path) => `${typeof API_BASE !== 'undefined' ? API_BASE : ''}${path}`;
@@ -5620,8 +5623,10 @@ setTimeout(function initOnePager() {
     }
 
     function markRoadmap() {
-        const done = [1, 5];
-        const current = [2];
+        // Steps 1–8 are now built; posting is manual (auto-post to TikTok needs
+        // the platform API + OAuth, out of scope), so step 7 stays "current".
+        const done = [1, 2, 3, 4, 5, 6, 8];
+        const current = [7];
         document.querySelectorAll('#trendRoadmap li').forEach((li) => {
             const step = parseInt(li.dataset.step);
             li.classList.toggle('done', done.includes(step));
@@ -5717,6 +5722,11 @@ setTimeout(function initOnePager() {
         bindCardActions();
     }
 
+    function metricChip(label, value) {
+        if (value == null) return '';
+        return `<span class="trend-metric-chip"><b>${value}</b> ${label}</span>`;
+    }
+
     function buildCard(c) {
         const bm = bucketMeta(c.bucket);
         const glyph = PLATFORM_GLYPH[c.platform] || '🎬';
@@ -5725,6 +5735,19 @@ setTimeout(function initOnePager() {
         const author = c.author_id ? `@${esc(c.author_id)}` : 'unknown';
         const followers = c.author_followers != null ? `${fmtNum(c.author_followers)} followers` : '';
         const scored = c.composite_score != null;
+        const composite = scored ? Number(c.composite_score) : null;
+        const isRecreating = state.recreating.has(c.id);
+
+        // derived metrics (step 2)
+        const velocity = c.velocity != null ? `${fmtNum(Math.round(Number(c.velocity)))}/h` : null;
+        const baseline = c.baseline_ratio != null ? `${Number(c.baseline_ratio).toFixed(1)}x` : null;
+
+        // generation linkage (step 6)
+        const genStatus = c.gen_status || null;
+        let recreateLabel = 'Recreate';
+        if (isRecreating) recreateLabel = 'Generating…';
+        else if (genStatus === 'rendering') recreateLabel = 'Rendering…';
+        else if (genStatus && ['review', 'approved', 'posted'].includes(genStatus)) recreateLabel = 'Recreate again';
 
         return `
         <div class="trend-card" data-id="${esc(c.id)}">
@@ -5732,6 +5755,7 @@ setTimeout(function initOnePager() {
             <span class="trend-platform-glyph">${glyph}</span>
             <span class="trend-card-bucket ${bm.cls}">${bm.label}</span>
             <span class="trend-card-age">${ageStr(c.created_at)}</span>
+            ${composite != null ? `<span class="trend-card-composite" title="Composite score">${composite.toFixed(2)}</span>` : ''}
           </div>
           <div class="trend-card-body">
             <div class="trend-card-author">${author}${followers ? ' · ' + followers : ''}</div>
@@ -5742,14 +5766,15 @@ setTimeout(function initOnePager() {
               <div><b>${fmtNum(c.comment_count)}</b><span>Comments</span></div>
               <div><b>${fmtNum(c.snapshot_count)}</b><span>Snaps</span></div>
             </div>
+            ${(velocity || baseline) ? `<div class="trend-metric-row">${metricChip('velocity', velocity)}${metricChip('vs baseline', baseline)}</div>` : ''}
             <div class="trend-fit">
               <div class="trend-fit-head"><span>CeleriTech fit</span><span>${fit != null ? fit.toFixed(1) + '/10' : '—'}</span></div>
               <div class="trend-fit-track"><div class="trend-fit-fill" style="width:${fitPct}%"></div></div>
             </div>
-            <div class="trend-bridge ${scored ? '' : 'pending'}">${scored ? esc(c.bridge_line || '') : 'Pending scoring (step 4)'}</div>
+            <div class="trend-bridge ${scored ? '' : 'pending'}">${scored ? (esc(c.bridge_line || '') || '<span style="color:var(--text-muted)">No bridge line</span>') : 'Not scored yet — hit Score'}</div>
             <div class="trend-card-actions">
-              <button class="trend-btn-recreate" data-recreate="${esc(c.id)}" ${scored ? '' : 'disabled title="Available after the generation pipeline ships (step 6)"'}>
-                Recreate
+              <button class="trend-btn-recreate" data-recreate="${esc(c.id)}" ${scored && !isRecreating ? '' : 'disabled'} ${scored ? '' : 'title="Score this candidate first"'}>
+                ${isRecreating ? '<span class="spinner" style="border-color:rgba(255,255,255,0.4);border-top-color:#fff;width:13px;height:13px;"></span> ' : ''}${recreateLabel}
               </button>
               <button class="trend-btn-dismiss" data-dismiss="${esc(c.id)}" title="Dismiss">✕</button>
               <a class="trend-btn-dismiss" href="${esc(c.url)}" target="_blank" rel="noopener" title="Open source" style="text-decoration:none;">↗</a>
@@ -5769,9 +5794,41 @@ setTimeout(function initOnePager() {
         document.querySelectorAll('#pageTrends [data-recreate]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 if (btn.disabled) return;
-                toast('Generation pipeline ships in step 6');
+                recreate(btn.dataset.recreate);
             });
         });
+    }
+
+    // ─── Step 6: recreate (generate a branded video) ────────────
+    async function recreate(candidateId) {
+        if (state.recreating.has(candidateId)) return;
+        state.recreating.add(candidateId);
+        renderCandidates();
+        const solutionId = selectedSolutionId() || null;
+        try {
+            const res = await fetch(tApi(`/api/trends/candidates/${candidateId}/recreate`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ solutionId }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                toast(data.error || 'Recreate failed', 'error');
+                return;
+            }
+            const rendering = data.status === 'rendering';
+            toast(rendering ? 'Script written, video rendering — see the Queue tab' : 'Script written — see the Queue tab', 'success');
+            state.generations.unshift(data);
+            updateQueueBadge();
+            switchSubtab('queue');
+            // Kick off a poll if it is rendering.
+            if (rendering) pollGeneration(data.id);
+        } catch (err) {
+            toast('Recreate failed: ' + err.message, 'error');
+        } finally {
+            state.recreating.delete(candidateId);
+            renderCandidates();
+        }
     }
 
     async function runIngest() {
@@ -5802,11 +5859,272 @@ setTimeout(function initOnePager() {
         state.subtab = name;
         document.querySelectorAll('#pageTrends .trend-subtab').forEach((t) =>
             t.classList.toggle('active', t.dataset.subtab === name));
-        document.getElementById('trendPanelDashboard').style.display = name === 'dashboard' ? '' : 'none';
-        document.getElementById('trendPanelSolutions').style.display = name === 'solutions' ? '' : 'none';
-        document.getElementById('trendPanelTopics').style.display = name === 'topics' ? '' : 'none';
-        document.getElementById('trendPanelRoadmap').style.display = name === 'roadmap' ? '' : 'none';
+        const panels = {
+            dashboard: 'trendPanelDashboard',
+            queue: 'trendPanelQueue',
+            solutions: 'trendPanelSolutions',
+            topics: 'trendPanelTopics',
+            roadmap: 'trendPanelRoadmap',
+        };
+        Object.entries(panels).forEach(([key, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = key === name ? '' : 'none';
+        });
         if (name === 'solutions') loadSolutions();
+        if (name === 'queue') loadGenerations();
+        if (name === 'topics') loadTopics();
+    }
+
+    // ─── Step 4: score candidates ───────────────────────────────
+    async function scoreCandidates() {
+        const btn = document.getElementById('trendScoreBtn');
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) { toast('Connect the database first', 'error'); return; }
+        if (state.health.llm && !state.health.llm.configured) {
+            toast('ANTHROPIC_API_KEY not configured', 'error');
+            return;
+        }
+        const orig = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-orange"></span> Scoring…'; }
+        try {
+            const solutionId = selectedSolutionId() || null;
+            const res = await fetch(tApi('/api/trends/score'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit: 30, solutionId }),
+            });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Scoring unavailable', 'error'); return; }
+            if (data.requested === 0) toast('All candidates are already scored');
+            else toast(`Scored ${data.scored} candidate${data.scored === 1 ? '' : 's'}${data.usedSolution ? ' for ' + data.usedSolution : ''}`, 'success');
+            await loadCandidates();
+        } catch (err) {
+            toast('Scoring failed: ' + err.message, 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+        }
+    }
+
+    // ─── Step 6/7: generation review queue ──────────────────────
+    function genStatusMeta(status) {
+        switch (status) {
+            case 'rendering': return { cls: 'gen-rendering', label: 'Rendering' };
+            case 'review': return { cls: 'gen-review', label: 'Ready for review' };
+            case 'approved': return { cls: 'gen-approved', label: 'Approved' };
+            case 'posted': return { cls: 'gen-posted', label: 'Posted' };
+            case 'killed': return { cls: 'gen-killed', label: 'Killed' };
+            case 'failed': return { cls: 'gen-failed', label: 'Failed' };
+            case 'script_only': return { cls: 'gen-script', label: 'Script only' };
+            default: return { cls: 'gen-script', label: status || 'Drafted' };
+        }
+    }
+
+    function updateQueueBadge() {
+        const badge = document.getElementById('trendQueueBadge');
+        if (!badge) return;
+        const active = state.generations.filter((g) => g.status === 'review').length;
+        badge.textContent = active;
+        badge.style.display = active > 0 ? '' : 'none';
+    }
+
+    async function loadGenerations() {
+        const setup = document.getElementById('queueSetup');
+        const empty = document.getElementById('queueEmpty');
+        const loading = document.getElementById('queueLoading');
+        const list = document.getElementById('trendQueueList');
+        setup.style.display = 'none';
+        empty.style.display = 'none';
+        list.innerHTML = '';
+
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) { setup.style.display = ''; return; }
+
+        loading.style.display = '';
+        try {
+            const res = await fetch(tApi('/api/trends/generations?limit=100'));
+            if (!res.ok) throw new Error('load failed');
+            state.generations = await res.json();
+        } catch (err) {
+            state.generations = [];
+            toast('Could not load the queue', 'error');
+        } finally {
+            loading.style.display = 'none';
+        }
+
+        updateQueueBadge();
+        renderGenerations();
+
+        // Auto-poll anything still rendering.
+        state.generations.filter((g) => g.status === 'rendering').forEach((g) => pollGeneration(g.id));
+    }
+
+    function renderGenerations() {
+        const list = document.getElementById('trendQueueList');
+        const empty = document.getElementById('queueEmpty');
+        let items = state.generations.slice();
+        if (state.queueStatus !== 'all') items = items.filter((g) => g.status === state.queueStatus);
+
+        if (!items.length) {
+            list.innerHTML = '';
+            empty.style.display = state.generations.length ? 'none' : '';
+            if (state.generations.length) {
+                list.innerHTML = `<div class="trend-empty-inline">No generations with status "${esc(state.queueStatus)}".</div>`;
+            }
+            return;
+        }
+        empty.style.display = 'none';
+        list.innerHTML = items.map(buildGenCard).join('');
+        bindGenActions();
+    }
+
+    function buildGenCard(g) {
+        const sm = genStatusMeta(g.status);
+        let script = {};
+        try { script = typeof g.script_json === 'string' ? JSON.parse(g.script_json) : (g.script_json || {}); } catch { script = {}; }
+        const title = script.title || g.caption || 'Untitled draft';
+        const hook = script.hook || '';
+        const onScreen = Array.isArray(script.on_screen_text) ? script.on_screen_text : [];
+        const hashtags = Array.isArray(script.hashtags) ? script.hashtags : [];
+
+        const media = g.asset_url
+            ? `<video class="trend-gen-video" src="${esc(g.asset_url)}" controls preload="metadata"></video>`
+            : `<div class="trend-gen-media-placeholder">${g.status === 'rendering' ? '<span class="spinner-orange"></span> Rendering video…' : (g.status === 'failed' ? '⚠ Render failed' : '📝 Script only')}</div>`;
+
+        const actions = [];
+        if (g.status === 'rendering') actions.push(`<button class="btn-ghost" data-gen-refresh="${esc(g.id)}">Check status</button>`);
+        if (g.status === 'review') {
+            actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-approve="${esc(g.id)}">✓ Approve</button>`);
+            actions.push(`<button class="btn-ghost danger" data-gen-kill="${esc(g.id)}">Kill</button>`);
+        }
+        if (g.status === 'approved') {
+            actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-posted="${esc(g.id)}">Mark posted</button>`);
+        }
+        if (g.asset_url) actions.push(`<a class="btn-ghost" href="${esc(g.asset_url)}" download target="_blank" rel="noopener">Download</a>`);
+        if (g.source_url) actions.push(`<a class="btn-ghost" href="${esc(g.source_url)}" target="_blank" rel="noopener">Source ↗</a>`);
+
+        return `
+        <div class="trend-gen-card" data-gen="${esc(g.id)}">
+          <div class="trend-gen-media">${media}</div>
+          <div class="trend-gen-body">
+            <div class="trend-gen-head">
+              <span class="trend-gen-status ${sm.cls}">${sm.label}</span>
+              <span class="trend-gen-title">${esc(title)}</span>
+            </div>
+            ${hook ? `<div class="trend-gen-hook">"${esc(hook)}"</div>` : ''}
+            ${g.script ? `<div class="trend-gen-vo"><b>Voiceover:</b> ${esc(g.script)}</div>` : ''}
+            ${onScreen.length ? `<div class="trend-gen-onscreen">${onScreen.map((t) => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
+            ${g.caption ? `<div class="trend-gen-caption"><b>Caption:</b> ${esc(g.caption)}</div>` : ''}
+            ${hashtags.length ? `<div class="trend-gen-tags">${hashtags.map((t) => `<span>#${esc(String(t).replace(/^#/, ''))}</span>`).join('')}</div>` : ''}
+            ${g.error ? `<div class="trend-gen-error">${esc(g.error)}</div>` : ''}
+            <div class="trend-gen-actions">${actions.join('')}</div>
+          </div>
+        </div>`;
+    }
+
+    function bindGenActions() {
+        const list = document.getElementById('trendQueueList');
+        list.querySelectorAll('[data-gen-refresh]').forEach((b) =>
+            b.addEventListener('click', () => pollGeneration(b.dataset.genRefresh, true)));
+        list.querySelectorAll('[data-gen-approve]').forEach((b) =>
+            b.addEventListener('click', () => setGenStatus(b.dataset.genApprove, 'approved')));
+        list.querySelectorAll('[data-gen-kill]').forEach((b) =>
+            b.addEventListener('click', () => setGenStatus(b.dataset.genKill, 'killed')));
+        list.querySelectorAll('[data-gen-posted]').forEach((b) =>
+            b.addEventListener('click', () => setGenStatus(b.dataset.genPosted, 'posted')));
+    }
+
+    async function setGenStatus(id, status) {
+        try {
+            const res = await fetch(tApi(`/api/trends/generations/${id}`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status }),
+            });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
+            const idx = state.generations.findIndex((g) => g.id === id);
+            if (idx !== -1) state.generations[idx] = { ...state.generations[idx], ...data };
+            updateQueueBadge();
+            renderGenerations();
+            toast(status === 'approved' ? 'Approved' : status === 'killed' ? 'Killed' : status === 'posted' ? 'Marked posted' : 'Updated');
+        } catch (err) {
+            toast('Update failed: ' + err.message, 'error');
+        }
+    }
+
+    const polling = new Set();
+    async function pollGeneration(id, once = false) {
+        if (polling.has(id) && !once) return;
+        polling.add(id);
+        try {
+            const res = await fetch(tApi(`/api/trends/generations/${id}/refresh`), { method: 'POST' });
+            const data = await res.json();
+            if (res.ok && data) {
+                const idx = state.generations.findIndex((g) => g.id === id);
+                if (idx !== -1) state.generations[idx] = { ...state.generations[idx], ...data };
+                if (state.subtab === 'queue') { updateQueueBadge(); renderGenerations(); }
+                if (data.status === 'rendering' && !once) {
+                    setTimeout(() => { polling.delete(id); pollGeneration(id); }, 12000);
+                    return;
+                }
+                if (data.status === 'review') toast('A video finished rendering — ready for review', 'success');
+            }
+        } catch { /* silent */ }
+        polling.delete(id);
+    }
+
+    // ─── Step 8: live topics ────────────────────────────────────
+    async function loadTopics() {
+        const loading = document.getElementById('trendTopicsLoading');
+        const wrap = document.getElementById('trendTopicsLive');
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) { if (wrap) wrap.innerHTML = '<div style="color:var(--text-muted);">Connect the database to track topics.</div>'; return; }
+        if (loading) loading.style.display = '';
+        try {
+            const res = await fetch(tApi('/api/trends/topics'));
+            const topics = res.ok ? await res.json() : [];
+            if (!topics.length) {
+                wrap.innerHTML = '<div style="color:var(--text-muted);">No topic snapshots yet. Run ingest, then snapshot topics.</div>';
+            } else {
+                wrap.innerHTML = topics.map((t) => {
+                    const wave = Number(t.wave_score) || 0;
+                    const pct = Math.round(wave * 100);
+                    const rising = wave > 0.05;
+                    return `
+                    <div class="trend-topic-row">
+                      <span class="trend-topic-name">${esc(t.keyword)}</span>
+                      <span class="trend-topic-vol">${fmtNum(t.mention_volume)} mentions</span>
+                      <span class="trend-topic-wave ${rising ? 'rising' : ''}">
+                        <span class="trend-topic-wave-track"><span class="trend-topic-wave-fill" style="width:${pct}%"></span></span>
+                        ${rising ? '▲ ' : ''}${pct}%
+                      </span>
+                    </div>`;
+                }).join('');
+            }
+        } catch (err) {
+            wrap.innerHTML = '<div style="color:#b91c1c;">Could not load topics.</div>';
+        } finally {
+            if (loading) loading.style.display = 'none';
+        }
+    }
+
+    async function ingestTopics() {
+        const btn = document.getElementById('trendTopicIngestBtn');
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) { toast('Connect the database first', 'error'); return; }
+        const orig = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'Snapshotting…'; }
+        try {
+            const res = await fetch(tApi('/api/trends/topics/ingest'), { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Topic snapshot failed', 'error'); return; }
+            toast('Topic snapshot taken', 'success');
+            await loadTopics();
+        } catch (err) {
+            toast('Topic snapshot failed', 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = orig; }
+        }
     }
 
     // ─── Solutions knowledge base ───────────────────────────────
@@ -6080,6 +6398,21 @@ setTimeout(function initOnePager() {
 
         const ingest = document.getElementById('trendIngestBtn');
         if (ingest) ingest.addEventListener('click', runIngest);
+
+        const scoreBtn = document.getElementById('trendScoreBtn');
+        if (scoreBtn) scoreBtn.addEventListener('click', scoreCandidates);
+
+        // Queue status filter
+        page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((c) =>
+            c.addEventListener('click', () => {
+                state.queueStatus = c.dataset.qstatus;
+                page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((x) => x.classList.toggle('active', x === c));
+                renderGenerations();
+            }));
+
+        // Topics
+        const topicIngest = document.getElementById('trendTopicIngestBtn');
+        if (topicIngest) topicIngest.addEventListener('click', ingestTopics);
 
         // Solutions form
         const addBtn = document.getElementById('solAddBtn');

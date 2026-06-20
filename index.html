@@ -2073,6 +2073,12 @@
               </svg>
               Refresh
             </button>
+            <button type="button" class="btn-ghost" id="trendScoreBtn" title="Score unscored candidates with the LLM">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15 9 22 9 16 14 18 21 12 17 6 21 8 14 2 9 9 9 12 2" />
+              </svg>
+              Score
+            </button>
             <button type="button" class="btn-primary" id="trendIngestBtn" style="margin:0;padding:10px 20px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
                 <path d="M12 2v6m0 0l3-3m-3 3L9 5" /><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -2096,6 +2102,7 @@
         <!-- Sub-tabs -->
         <div class="trend-subtabs">
           <button class="trend-subtab active" data-subtab="dashboard">Dashboard</button>
+          <button class="trend-subtab" data-subtab="queue">🎬 Queue <span class="trend-subtab-badge" id="trendQueueBadge" style="display:none;">0</span></button>
           <button class="trend-subtab" data-subtab="solutions">🧠 Solutions</button>
           <button class="trend-subtab" data-subtab="topics">Topics</button>
           <button class="trend-subtab" data-subtab="roadmap">Roadmap</button>
@@ -2162,6 +2169,41 @@
             <span>Below threshold</span>
           </div>
           <div class="trend-cards trend-cards-discard" id="trendCardsDiscard"></div>
+        </div>
+
+        <!-- ─── Sub-tab: Queue (generation review) ─── -->
+        <div class="trend-subpanel" id="trendPanelQueue" style="display:none;">
+          <div class="trend-solutions-intro">
+            <p>
+              Every <strong>Recreate</strong> lands here. Claude writes the script, fal.ai renders the
+              video, then it waits for your review. Approve to greenlight for posting, or kill it.
+            </p>
+            <div class="trend-queue-filter" id="trendQueueFilter">
+              <button class="trend-chip active" data-qstatus="all">All</button>
+              <button class="trend-chip" data-qstatus="rendering">Rendering</button>
+              <button class="trend-chip" data-qstatus="review">Review</button>
+              <button class="trend-chip" data-qstatus="approved">Approved</button>
+              <button class="trend-chip" data-qstatus="posted">Posted</button>
+            </div>
+          </div>
+
+          <section class="card trend-setup" id="queueSetup" style="display:none;">
+            <div class="trend-setup-icon">🔌</div>
+            <h3>Connect the trend engine</h3>
+            <p>The review queue lives in the trend database. Set <code>DATABASE_URL</code> and run the migration to start generating.</p>
+          </section>
+
+          <section class="card trend-empty" id="queueEmpty" style="display:none;">
+            <div class="trend-setup-icon">🎬</div>
+            <h3>Nothing in the queue</h3>
+            <p>Hit <strong>Recreate</strong> on a scored candidate in the Dashboard to draft your first branded video.</p>
+          </section>
+
+          <div class="trend-loading" id="queueLoading" style="display:none;">
+            <span class="spinner-orange"></span> Loading queue…
+          </div>
+
+          <div class="trend-queue-list" id="trendQueueList"></div>
         </div>
 
         <!-- ─── Sub-tab: Solutions (knowledge base) ─── -->
@@ -2240,9 +2282,20 @@
               composite score of linked candidates. Wired in step 8.
             </p>
             <div class="trend-keyword-chips" id="trendKeywordChips"></div>
-            <pre class="trend-formula" style="margin-top:16px;">wave_score = normalized_acceleration(mention_volume)
-           * sentiment_weight
-           * buyer_relevance_weight</pre>
+            <div class="trend-toolbar" style="margin-top:16px;">
+              <button type="button" class="btn-ghost" id="trendTopicIngestBtn">Snapshot topics now</button>
+            </div>
+          </section>
+
+          <section class="card" style="margin-top:20px;">
+            <h3 style="margin-top:0;">Live topic waves</h3>
+            <p style="color:var(--text-secondary);">Mention volume across ingested candidates and how fast each topic is rising. A rising topic boosts the composite score of any candidate that touches it.</p>
+            <div class="trend-loading" id="trendTopicsLoading" style="display:none;">
+              <span class="spinner-orange"></span> Loading topics…
+            </div>
+            <div class="trend-topics-table" id="trendTopicsLive">
+              <div style="color:var(--text-muted);">No topic snapshots yet. Run ingest, then snapshot topics.</div>
+            </div>
           </section>
         </div>
 
@@ -2257,7 +2310,7 @@
               <li data-step="4">Scorer LLM step and the CeleriTech message bank. Composite score.</li>
               <li data-step="5">Dashboard read view with the cards.</li>
               <li data-step="6">Recreate to generation pipeline, ending in the review queue.</li>
-              <li data-step="7">Review and post.</li>
+              <li data-step="7">Review queue with approve/kill + Telegram/Slack alerts. Auto-post to TikTok pending platform API.</li>
               <li data-step="8">Listening layer and topic linkage.</li>
             </ol>
           </section>

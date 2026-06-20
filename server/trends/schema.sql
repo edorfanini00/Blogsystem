@@ -102,6 +102,17 @@ create table if not exists generations (
 create index if not exists idx_generations_candidate on generations (candidate_id);
 create index if not exists idx_generations_status on generations (status);
 
+-- Generation pipeline columns (step 6). Idempotent adds so existing
+-- deployments migrate forward without dropping data.
+alter table generations add column if not exists script_json    jsonb;
+alter table generations add column if not exists video_prompt    text;
+alter table generations add column if not exists caption         text;
+alter table generations add column if not exists model           text;
+alter table generations add column if not exists fal_request_id  text;
+alter table generations add column if not exists status_url      text;
+alter table generations add column if not exists response_url    text;
+alter table generations add column if not exists error           text;
+
 -- ─── solutions (the "brain" / knowledge base) ───────────────────
 -- Each solution is a sellable offering with its own context. Replaces the
 -- single hardcoded message bank: the scorer and the generator read the
