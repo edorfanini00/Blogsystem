@@ -103,6 +103,10 @@ async function resolveVideoPart(candidate) {
     };
 }
 
+function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+}
+
 function parseJsonLoose(text) {
     if (!text) return null;
     try { return JSON.parse(text); } catch { /* fall through */ }
@@ -166,16 +170,25 @@ export async function analyzeCandidate(candidateId) {
 
     let analysis = null;
     let lastErr = null;
+    // Try each model; for transient overload (503/429) retry a few times with
+    // backoff before moving on, since Gemini throttles video requests.
+    outer:
     for (const model of MODELS) {
-        try {
-            analysis = await callGemini(model, videoPart, c);
-            analysis.model = model;
-            break;
-        } catch (err) {
-            lastErr = err;
-            // 4xx that isn't rate-limit usually means the model rejected the
-            // request shape — try the next model. 5xx/429 also worth a retry.
-            console.error(`analyze: ${err.message}`);
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                analysis = await callGemini(model, videoPart, c);
+                analysis.model = model;
+                break outer;
+            } catch (err) {
+                lastErr = err;
+                console.error(`analyze [${model}] attempt ${attempt + 1}: ${err.message}`);
+                const transient = err.status === 503 || err.status === 429;
+                if (transient && attempt < 2) {
+                    await sleep(2000 * (attempt + 1));
+                    continue;
+                }
+                break; // non-transient or out of retries → next model
+            }
         }
     }
     if (!analysis) throw lastErr || new Error('All analysis models failed');
