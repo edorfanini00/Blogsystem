@@ -150,6 +150,16 @@ export const TREND_MIN_VIEWS = process.env.TREND_MIN_VIEWS != null
     ? Number(process.env.TREND_MIN_VIEWS)
     : 1000;
 
+// Region / language targeting. TikTok's search actor already defaults to US
+// results, but the Instagram and YouTube actors have no country option and
+// return global content (hence Brazilian/Spanish posts leaking in). Since the
+// actors don't expose creator country, we use caption LANGUAGE as a practical
+// proxy for "US audience" content: keep English, drop clearly non-English.
+// TREND_LANG='en' (default) enables the filter; set '' or 'any' to disable.
+export const TREND_LANG = process.env.TREND_LANG != null
+    ? process.env.TREND_LANG.trim().toLowerCase()
+    : 'en';
+
 // ─── Composite score weights (section 6.3) ──────────────────────
 // Starting points. Tune from real data.
 export const SCORE_WEIGHTS = {

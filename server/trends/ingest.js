@@ -16,6 +16,7 @@ import {
     SEARCH_TERMS,
     SEARCH_PLATFORMS,
     TREND_MIN_VIEWS,
+    TREND_LANG,
 } from './config.js';
 
 // Upsert a candidate by url; returns its id.
@@ -53,6 +54,40 @@ function passesQuality(post) {
     if (!TREND_MIN_VIEWS) return true;
     const views = Number(post?.stats?.playCount) || 0;
     return views >= TREND_MIN_VIEWS;
+}
+
+// Scripts that immediately mean "not US/English" content.
+const NON_LATIN_SCRIPT = /[\u0400-\u04FF\u0600-\u06FF\u0590-\u05FF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF\u0900-\u097F\u0370-\u03FF]/;
+// Common stopwords for Portuguese/Spanish/French/German/Italian. Two distinct
+// hits is a strong signal the caption is not English.
+const NON_EN_WORDS = /\b(que|n[ãa]o|voc[êe]|obrigad\w*|uma|dos|das|isso|muito|agora|fazer|pra|pela|pelo|est[áa]|s[ãa]o|gente|empresa|nuestro|nuestra|tambi[ée]n|gracias|c[óo]mo|qu[ée]|pero|esto|esta|aqu[íi]|avec|pour|vous|nous|c'est|une|und|nicht|f[üu]r|auch|sehr|della|questo|grazie|perch[ée])\b/gi;
+// Heavy diacritics typical of romance languages.
+const DIACRITICS = /[ãõñçáéíóúâêôàèìòùäöü]/gi;
+
+// We can't get a creator's country from the actors, so caption language is the
+// practical proxy for "US audience" content. English (Latin, no romance
+// markers) passes; clearly non-English is dropped. Short/empty captions get the
+// benefit of the doubt so we don't lose minimal-caption virals.
+function looksEnglish(text) {
+    const t = String(text || '').trim();
+    if (t.length < 12) return true;
+    if (NON_LATIN_SCRIPT.test(t)) return false;
+    const hits = new Set((t.match(NON_EN_WORDS) || []).map((s) => s.toLowerCase())).size;
+    const dia = (t.match(DIACRITICS) || []).length;
+    if (hits >= 2) return false;            // two romance stopwords
+    if (hits >= 1 && dia >= 2) return false; // a stopword plus accents
+    if (dia >= 4) return false;              // heavily accented
+    return true;
+}
+
+function passesRegion(post) {
+    if (TREND_LANG !== 'en') return true;
+    return looksEnglish(post?.caption);
+}
+
+// Combined gate applied to every ingested candidate.
+function passesAll(post) {
+    return passesQuality(post) && passesRegion(post);
 }
 
 async function insertSnapshot(candidateId, stats) {
@@ -146,13 +181,16 @@ export async function runIngestCycle({
         }
 
         const deduped = [...byUrl.values()];
-        const unique = deduped.filter(passesQuality);
-        summary.belowViewFloor = deduped.length - unique.length;
+        const afterViews = deduped.filter(passesQuality);
+        const unique = afterViews.filter(passesRegion);
+        summary.belowViewFloor = deduped.length - afterViews.length;
+        summary.nonUsDropped = afterViews.length - unique.length;
         summary.minViews = TREND_MIN_VIEWS;
+        summary.lang = TREND_LANG || 'any';
         const snaps = await persistPosts(unique);
         summary.totalCandidates = unique.length;
         summary.totalSnapshots = snaps;
-        console.log(`📈 Trend ingest (${TREND_DISCOVERY}): ${unique.length} kept / ${deduped.length} found (>= ${TREND_MIN_VIEWS} views), ${snaps} snapshots`);
+        console.log(`📈 Trend ingest (${TREND_DISCOVERY}): ${unique.length} kept / ${deduped.length} found (>= ${TREND_MIN_VIEWS} views, lang=${TREND_LANG || 'any'}, ${summary.nonUsDropped} non-EN dropped), ${snaps} snapshots`);
 
         summary.finishedAt = new Date().toISOString();
         return summary;
@@ -162,7 +200,7 @@ export async function runIngestCycle({
     for (const tag of hashtags) {
         try {
             const raw = await getHashtagRecentPosts(tag, days);
-            const posts = raw.filter(passesQuality);
+            const posts = raw.filter(passesAll);
             const snapshots = await persistPosts(posts);
             summary.hashtags.push({ tag, candidates: posts.length, found: raw.length, snapshots });
             summary.totalCandidates += posts.length;
@@ -244,6 +282,10 @@ export async function listCandidates({ limit = 50 } = {}) {
          limit $1`,
         [limit]
     );
+    // Also filter existing rows at read time so non-US/English candidates that
+    // were stored before the language gate existed drop out of the UI + reports
+    // immediately, without needing a re-ingest or a destructive purge.
+    if (TREND_LANG === 'en') return r.rows.filter((row) => looksEnglish(row.caption));
     return r.rows;
 }
 

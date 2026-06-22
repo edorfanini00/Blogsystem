@@ -33,6 +33,7 @@ import {
     PLATFORMS,
     TREND_DISCOVERY,
     SEARCH_TERMS,
+    TREND_LANG,
 } from './config.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
@@ -113,6 +114,7 @@ router.get('/health', async (req, res) => {
             platforms: isApifyConfigured ? PLATFORMS : (isEnsembleConfigured ? ['tiktok'] : []),
             discovery: isApifyConfigured ? TREND_DISCOVERY : 'hashtag',
             searchTerms: isApifyConfigured ? SEARCH_TERMS.length : 0,
+            lang: TREND_LANG || 'any',
         },
         apify: { configured: isApifyConfigured },
         ensembleData: { configured: isEnsembleConfigured },
