@@ -936,7 +936,7 @@ app.post('/api/generate', async (req, res) => {
         const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization);
 
         const message = await callClaude({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 8192,
             messages: [
                 {
@@ -964,7 +964,7 @@ app.post('/api/generate', async (req, res) => {
             // Use Claude to create context-specific prompts from the actual blog sections
             try {
                 const promptGenResponse = await callClaude({
-                    model: 'claude-sonnet-4-20250514',
+                    model: 'claude-sonnet-4-6',
                     max_tokens: 1024,
                     messages: [{
                         role: 'user',
@@ -1077,7 +1077,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
 
             try {
                 const translationResponse = await callClaude({
-                    model: 'claude-sonnet-4-20250514',
+                    model: 'claude-sonnet-4-6',
                     max_tokens: 8192,
                     messages: [{
                         role: 'user',
@@ -1348,7 +1348,7 @@ app.post('/api/ads/generate-images', async (req, res) => {
         let imagePrompts = [];
         try {
             const promptRes = await callClaude({
-                model: 'claude-sonnet-4-20250514',
+                model: 'claude-sonnet-4-6',
                 max_tokens: 1024,
                 messages: [{
                     role: 'user',
@@ -1619,7 +1619,7 @@ RULES:
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
+                model: 'claude-sonnet-4-6',
                 max_tokens: 8000,
                 stream: true,
                 messages: [{ role: 'user', content: adPrompt }],
@@ -2284,7 +2284,7 @@ app.get('/api/sales/call/:id', async (req, res) => {
 async function analyzeTranscript(transcript, contactName, company) {
     try {
         const message = await callClaude({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 2048,
             messages: [
                 {
@@ -3208,7 +3208,7 @@ app.post('/api/onepager/generate', async (req, res) => {
         send({ type: 'progress', step: 1, total: totalSteps, message: 'Crafting premium one-pager with AI…' });
 
         const contentResponse = await callClaude({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 4096,
             messages: [{
                 role: 'user',
@@ -3946,7 +3946,7 @@ app.post('/api/leads/:id/email', async (req, res) => {
                 // Generate personalized email with Claude
                 try {
                     const emailResponse = await callClaude({
-                        model: 'claude-sonnet-4-20250514',
+                        model: 'claude-sonnet-4-6',
                         max_tokens: 1024,
                         messages: [{
                             role: 'user',

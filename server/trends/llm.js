@@ -12,7 +12,7 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 export const isLlmConfigured =
     !!apiKey && apiKey !== 'placeholder' && apiKey !== 'your_anthropic_api_key';
 
-export const LLM_MODEL = process.env.TREND_LLM_MODEL || 'claude-sonnet-4-20250514';
+export const LLM_MODEL = process.env.TREND_LLM_MODEL || 'claude-sonnet-4-6';
 
 const client = new Anthropic({ apiKey: apiKey || 'placeholder' });
 
