@@ -5533,6 +5533,7 @@ setTimeout(function initOnePager() {
         generations: [],
         queueStatus: 'all',
         recreating: new Set(),
+        report: null,
     };
 
     const tApi = (path) => `${typeof API_BASE !== 'undefined' ? API_BASE : ''}${path}`;
@@ -5914,6 +5915,7 @@ setTimeout(function initOnePager() {
         });
         const panels = {
             dashboard: 'trendPanelDashboard',
+            insights: 'trendPanelInsights',
             queue: 'trendPanelQueue',
             solutions: 'trendPanelSolutions',
             topics: 'trendPanelTopics',
@@ -5926,6 +5928,147 @@ setTimeout(function initOnePager() {
         if (name === 'solutions') loadSolutions();
         if (name === 'queue') loadGenerations();
         if (name === 'topics') loadTopics();
+        if (name === 'insights') loadReport();
+    }
+
+    // ─── Weekly trend report (intelligence) ─────────────────────
+    function confBadge(conf) {
+        const c = String(conf || '').toLowerCase();
+        const map = {
+            high: { cls: 'conf-high', label: 'High confidence' },
+            medium: { cls: 'conf-medium', label: 'Medium confidence' },
+            low: { cls: 'conf-low', label: 'Low confidence' },
+            building: { cls: 'conf-building', label: 'Building baseline' },
+        };
+        const m = map[c] || map.building;
+        return `<span class="insights-conf-badge ${m.cls}">${m.label}</span>`;
+    }
+
+    function growthStr(g) {
+        const v = Number(g) || 0;
+        const p = Math.round(v * 100);
+        if (p > 0) return `<span class="ins-up">▲ ${p}%</span>`;
+        if (p < 0) return `<span class="ins-down">▼ ${Math.abs(p)}%</span>`;
+        return `<span class="ins-flat">—</span>`;
+    }
+
+    async function loadReport(forceGenerate) {
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        const setup = document.getElementById('insightsSetup');
+        const loading = document.getElementById('insightsLoading');
+        const empty = document.getElementById('insightsEmpty');
+        const body = document.getElementById('insightsBody');
+        if (!setup) return;
+        setup.style.display = 'none';
+        empty.style.display = 'none';
+        if (!dbOk) { setup.style.display = ''; body.style.display = 'none'; return; }
+
+        loading.style.display = '';
+        if (!forceGenerate) body.style.display = body.innerHTML && state.report ? '' : 'none';
+        try {
+            let report;
+            if (forceGenerate) {
+                const res = await fetch(tApi('/api/trends/report'), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                });
+                report = await res.json();
+                if (!res.ok) throw new Error(report.error || 'Failed to generate');
+            } else {
+                const res = await fetch(tApi('/api/trends/report/latest'));
+                report = await res.json();
+            }
+            state.report = report && report.id ? report : null;
+        } catch (err) {
+            toast('Report error: ' + err.message, 'error');
+            state.report = state.report || null;
+        } finally {
+            loading.style.display = 'none';
+        }
+
+        if (!state.report) { empty.style.display = ''; body.style.display = 'none'; return; }
+        renderReport(state.report);
+    }
+
+    function parseJson(v, fallback) {
+        if (v == null) return fallback;
+        if (typeof v === 'object') return v;
+        try { return JSON.parse(v); } catch { return fallback; }
+    }
+
+    function renderReport(report) {
+        const body = document.getElementById('insightsBody');
+        const period = document.getElementById('insightsPeriod');
+        const conf = document.getElementById('insightsConf');
+        body.style.display = '';
+
+        const gen = report.generated_at ? new Date(report.generated_at) : null;
+        const start = report.period_start ? new Date(report.period_start) : null;
+        const fmt = (d) => d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
+        period.textContent = `${fmt(start)} – ${fmt(gen)} · generated ${gen ? gen.toLocaleString() : '—'}`;
+        conf.innerHTML = confBadge(report.confidence);
+
+        // Summary
+        document.getElementById('insightsSummary').innerHTML = report.summary
+            ? `<div class="insights-summary-card">${esc(report.summary)}</div>` : '';
+
+        // Recommendations
+        const recs = parseJson(report.recommendations, []) || [];
+        document.getElementById('insightsRecs').innerHTML = recs.length ? recs.map((r) => `
+            <div class="insights-rec ${'cat-' + (r.category || 'companies')}">
+              <div class="insights-rec-top">
+                <span class="trend-cat-badge ${catMeta(r.category).cls}">${catMeta(r.category).label}</span>
+                ${confBadge(r.confidence)}
+              </div>
+              <div class="insights-rec-title">${esc(r.title || '')}</div>
+              ${r.format ? `<div class="insights-rec-format">🎬 ${esc(r.format)}</div>` : ''}
+              ${r.angle ? `<div class="insights-rec-angle">${esc(r.angle)}</div>` : ''}
+              ${r.why_now ? `<div class="insights-rec-why"><b>Why now:</b> ${esc(r.why_now)}</div>` : ''}
+              ${r.evidence ? `<div class="insights-rec-ev">📊 ${esc(r.evidence)}</div>` : ''}
+            </div>`).join('') : '<p style="color:var(--text-muted)">No recommendations in this report.</p>';
+
+        // Trending now — category momentum cards
+        const trending = parseJson(report.trending, {}) || {};
+        const cats = trending.categories || [];
+        document.getElementById('insightsCats').innerHTML = cats.map((c) => `
+            <div class="insights-cat-card">
+              <div class="insights-cat-name"><span class="trend-cat-badge ${catMeta(c.category).cls}">${catMeta(c.category).label}</span></div>
+              <div class="insights-cat-views">${fmtNum(c.totalViews)} <span>views</span></div>
+              <div class="insights-cat-meta">${c.videos} videos · avg ${fmtNum(c.avgViews)}</div>
+              <div class="insights-cat-growth">WoW views ${growthStr(c.viewGrowth)}</div>
+            </div>`).join('');
+
+        // Hottest videos
+        const hot = (trending.topVideos || []).slice(0, 8);
+        document.getElementById('insightsHot').innerHTML = hot.length ? `
+            <div class="insights-hot-list">
+              ${hot.map((v, i) => `
+                <a class="insights-hot-row" href="${esc(v.url)}" target="_blank" rel="noopener">
+                  <span class="insights-hot-rank">${i + 1}</span>
+                  <span class="trend-cat-badge ${catMeta(v.category).cls}">${catMeta(v.category).label}</span>
+                  <span class="insights-hot-cap">${esc(v.caption || '(no caption)')}</span>
+                  <span class="insights-hot-views">${fmtNum(v.views)} views</span>
+                </a>`).join('')}
+            </div>` : '';
+
+        // Rising topics with forecast
+        const rising = parseJson(report.rising, {}) || {};
+        const topics = (rising.topics || []);
+        document.getElementById('insightsTopics').innerHTML = topics.length ? topics.map((t) => `
+            <div class="insights-topic-row">
+              <span class="insights-topic-dir dir-${t.direction}">${t.direction === 'rising' ? '▲' : t.direction === 'fading' ? '▼' : '•'}</span>
+              <span class="insights-topic-kw">${esc(t.keyword)}</span>
+              <span class="insights-topic-mentions">${fmtNum(t.mentions)} mentions ${growthStr(t.growth)}</span>
+              <span class="insights-topic-fc" title="Forecast next week">→ ~${fmtNum(t.projectedNext)}</span>
+              ${confBadge(t.confidence)}
+            </div>`).join('') : '<p style="color:var(--text-muted)">No topic history yet — run a few weekly cycles.</p>';
+
+        // Accelerating videos
+        const accel = (rising.accelerating || []);
+        document.getElementById('insightsAccel').innerHTML = accel.length ? accel.map((a) => `
+            <a class="insights-accel-row" href="${esc(a.url)}" target="_blank" rel="noopener">
+              <span class="insights-accel-rate">${fmtNum(a.velocityPerHour)}/hr</span>
+              <span class="insights-accel-cap">${esc(a.caption || '(no caption)')}</span>
+            </a>`).join('') : '<p style="color:var(--text-muted)">Acceleration needs 2+ snapshots per video — builds over daily cycles.</p>';
     }
 
     // ─── Step 4: score candidates ───────────────────────────────
@@ -6480,6 +6623,15 @@ setTimeout(function initOnePager() {
 
         const scoreBtn = document.getElementById('trendScoreBtn');
         if (scoreBtn) scoreBtn.addEventListener('click', scoreCandidates);
+
+        const insBtn = document.getElementById('insightsGenBtn');
+        if (insBtn) insBtn.addEventListener('click', async () => {
+            const orig = insBtn.innerHTML;
+            insBtn.disabled = true;
+            insBtn.innerHTML = '<span class="spinner-orange"></span> Analyzing…';
+            try { await loadReport(true); toast('Weekly report generated', 'success'); }
+            finally { insBtn.disabled = false; insBtn.innerHTML = orig; }
+        });
 
         // Queue status filter
         page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((c) =>

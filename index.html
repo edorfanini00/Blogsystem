@@ -2102,6 +2102,7 @@
         <!-- Sub-tabs -->
         <div class="trend-subtabs" role="tablist" aria-label="Trend Analysis sections">
           <button class="trend-subtab active" data-subtab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+          <button class="trend-subtab" data-subtab="insights" role="tab" aria-selected="false">📊 Weekly Report</button>
           <button class="trend-subtab" data-subtab="queue" role="tab" aria-selected="false">🎬 Queue <span class="trend-subtab-badge" id="trendQueueBadge" style="display:none;">0</span></button>
           <button class="trend-subtab" data-subtab="solutions" role="tab" aria-selected="false">🧠 Solutions</button>
           <button class="trend-subtab" data-subtab="topics" role="tab" aria-selected="false">Topics</button>
@@ -2179,6 +2180,59 @@
             <span>Below threshold</span>
           </div>
           <div class="trend-cards trend-cards-discard" id="trendCardsDiscard"></div>
+        </div>
+
+        <!-- ─── Sub-tab: Weekly Report (trend intelligence) ─── -->
+        <div class="trend-subpanel" id="trendPanelInsights" style="display:none;">
+          <div class="insights-head">
+            <div>
+              <h3 style="margin:0;">Weekly trend report</h3>
+              <p class="insights-period" id="insightsPeriod" style="margin:4px 0 0;color:var(--text-muted);font-size:0.85rem;">—</p>
+            </div>
+            <div class="insights-head-actions">
+              <span class="insights-conf" id="insightsConf"></span>
+              <button type="button" class="btn-primary" id="insightsGenBtn" style="margin:0;padding:10px 20px;white-space:nowrap;">Generate report</button>
+            </div>
+          </div>
+
+          <section class="card trend-setup" id="insightsSetup" style="display:none;">
+            <div class="trend-setup-icon">🔌</div>
+            <h3>Connect the trend engine</h3>
+            <p>Weekly reports analyze the trend database. Set <code>DATABASE_URL</code> and run the migration to start.</p>
+          </section>
+
+          <div class="trend-loading" id="insightsLoading" style="display:none;">
+            <span class="spinner-orange"></span> Analyzing this week's data…
+          </div>
+
+          <section class="card trend-empty" id="insightsEmpty" style="display:none;">
+            <div class="trend-setup-icon">📊</div>
+            <h3>No report yet</h3>
+            <p>Hit <strong>Generate report</strong> to spot this week's trends, momentum, and what to make next.</p>
+          </section>
+
+          <div id="insightsBody" style="display:none;">
+            <div class="insights-summary" id="insightsSummary"></div>
+
+            <h4 class="insights-h">🎯 What to make next</h4>
+            <div class="insights-recs" id="insightsRecs"></div>
+
+            <h4 class="insights-h">🔥 Trending now</h4>
+            <div class="insights-cats" id="insightsCats"></div>
+            <div class="insights-hot" id="insightsHot"></div>
+
+            <h4 class="insights-h">📈 Rising &amp; predicted</h4>
+            <div class="insights-rising-grid">
+              <div class="insights-rising-col">
+                <div class="insights-col-label">Buyer topics — momentum &amp; next-week forecast</div>
+                <div id="insightsTopics"></div>
+              </div>
+              <div class="insights-rising-col">
+                <div class="insights-col-label">Fastest accelerating videos (views/hr)</div>
+                <div id="insightsAccel"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ─── Sub-tab: Queue (generation review) ─── -->
