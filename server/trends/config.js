@@ -92,11 +92,29 @@ export const TOPIC_KEYWORDS = [
 // Discovery mode: 'both' (default), 'search' (views-only), or 'hashtag'.
 export const TREND_DISCOVERY = (process.env.TREND_DISCOVERY || 'both').toLowerCase();
 
-// Search phrases to hunt by. Defaults to the listening-layer topics; override
-// with TREND_SEARCH_TERMS (comma-separated) for a dedicated hunt list.
+// Search phrases to hunt by, balanced across the three industry categories so
+// each one (Companies / Food / Oil) actually gets populated. Override with
+// TREND_SEARCH_TERMS (comma-separated) for a dedicated hunt list.
+const DEFAULT_SEARCH_TERMS = [
+    // General "companies going viral"
+    'factory tour',
+    'how its made',
+    'manufacturing process',
+    'warehouse operations',
+    'company behind the scenes',
+    // Food industry
+    'food factory',
+    'food manufacturing',
+    'food recall',
+    'cold chain logistics',
+    // Oil & gas industry
+    'oil and gas',
+    'oil refinery',
+    'oil rig life',
+];
 export const SEARCH_TERMS = (process.env.TREND_SEARCH_TERMS
     ? process.env.TREND_SEARCH_TERMS.split(',')
-    : TOPIC_KEYWORDS
+    : DEFAULT_SEARCH_TERMS
 )
     .map((s) => s.trim())
     .filter(Boolean);

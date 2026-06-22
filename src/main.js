@@ -5525,6 +5525,7 @@ setTimeout(function initOnePager() {
         bound: false,
         subtab: 'dashboard',
         bucket: 'all',
+        category: 'all',
         sort: 'composite',
         candidates: [],
         health: null,
@@ -5563,6 +5564,13 @@ setTimeout(function initOnePager() {
     }
 
     const PLATFORM_GLYPH = { tiktok: '🎵', instagram: '📸', youtube: '▶' };
+
+    const CATEGORY_META = {
+        companies: { label: '🏢 Companies', cls: 'cat-companies' },
+        food: { label: '🍔 Food', cls: 'cat-food' },
+        oil: { label: '🛢️ Oil & gas', cls: 'cat-oil' },
+    };
+    function catMeta(cat) { return CATEGORY_META[cat] || CATEGORY_META.companies; }
 
     function bucketMeta(bucket) {
         switch (bucket) {
@@ -5693,10 +5701,16 @@ setTimeout(function initOnePager() {
         const discardWrap = document.getElementById('trendCardsDiscard');
         const divider = document.getElementById('trendDiscardDivider');
 
+        updateCategoryCounts();
+
         let list = state.candidates.filter((c) => !state.dismissed.has(c.id));
 
         if (state.bucket !== 'all') {
             list = list.filter((c) => (c.bucket || 'unscored') === state.bucket);
+        }
+
+        if (state.category !== 'all') {
+            list = list.filter((c) => (c.category || 'companies') === state.category);
         }
 
         list.sort((a, b) => {
@@ -5721,6 +5735,23 @@ setTimeout(function initOnePager() {
         divider.style.display = discarded.length ? '' : 'none';
 
         bindCardActions();
+    }
+
+    // Show how many candidates fall in each industry on the filter chips.
+    function updateCategoryCounts() {
+        const live = state.candidates.filter((c) => !state.dismissed.has(c.id));
+        const counts = { all: live.length, companies: 0, food: 0, oil: 0 };
+        for (const c of live) counts[(c.category || 'companies')] = (counts[(c.category || 'companies')] || 0) + 1;
+        document.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((chip) => {
+            const cat = chip.dataset.category;
+            let n = chip.querySelector('.trend-cat-count');
+            if (!n) {
+                n = document.createElement('span');
+                n.className = 'trend-cat-count';
+                chip.appendChild(n);
+            }
+            n.textContent = counts[cat] != null ? counts[cat] : 0;
+        });
     }
 
     function metricChip(label, value) {
@@ -5764,7 +5795,10 @@ setTimeout(function initOnePager() {
             ${composite != null ? `<span class="trend-card-composite" title="Composite score">${composite.toFixed(2)}</span>` : ''}
           </a>
           <div class="trend-card-body">
-            <div class="trend-card-author">${author}${followers ? ' · ' + followers : ''}</div>
+            <div class="trend-card-author">
+              <span>${author}${followers ? ' · ' + followers : ''}</span>
+              <span class="trend-cat-badge ${catMeta(c.category).cls}">${catMeta(c.category).label}</span>
+            </div>
             <div class="trend-card-caption">${esc(c.caption) || '<span style="color:var(--text-muted)">No caption</span>'}</div>
             <div class="trend-card-statbar">
               <div><b>${fmtNum(c.play_count)}</b><span>Views</span></div>
@@ -6419,6 +6453,17 @@ setTimeout(function initOnePager() {
             c.addEventListener('click', () => {
                 state.bucket = c.dataset.bucket;
                 page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((x) => {
+                    const on = x === c;
+                    x.classList.toggle('active', on);
+                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                renderCandidates();
+            }));
+
+        page.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((c) =>
+            c.addEventListener('click', () => {
+                state.category = c.dataset.category;
+                page.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((x) => {
                     const on = x === c;
                     x.classList.toggle('active', on);
                     x.setAttribute('aria-pressed', on ? 'true' : 'false');

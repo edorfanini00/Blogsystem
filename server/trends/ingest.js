@@ -186,6 +186,18 @@ export async function runIngestCycle({
 export async function listCandidates({ limit = 50 } = {}) {
     const r = await query(
         `select c.*,
+                -- Industry category, derived from caption + hashtags so it works
+                -- on existing rows without a re-ingest. Oil takes precedence over
+                -- food; everything else is general "companies going viral".
+                case
+                    when (coalesce(c.caption,'') || ' ' || array_to_string(c.hashtags,' '))
+                         ~* '(oil|gas|refiner|drill|oilfield|petroleum|pipeline|\\moilrig\\M|\\mrig\\M)'
+                        then 'oil'
+                    when (coalesce(c.caption,'') || ' ' || array_to_string(c.hashtags,' '))
+                         ~* '(food|beverage|recall|fsma|cold ?chain|kitchen|restaurant|noodle|chocolate|snack|grocery|bakery|dairy|brewery|\\mfarm|\\mmeat\\M|drink|cpg|culinary)'
+                        then 'food'
+                    else 'companies'
+                end as category,
                 s.play_count, s.like_count, s.comment_count, s.share_count, s.captured_at,
                 sc.snapshot_count,
                 -- velocity: plays gained per hour across the last two snapshots
