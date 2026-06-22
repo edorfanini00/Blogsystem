@@ -52,6 +52,58 @@ function requireDb(res) {
     return true;
 }
 
+// ─── GET /api/trends/thumb ──────────────────────────────────────
+// Image proxy for video thumbnails. Instagram (cdninstagram/fbcdn) and
+// TikTok CDNs block hotlinking with a 403 unless the request carries the
+// platform's own Referer — which a browser can't send cross-origin. We fetch
+// server-side with the right headers and stream the bytes back. Whitelisted
+// hosts only, so it can't be used as an open proxy.
+const THUMB_HOSTS = [
+    'cdninstagram.com', 'fbcdn.net',
+    'tiktokcdn.com', 'tiktokcdn-us.com', 'tiktokv.com', 'ttwstatic.com',
+    'muscdn.com', 'ibyteimg.com', 'byteimg.com',
+    'ytimg.com', 'ggpht.com',
+];
+function thumbReferer(host) {
+    if (/instagram|fbcdn/.test(host)) return 'https://www.instagram.com/';
+    if (/tiktok|muscdn|ibyteimg|byteimg|ttwstatic/.test(host)) return 'https://www.tiktok.com/';
+    if (/ytimg|ggpht/.test(host)) return 'https://www.youtube.com/';
+    return undefined;
+}
+router.get('/thumb', async (req, res) => {
+    const u = req.query.u;
+    if (!u || typeof u !== 'string') return res.status(400).end();
+    let parsed;
+    try { parsed = new URL(u); } catch { return res.status(400).end(); }
+    if (parsed.protocol !== 'https:') return res.status(400).end();
+    const host = parsed.hostname.toLowerCase();
+    if (!THUMB_HOSTS.some((h) => host === h || host.endsWith('.' + h))) {
+        return res.status(403).end();
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
+            Accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
+        };
+        const ref = thumbReferer(host);
+        if (ref) headers.Referer = ref;
+        const r = await fetch(u, { headers, signal: controller.signal });
+        if (!r.ok) return res.status(502).end();
+        const ct = r.headers.get('content-type') || 'image/jpeg';
+        if (!ct.startsWith('image/')) return res.status(415).end();
+        const buf = Buffer.from(await r.arrayBuffer());
+        res.set('Content-Type', ct);
+        res.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, immutable');
+        return res.send(buf);
+    } catch {
+        return res.status(502).end();
+    } finally {
+        clearTimeout(timer);
+    }
+});
+
 // ─── GET /api/trends/health ─────────────────────────────────────
 router.get('/health', async (req, res) => {
     const out = {

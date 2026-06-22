@@ -5799,8 +5799,13 @@ setTimeout(function initOnePager() {
         else if (genStatus === 'rendering') recreateLabel = 'Rendering…';
         else if (genStatus && ['review', 'approved', 'posted'].includes(genStatus)) recreateLabel = 'Recreate again';
 
-        const thumb = c.thumbnail
-            ? `<img class="trend-card-thumb" src="${esc(c.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
+        // YouTube (i.ytimg.com) serves directly; Instagram/TikTok CDNs block
+        // hotlinking, so route those through our referer-setting image proxy.
+        const thumbSrc = c.thumbnail
+            ? (c.platform === 'youtube' ? c.thumbnail : `/api/trends/thumb?u=${encodeURIComponent(c.thumbnail)}`)
+            : '';
+        const thumb = thumbSrc
+            ? `<img class="trend-card-thumb" src="${esc(thumbSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
             : '';
         return `
         <div class="trend-card" data-id="${esc(c.id)}">
