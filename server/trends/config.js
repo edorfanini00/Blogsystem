@@ -34,11 +34,17 @@ export const INGEST_DAYS = 7;
 
 // Platforms the engine ingests from. With Apify configured, each platform is
 // pulled from its own actor in one call per cycle. Override via the
-// TREND_PLATFORMS env var (comma-separated, e.g. "tiktok,instagram").
+// TREND_PLATFORMS env var (comma-separated, e.g. "tiktok,instagram,youtube").
+//
+// YouTube is supported but OFF by default: its actor is slow/unreliable and,
+// running long, holds Apify memory and starves the other actors (free-plan
+// concurrent-memory cap), causing TikTok 402s. Re-enable with TREND_PLATFORMS
+// once on a plan with more memory headroom or a more stable YT actor.
 const SUPPORTED = ['tiktok', 'instagram', 'youtube'];
+const DEFAULT_PLATFORMS = ['tiktok', 'instagram'];
 export const PLATFORMS = (process.env.TREND_PLATFORMS
     ? process.env.TREND_PLATFORMS.split(',')
-    : SUPPORTED
+    : DEFAULT_PLATFORMS
 )
     .map((p) => p.trim().toLowerCase())
     .filter((p) => SUPPORTED.includes(p));
