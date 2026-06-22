@@ -19,6 +19,25 @@ const VALID_BUCKETS = ['trendjack', 'clone_format', 'discard'];
 const BASELINE_CAP = 50;      // 50x a creator's follower base = clearly viral
 const ACCEL_CAP = 100000;     // plays/hour^2; tune from real data
 
+// When a candidate has been deep-analyzed (frames/text/audio), give the scorer
+// the real content instead of just the caption — it can judge the actual hook.
+function analysisBlock(analysis) {
+    const a = typeof analysis === 'string' ? safeParse(analysis) : analysis;
+    if (!a) return '';
+    const lines = ['', 'VIDEO ANALYSIS (from watching the actual video):'];
+    if (a.hook) lines.push(`Hook: ${a.hook}`);
+    if (a.format) lines.push(`Format: ${a.format}`);
+    if (Array.isArray(a.onScreenText) && a.onScreenText.length) lines.push(`On-screen text: ${a.onScreenText.join(' | ').slice(0, 400)}`);
+    if (a.transcript) lines.push(`Transcript: ${String(a.transcript).slice(0, 600)}`);
+    if (a.sound) lines.push(`Sound: ${a.sound}`);
+    if (Array.isArray(a.whyItWorks) && a.whyItWorks.length) lines.push(`Why it works: ${a.whyItWorks.join('; ').slice(0, 400)}`);
+    return lines.join('\n');
+}
+
+function safeParse(s) {
+    try { return JSON.parse(s); } catch { return null; }
+}
+
 function solutionBlock(ctx) {
     if (ctx) {
         const lines = [
@@ -70,10 +89,11 @@ export async function scoreCandidate(candidate, { solutionContext = null, topics
             `Hashtags: ${(candidate.hashtags || []).join(', ') || '(none)'}`,
             `Creator followers: ${candidate.author_followers ?? 'unknown'}`,
             `Plays: ${metrics.playCount ?? 'unknown'}, baseline ratio: ${metrics.baselineRatio?.toFixed(1) ?? 'n/a'}, velocity/hr: ${metrics.velocity?.toFixed(0) ?? 'n/a'}`,
+            analysisBlock(candidate.analysis),
             '',
             'CELERITECH CONTEXT',
             solutionBlock(solutionContext),
-        ].join('\n');
+        ].filter(Boolean).join('\n');
         try {
             const parsed = await claudeJSON(SYSTEM, user, { maxTokens: 500 });
             if (parsed) llm = parsed;

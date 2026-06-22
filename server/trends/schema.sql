@@ -26,6 +26,13 @@ create table if not exists candidates (
 -- instead of just a platform glyph. Idempotent add for existing deployments.
 alter table candidates add column if not exists thumbnail text;
 
+-- Deep video analysis (frames + on-screen text + audio transcript + sound),
+-- produced on demand by a multimodal model. media_url is a playable/downloadable
+-- video URL captured at ingest so we can feed the actual video to the analyzer.
+alter table candidates add column if not exists media_url   text;
+alter table candidates add column if not exists analysis    jsonb;
+alter table candidates add column if not exists analyzed_at timestamptz;
+
 create index if not exists idx_candidates_author on candidates (author_id);
 create index if not exists idx_candidates_audio on candidates (audio_id);
 create index if not exists idx_candidates_created on candidates (created_at);

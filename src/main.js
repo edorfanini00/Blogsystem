@@ -5534,6 +5534,8 @@ setTimeout(function initOnePager() {
         generations: [],
         queueStatus: 'all',
         recreating: new Set(),
+        analyzing: new Set(),
+        expandedAnalysis: new Set(),
         report: null,
     };
 
@@ -5777,6 +5779,45 @@ setTimeout(function initOnePager() {
         return `<span class="trend-metric-chip"><b>${value}</b> ${label}</span>`;
     }
 
+    function parseAnalysis(a) {
+        if (!a) return null;
+        if (typeof a === 'object') return a;
+        try { return JSON.parse(a); } catch { return null; }
+    }
+
+    // Collapsible deep-analysis panel rendered inside the card once a video
+    // has been analyzed (frames + on-screen text + audio transcript + sound).
+    function analysisPanel(c) {
+        const a = parseAnalysis(c.analysis);
+        if (!a) return '';
+        const open = state.expandedAnalysis.has(c.id);
+        const list = (arr) => (Array.isArray(arr) && arr.length)
+            ? `<ul class="trend-an-list">${arr.slice(0, 8).map((x) => `<li>${esc(String(x))}</li>`).join('')}</ul>`
+            : '<span class="trend-an-empty">—</span>';
+        const row = (label, val) => val ? `<div class="trend-an-row"><span class="trend-an-k">${label}</span><span class="trend-an-v">${esc(String(val))}</span></div>` : '';
+        const body = open ? `
+          <div class="trend-an-body">
+            ${row('Hook', a.hook)}
+            ${row('Format', a.format)}
+            ${row('Pacing', a.pacing)}
+            ${row('Sound', a.sound)}
+            <div class="trend-an-block"><span class="trend-an-k">On-screen text</span>${list(a.onScreenText)}</div>
+            ${a.transcript ? `<div class="trend-an-block"><span class="trend-an-k">Transcript</span><p class="trend-an-tx">${esc(a.transcript)}</p></div>` : ''}
+            <div class="trend-an-block"><span class="trend-an-k">Visual beats</span>${list(a.visualBreakdown)}</div>
+            <div class="trend-an-block"><span class="trend-an-k">Why it works</span>${list(a.whyItWorks)}</div>
+            ${row('CeleriTech angle', a.celeritechAngle)}
+          </div>` : '';
+        return `
+        <div class="trend-analysis ${open ? 'open' : ''}">
+          <button class="trend-an-toggle" data-analysis-toggle="${esc(c.id)}">
+            <span>🎬 Video analysis${a.format ? ' · ' + esc(a.format) : ''}</span>
+            <span class="trend-an-chev">${open ? '▲' : '▼'}</span>
+          </button>
+          ${a.summary ? `<div class="trend-an-summary">${esc(a.summary)}</div>` : ''}
+          ${body}
+        </div>`;
+    }
+
     function buildCard(c) {
         const bm = bucketMeta(c.bucket);
         const glyph = PLATFORM_GLYPH[c.platform] || '🎬';
@@ -5787,6 +5828,8 @@ setTimeout(function initOnePager() {
         const scored = c.composite_score != null;
         const composite = scored ? Number(c.composite_score) : null;
         const isRecreating = state.recreating.has(c.id);
+        const isAnalyzing = state.analyzing.has(c.id);
+        const hasAnalysis = !!parseAnalysis(c.analysis);
 
         // derived metrics (step 2)
         const velocity = c.velocity != null ? `${fmtNum(Math.round(Number(c.velocity)))}/h` : null;
@@ -5835,7 +5878,11 @@ setTimeout(function initOnePager() {
               <div class="trend-fit-track"><div class="trend-fit-fill" style="width:${fitPct}%"></div></div>
             </div>
             <div class="trend-bridge ${scored ? '' : 'pending'}">${scored ? (esc(c.bridge_line || '') || '<span style="color:var(--text-muted)">No bridge line</span>') : 'Not scored yet — hit Score'}</div>
+            ${analysisPanel(c)}
             <div class="trend-card-actions">
+              <button class="trend-btn-analyze" data-analyze="${esc(c.id)}" ${isAnalyzing ? 'disabled' : ''} title="Analyze the video: frames, on-screen text, audio">
+                ${isAnalyzing ? '<span class="spinner" style="width:12px;height:12px;"></span> Analyzing…' : (hasAnalysis ? '↻ Re-analyze' : '🔍 Analyze video')}
+              </button>
               <button class="trend-btn-recreate" data-recreate="${esc(c.id)}" ${scored && !isRecreating ? '' : 'disabled'} ${scored ? '' : 'title="Score this candidate first"'}>
                 ${isRecreating ? '<span class="spinner" style="border-color:rgba(255,255,255,0.4);border-top-color:#fff;width:13px;height:13px;"></span> ' : ''}${recreateLabel}
               </button>
@@ -5860,6 +5907,49 @@ setTimeout(function initOnePager() {
                 recreate(btn.dataset.recreate);
             });
         });
+        document.querySelectorAll('#pageTrends [data-analyze]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (btn.disabled) return;
+                analyzeVideo(btn.dataset.analyze);
+            });
+        });
+        document.querySelectorAll('#pageTrends [data-analysis-toggle]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.analysisToggle;
+                if (state.expandedAnalysis.has(id)) state.expandedAnalysis.delete(id);
+                else state.expandedAnalysis.add(id);
+                renderCandidates();
+            });
+        });
+    }
+
+    // ─── Deep video analysis (frames + on-screen text + audio) ──────
+    async function analyzeVideo(candidateId) {
+        if (state.analyzing.has(candidateId)) return;
+        state.analyzing.add(candidateId);
+        renderCandidates();
+        try {
+            const res = await fetch(tApi(`/api/trends/candidates/${candidateId}/analyze`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                toast(data.error || 'Analysis failed', 'error');
+                return;
+            }
+            // Patch the candidate in place and auto-expand the panel.
+            const c = state.candidates.find((x) => x.id === candidateId);
+            if (c) c.analysis = data.analysis;
+            state.expandedAnalysis.add(candidateId);
+            toast('Video analyzed', 'success');
+        } catch (err) {
+            toast('Analysis failed: ' + err.message, 'error');
+        } finally {
+            state.analyzing.delete(candidateId);
+            renderCandidates();
+        }
     }
 
     // ─── Step 6: recreate (generate a branded video) ────────────

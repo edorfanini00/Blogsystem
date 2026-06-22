@@ -24,6 +24,7 @@ import {
     updateGenerationStatus, getGeneration, isVideoConfigured, videoModel,
 } from './generate.js';
 import { notify, isNotifyConfigured, notifyChannels } from './notify.js';
+import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -121,6 +122,7 @@ router.get('/health', async (req, res) => {
         llm: { configured: isLlmConfigured },
         video: { configured: isVideoConfigured, model: videoModel },
         voiceover: { configured: !!ELEVENLABS_KEY },
+        analyze: { configured: isAnalyzeConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -191,6 +193,25 @@ router.get('/candidates/:id/snapshots', async (req, res) => {
         res.json(rows);
     } catch (err) {
         console.error('❌ Trend snapshots error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/trends/candidates/:id/analyze ────────────────────
+// Deep video analysis: feed the actual video (frames + on-screen text +
+// audio) to a multimodal model and store the structured breakdown.
+router.post('/candidates/:id/analyze', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isAnalyzeConfigured) {
+        return res.status(503).json({
+            error: 'GEMINI_API_KEY not configured. Add it to enable video analysis.',
+        });
+    }
+    try {
+        const row = await analyzeCandidate(req.params.id);
+        res.json({ ok: true, id: row.id, analysis: row.analysis, analyzed_at: row.analyzed_at });
+    } catch (err) {
+        console.error('❌ Trend analyze error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

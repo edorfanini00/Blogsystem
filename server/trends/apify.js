@@ -95,6 +95,9 @@ function normalizeTikTok(item) {
         caption: item.text ?? '',
         audioId: music.musicId ? String(music.musicId) : null,
         hashtags,
+        mediaUrl:
+            item.videoUrl || video.downloadAddr || video.playAddr ||
+            (Array.isArray(item.mediaUrls) ? item.mediaUrls[0] : null) || null,
         thumbnail:
             video.coverUrl || video.originalCoverUrl ||
             (Array.isArray(item.covers) ? item.covers[0] : null) ||
@@ -122,6 +125,9 @@ function normalizeInstagram(item) {
         caption: item.caption ?? '',
         audioId: item.audio_id ? String(item.audio_id) : null,
         hashtags: item.caption_hashtags || [],
+        mediaUrl:
+            item.video_url || item.videoUrl || item.media_url ||
+            item.video || item.mediaUrl || null,
         thumbnail:
             item.thumbnail_url || item.display_url || item.image_url ||
             item.thumbnail || item.displayUrl || null,
@@ -148,6 +154,7 @@ function normalizeTikTokSearch(item) {
         caption: item.desc ?? '',
         audioId: item.musicTitle ? String(item.musicTitle) : null,
         hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+        mediaUrl: item.videoUrl || item.video || item.downloadUrl || null,
         thumbnail: item.cover || item.dynamicCover || item.originCover || item.thumbnail || null,
         createdAt: item.createdAt || null,
         stats: {

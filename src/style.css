@@ -5936,6 +5936,84 @@ body.light-theme .campaign-stat {
 .ins-down { color: #f87171; font-weight: 800; }
 .ins-flat { color: var(--text-muted); }
 
+/* ─── Card: deep video analysis ─────────────────────────────── */
+.trend-btn-analyze {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-main);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.trend-btn-analyze:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--accent-primary); }
+.trend-btn-analyze:disabled { opacity: 0.6; cursor: default; }
+
+.trend-analysis {
+  margin: 10px 0 2px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-main);
+  overflow: hidden;
+}
+.trend-an-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.trend-an-chev { color: var(--text-muted); font-size: 0.7rem; }
+.trend-an-summary {
+  padding: 0 12px 10px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.trend-an-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.trend-an-row { display: flex; gap: 8px; font-size: 0.78rem; line-height: 1.4; }
+.trend-an-k {
+  flex: 0 0 auto;
+  min-width: 92px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  padding-top: 2px;
+}
+.trend-an-v { color: var(--text-primary); }
+.trend-an-block { display: flex; flex-direction: column; gap: 4px; }
+.trend-an-list { margin: 2px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.trend-an-list li { font-size: 0.78rem; line-height: 1.4; color: var(--text-primary); }
+.trend-an-empty { color: var(--text-muted); font-size: 0.78rem; }
+.trend-an-tx {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border-radius: 6px;
+  padding: 8px 10px;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
 .insights-plat-badge {
   font-size: 0.75rem;
   font-weight: 800;

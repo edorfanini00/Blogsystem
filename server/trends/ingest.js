@@ -23,14 +23,15 @@ import {
 async function upsertCandidate(c) {
     const r = await query(
         `insert into candidates
-            (platform, url, author_id, author_followers, caption, audio_id, hashtags, thumbnail, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            (platform, url, author_id, author_followers, caption, audio_id, hashtags, thumbnail, media_url, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          on conflict (url) do update set
             author_followers = excluded.author_followers,
             caption = excluded.caption,
             audio_id = excluded.audio_id,
             hashtags = excluded.hashtags,
-            thumbnail = coalesce(excluded.thumbnail, candidates.thumbnail)
+            thumbnail = coalesce(excluded.thumbnail, candidates.thumbnail),
+            media_url = coalesce(excluded.media_url, candidates.media_url)
          returning id`,
         [
             c.platform,
@@ -41,6 +42,7 @@ async function upsertCandidate(c) {
             c.audioId,
             c.hashtags || [],
             c.thumbnail || null,
+            c.mediaUrl || null,
             c.createdAt,
         ]
     );

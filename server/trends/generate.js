@@ -25,6 +25,26 @@ const VIDEO_DURATION = process.env.TREND_VIDEO_DURATION || '5';
 export const isVideoConfigured = !!FAL_KEY;
 export const videoModel = VIDEO_MODEL;
 
+// Feed the deep video analysis (real hook, transcript, on-screen text, format)
+// into the script writer so the remake mirrors what actually made it work.
+function analysisBlock(analysis) {
+    const a = typeof analysis === 'string' ? safeParse(analysis) : analysis;
+    if (!a) return '';
+    const lines = ['', 'ORIGINAL VIDEO ANALYSIS (mirror its structure, swap in the CeleriTech angle):'];
+    if (a.hook) lines.push(`Hook: ${a.hook}`);
+    if (a.format) lines.push(`Format: ${a.format}`);
+    if (a.pacing) lines.push(`Pacing: ${a.pacing}`);
+    if (Array.isArray(a.onScreenText) && a.onScreenText.length) lines.push(`On-screen text: ${a.onScreenText.join(' | ').slice(0, 400)}`);
+    if (a.transcript) lines.push(`Transcript: ${String(a.transcript).slice(0, 600)}`);
+    if (Array.isArray(a.visualBreakdown) && a.visualBreakdown.length) lines.push(`Visual beats: ${a.visualBreakdown.join(' | ').slice(0, 500)}`);
+    if (Array.isArray(a.whyItWorks) && a.whyItWorks.length) lines.push(`Why it works: ${a.whyItWorks.join('; ').slice(0, 400)}`);
+    return lines.join('\n');
+}
+
+function safeParse(s) {
+    try { return JSON.parse(s); } catch { return null; }
+}
+
 function solutionBlock(ctx) {
     if (ctx) {
         return [
@@ -68,10 +88,11 @@ async function writeScript(candidate, metrics, solutionContext) {
         `Caption: ${candidate.caption || '(none)'}`,
         `Hashtags: ${(candidate.hashtags || []).join(', ') || '(none)'}`,
         `Plays: ${metrics.playCount ?? 'unknown'} (baseline ratio ${metrics.baselineRatio?.toFixed(1) ?? 'n/a'})`,
+        analysisBlock(candidate.analysis),
         '',
         'CELERITECH CONTEXT',
         solutionBlock(solutionContext),
-    ].join('\n');
+    ].filter(Boolean).join('\n');
     const script = await claudeJSON(SYSTEM, user, { maxTokens: 1400 });
     if (!script) throw new Error('Script generation returned no parsable JSON');
     return script;
