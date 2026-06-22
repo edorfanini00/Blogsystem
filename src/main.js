@@ -584,11 +584,16 @@ navItems.forEach(item => {
     });
 });
 
-// Restore last active page on load
+// Restore last active page on load. Deferred to a macrotask so it runs AFTER
+// the whole module finishes evaluating — otherwise pages whose initializer is
+// defined in a later IIFE (trends, leadgen, scheduler) would be shown before
+// their init function exists, leaving the page rendered but unwired.
 const savedPage = localStorage.getItem('orbit_active_page');
 if (savedPage) {
-    const savedNavItem = document.querySelector(`.nav-item[data-page="${savedPage}"]`);
-    if (savedNavItem) savedNavItem.click();
+    setTimeout(() => {
+        const savedNavItem = document.querySelector(`.nav-item[data-page="${savedPage}"]`);
+        if (savedNavItem) savedNavItem.click();
+    }, 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2228,7 +2233,7 @@ function setupMediaUI() {
     });
 
     mediaForm.addEventListener('submit', handleMediaGeneration);
-    loadMediaHistory();
+    renderMediaHistory();
 }
 
 // Helper for generic custom selects
@@ -5845,6 +5850,7 @@ setTimeout(function initOnePager() {
     }
 
     function switchSubtab(name) {
+        console.log('[trends-debug] switchSubtab called with', name);
         state.subtab = name;
         document.querySelectorAll('#pageTrends .trend-subtab').forEach((t) => {
             const sel = t.dataset.subtab === name;
@@ -6374,12 +6380,16 @@ setTimeout(function initOnePager() {
     }
 
     function bindOnce() {
+        console.log('[trends-debug] bindOnce called, state.bound =', state.bound);
         if (state.bound) return;
         const page = document.getElementById('pageTrends');
+        console.log('[trends-debug] bindOnce page =', page);
         if (!page) return;
         state.bound = true;
 
-        page.querySelectorAll('.trend-subtab').forEach((t) =>
+        const subtabEls = page.querySelectorAll('.trend-subtab');
+        console.log('[trends-debug] subtab count =', subtabEls.length);
+        subtabEls.forEach((t) =>
             t.addEventListener('click', () => switchSubtab(t.dataset.subtab)));
 
         page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((c) =>
@@ -6431,6 +6441,7 @@ setTimeout(function initOnePager() {
     }
 
     window.initTrendsPage = async function initTrendsPage() {
+        console.log('[trends-debug] initTrendsPage called');
         bindOnce();
         markRoadmap();
         window.trendSelectedSolutionId = selectedSolutionId() || null;
