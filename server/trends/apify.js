@@ -164,29 +164,45 @@ function ytIdFromUrl(u) {
     return m ? m[1] : null;
 }
 
+// Maps the simpleapi/youtube-shorts-scraper output shape. Handles a couple of
+// legacy field names too so a future actor swap degrades gracefully.
 function normalizeYouTube(item) {
-    const url = item.url || null;
+    const id = item.id || item.videoId || null;
+    const url = item.url || item.videoUrl || (id ? `https://www.youtube.com/shorts/${id}` : null);
     if (!url) return null;
-    const ytId = ytIdFromUrl(url);
+    const ytId = id || ytIdFromUrl(url);
     return {
         platform: 'youtube',
         url,
-        authorId: item.channel_id || null,
-        authorFollowers: item.channel_subscribers ?? null,
+        authorId: item.channelName || item.channel_id || item.channelUrl || null,
+        authorFollowers: item.numberOfSubscribers ?? item.channel_subscribers ?? null,
         caption: item.title ?? '',
-        audioId: item.audio_title ? String(item.audio_title) : null,
+        audioId: null,
         hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
         thumbnail:
-            item.thumbnail || item.thumbnailUrl || item.thumbnail_url ||
+            item.thumbnailUrl || item.thumbnail || item.thumbnail_url ||
             (ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : null),
-        createdAt: item.published_at || null,
+        createdAt: item.date || item.published_at || null,
         stats: {
-            playCount: item.view_count ?? null,
-            likeCount: item.like_count ?? null,
-            commentCount: item.comment_count ?? null,
+            playCount: item.viewCount ?? item.view_count ?? null,
+            likeCount: item.likes ?? item.like_count ?? null,
+            commentCount: item.commentsCount ?? item.comment_count ?? null,
             shareCount: null,
         },
     };
+}
+
+// Convert the TikTok-style date window (thisWeek/thisMonth/...) to the
+// relative form the YouTube actor expects (e.g. "7 days", "1 month").
+function ytPublishedAfter(window) {
+    switch (String(window || '').toLowerCase()) {
+        case 'today': return '1 day';
+        case 'thisweek': return '7 days';
+        case 'thismonth': return '1 month';
+        case '3months': return '3 months';
+        case '6months': return '6 months';
+        default: return '1 month';
+    }
 }
 
 // ─── Per-platform input builders ────────────────────────────────
@@ -205,9 +221,11 @@ function buildInput(platform, tags, resultsPerHashtag) {
                 maxPostsPerHashtag: resultsPerHashtag,
             };
         case 'youtube':
+            // simpleapi actor takes keywords/handles/URLs in startUrls.
             return {
-                hashtagUrls: tags.map((t) => `https://www.youtube.com/hashtag/${t}/shorts`),
+                startUrls: tags,
                 maxResults: resultsPerHashtag,
+                sortOrder: 'popular',
             };
         default:
             throw new Error(`Unsupported platform: ${platform}`);
@@ -252,8 +270,10 @@ function buildSearchInput(platform, terms, results) {
             };
         case 'youtube':
             return {
-                searchQueries: terms,
+                startUrls: terms,
                 maxResults: results,
+                sortOrder: 'popular',
+                publishedAfter: ytPublishedAfter(APIFY_SEARCH_DATE),
             };
         default:
             throw new Error(`Search not supported for platform: ${platform}`);

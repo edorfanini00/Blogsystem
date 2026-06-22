@@ -5936,6 +5936,27 @@ body.light-theme .campaign-stat {
 .ins-down { color: #f87171; font-weight: 800; }
 .ins-flat { color: var(--text-muted); }
 
+.insights-plat-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.insights-plat-badge.plat-tiktok { background: rgba(56, 189, 248, 0.16); color: #38bdf8; }
+.insights-plat-badge.plat-instagram { background: rgba(236, 72, 153, 0.16); color: #f472b6; }
+.insights-plat-badge.plat-youtube { background: rgba(239, 68, 68, 0.16); color: #f87171; }
+.insights-plat-top {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.insights-plat-top:hover { color: var(--accent-primary); }
+
 .insights-hot-list {
   display: flex;
   flex-direction: column;

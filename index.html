@@ -2128,6 +2128,14 @@
             <button class="trend-cat-chip" data-category="oil">🛢️ Oil &amp; gas</button>
           </div>
 
+          <!-- Platform filter -->
+          <div class="trend-category-filter" id="trendPlatformFilter" role="group" aria-label="Filter by platform">
+            <button class="trend-cat-chip active" data-platform="all">All platforms</button>
+            <button class="trend-cat-chip" data-platform="tiktok">🎵 TikTok</button>
+            <button class="trend-cat-chip" data-platform="instagram">📸 Instagram Reels</button>
+            <button class="trend-cat-chip" data-platform="youtube">▶️ YouTube Shorts</button>
+          </div>
+
           <!-- Controls -->
           <div class="trend-controls" id="trendControls">
             <div class="trend-filter-group" id="trendBucketFilter">
@@ -2217,7 +2225,10 @@
             <h4 class="insights-h">🎯 What to make next</h4>
             <div class="insights-recs" id="insightsRecs"></div>
 
-            <h4 class="insights-h">🔥 Trending now</h4>
+            <h4 class="insights-h">📱 Trending by platform</h4>
+            <div class="insights-cats" id="insightsPlatforms"></div>
+
+            <h4 class="insights-h">🔥 Trending now (by industry)</h4>
             <div class="insights-cats" id="insightsCats"></div>
             <div class="insights-hot" id="insightsHot"></div>
 

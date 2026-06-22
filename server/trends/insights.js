@@ -19,6 +19,8 @@ import { MESSAGE_BANK, EDITORIAL_RULES } from './config.js';
 const DAY = 86400000;
 const CATEGORIES = ['companies', 'food', 'oil'];
 const CATEGORY_LABEL = { companies: 'Companies going viral', food: 'Food industry', oil: 'Oil & gas' };
+const PLATFORMS_LIST = ['tiktok', 'instagram', 'youtube'];
+const PLATFORM_LABEL = { tiktok: 'TikTok', instagram: 'Instagram Reels', youtube: 'YouTube Shorts' };
 
 function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
 function pct(now, prev) {
@@ -62,6 +64,36 @@ export async function computeSignals({ days = 7 } = {}) {
             videos: tw.length,
             videosPrev: pw.length,
             videoGrowth: Number(pct(tw.length, pw.length).toFixed(3)),
+            totalViews: twViews,
+            totalViewsPrev: pwViews,
+            viewGrowth: Number(pct(twViews, pwViews).toFixed(3)),
+            avgViews: tw.length ? Math.round(twViews / tw.length) : 0,
+            topVideos: top,
+        };
+    });
+
+    // Per-platform momentum + each platform's own top videos.
+    const platforms = PLATFORMS_LIST.map((p) => {
+        const tw = thisWeek.filter((c) => c.platform === p);
+        const pw = prevWeek.filter((c) => c.platform === p);
+        const twViews = tw.reduce((a, c) => a + num(c.play_count), 0);
+        const pwViews = pw.reduce((a, c) => a + num(c.play_count), 0);
+        const top = [...tw]
+            .sort((a, b) => num(b.play_count) - num(a.play_count))
+            .slice(0, 5)
+            .map((c) => ({
+                caption: (c.caption || '').slice(0, 140),
+                url: c.url,
+                category: c.category || 'companies',
+                views: num(c.play_count),
+                likes: num(c.like_count),
+                author: c.author_id,
+            }));
+        return {
+            platform: p,
+            label: PLATFORM_LABEL[p],
+            videos: tw.length,
+            videosPrev: pw.length,
             totalViews: twViews,
             totalViewsPrev: pwViews,
             viewGrowth: Number(pct(twViews, pwViews).toFixed(3)),
@@ -186,6 +218,7 @@ export async function computeSignals({ days = 7 } = {}) {
             priorReports,
         },
         categories,
+        platforms,
         topVideos,
         accelerating,
         topics,
@@ -195,11 +228,11 @@ export async function computeSignals({ days = 7 } = {}) {
 }
 
 // ─── The analyst LLM (synthesis only, evidence-constrained) ──────
-const SYSTEM = `You are CeleriTech's social media trend analyst. You are given REAL measured data from this week's social scrape: per-category view counts and week-over-week growth, the hottest individual videos, fast-accelerating videos, and buyer-topic mention momentum with simple forecasts.
+const SYSTEM = `You are CeleriTech's social media trend analyst. You are given REAL measured data from this week's social scrape across THREE platforms (TikTok, Instagram Reels, YouTube Shorts): per-category and per-platform view counts and week-over-week growth, the hottest individual videos, fast-accelerating videos, and buyer-topic mention momentum with simple forecasts.
 
 Your job:
-1. Write a short, plain "summary" (3-5 sentences) of what is actually trending and what is gaining momentum this week. Companies going viral, food industry, and oil & gas are the three lanes.
-2. Propose specific content CeleriTech should make next week.
+1. Write a short, plain "summary" (3-5 sentences) of what is actually trending and what is gaining momentum this week. Cover the three industry lanes (companies going viral, food, oil & gas) AND note which platform is strongest for which content.
+2. Propose specific content CeleriTech should make next week, and say which platform each idea fits best.
 
 Hard rules:
 - Use ONLY the numbers in the data. Every claim must cite a real figure (views, growth %, mentions, velocity). Never invent a trend or a statistic.
@@ -217,6 +250,7 @@ Return ONLY JSON:
       "title": "<the content idea>",
       "format": "<short-form video format to use>",
       "category": "<companies|food|oil>",
+      "platform": "<tiktok|instagram|youtube — best fit>",
       "angle": "<the CeleriTech / EZ solutions angle>",
       "why_now": "<why this is timely, cite the evidence number>",
       "evidence": "<the exact metric you are relying on, e.g. 'food views +180% WoW' or '195M-view noodle factory'>",
@@ -242,6 +276,14 @@ export async function generateReport({ days = 7 } = {}) {
                 viewGrowthPct: Math.round(c.viewGrowth * 100),
                 avgViews: c.avgViews,
                 topVideos: c.topVideos.slice(0, 3).map((v) => ({ caption: v.caption, views: v.views })),
+            })),
+            platforms: signals.platforms.map((p) => ({
+                platform: p.platform,
+                videos: p.videos,
+                totalViews: p.totalViews,
+                avgViews: p.avgViews,
+                viewGrowthPct: Math.round(p.viewGrowth * 100),
+                topVideo: p.topVideos[0] ? { caption: p.topVideos[0].caption, views: p.topVideos[0].views } : null,
             })),
             hottestVideos: signals.topVideos.slice(0, 8).map((v) => ({ caption: v.caption, views: v.views, category: v.category })),
             accelerating: signals.accelerating.slice(0, 5).map((v) => ({ caption: v.caption, velocityPerHour: v.velocityPerHour })),
@@ -269,6 +311,7 @@ export async function generateReport({ days = 7 } = {}) {
     // Build the deterministic "trending" + "rising" views the UI renders.
     const trending = {
         categories: signals.categories,
+        platforms: signals.platforms,
         topVideos: signals.topVideos,
         clusters: signals.clusters,
     };

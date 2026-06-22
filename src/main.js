@@ -5526,6 +5526,7 @@ setTimeout(function initOnePager() {
         subtab: 'dashboard',
         bucket: 'all',
         category: 'all',
+        platform: 'all',
         sort: 'composite',
         candidates: [],
         health: null,
@@ -5572,6 +5573,13 @@ setTimeout(function initOnePager() {
         oil: { label: '🛢️ Oil & gas', cls: 'cat-oil' },
     };
     function catMeta(cat) { return CATEGORY_META[cat] || CATEGORY_META.companies; }
+
+    const PLATFORM_META = {
+        tiktok: { label: '🎵 TikTok', cls: 'plat-tiktok' },
+        instagram: { label: '📸 Instagram Reels', cls: 'plat-instagram' },
+        youtube: { label: '▶️ YouTube Shorts', cls: 'plat-youtube' },
+    };
+    function platMeta(p) { return PLATFORM_META[p] || { label: p || '—', cls: '' }; }
 
     function bucketMeta(bucket) {
         switch (bucket) {
@@ -5714,6 +5722,10 @@ setTimeout(function initOnePager() {
             list = list.filter((c) => (c.category || 'companies') === state.category);
         }
 
+        if (state.platform !== 'all') {
+            list = list.filter((c) => c.platform === state.platform);
+        }
+
         const num = (v) => Number(v) || 0;
         list.sort((a, b) => {
             if (state.sort === 'views') return num(b.play_count) - num(a.play_count);
@@ -5736,21 +5748,28 @@ setTimeout(function initOnePager() {
         bindCardActions();
     }
 
-    // Show how many candidates fall in each industry on the filter chips.
-    function updateCategoryCounts() {
+    // Show how many candidates fall in each industry / platform on the chips.
+    function setChipCounts(selector, key, dataAttr) {
         const live = state.candidates.filter((c) => !state.dismissed.has(c.id));
-        const counts = { all: live.length, companies: 0, food: 0, oil: 0 };
-        for (const c of live) counts[(c.category || 'companies')] = (counts[(c.category || 'companies')] || 0) + 1;
-        document.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((chip) => {
-            const cat = chip.dataset.category;
+        const counts = { all: live.length };
+        for (const c of live) {
+            const v = c[key] || (key === 'category' ? 'companies' : '');
+            counts[v] = (counts[v] || 0) + 1;
+        }
+        document.querySelectorAll(selector).forEach((chip) => {
+            const k = chip.dataset[dataAttr];
             let n = chip.querySelector('.trend-cat-count');
             if (!n) {
                 n = document.createElement('span');
                 n.className = 'trend-cat-count';
                 chip.appendChild(n);
             }
-            n.textContent = counts[cat] != null ? counts[cat] : 0;
+            n.textContent = counts[k] != null ? counts[k] : 0;
         });
+    }
+    function updateCategoryCounts() {
+        setChipCounts('#trendCategoryFilter .trend-cat-chip', 'category', 'category');
+        setChipCounts('#trendPlatformFilter .trend-cat-chip', 'platform', 'platform');
     }
 
     function metricChip(label, value) {
@@ -6026,8 +6045,21 @@ setTimeout(function initOnePager() {
               ${r.evidence ? `<div class="insights-rec-ev">📊 ${esc(r.evidence)}</div>` : ''}
             </div>`).join('') : '<p style="color:var(--text-muted)">No recommendations in this report.</p>';
 
-        // Trending now — category momentum cards
+        // Trending now — category + platform momentum cards
         const trending = parseJson(report.trending, {}) || {};
+        const plats = trending.platforms || [];
+        const platEl = document.getElementById('insightsPlatforms');
+        if (platEl) {
+            platEl.innerHTML = plats.map((p) => `
+            <div class="insights-cat-card">
+              <div class="insights-cat-name"><span class="insights-plat-badge ${platMeta(p.platform).cls}">${platMeta(p.platform).label}</span></div>
+              <div class="insights-cat-views">${fmtNum(p.totalViews)} <span>views</span></div>
+              <div class="insights-cat-meta">${p.videos} videos · avg ${fmtNum(p.avgViews)}</div>
+              <div class="insights-cat-growth">WoW views ${growthStr(p.viewGrowth)}</div>
+              ${p.topVideos && p.topVideos[0] ? `<a class="insights-plat-top" href="${esc(p.topVideos[0].url)}" target="_blank" rel="noopener" title="${esc(p.topVideos[0].caption)}">Top: ${esc((p.topVideos[0].caption || '').slice(0, 48))} · ${fmtNum(p.topVideos[0].views)}</a>` : ''}
+            </div>`).join('');
+        }
+
         const cats = trending.categories || [];
         document.getElementById('insightsCats').innerHTML = cats.map((c) => `
             <div class="insights-cat-card">
@@ -6605,6 +6637,17 @@ setTimeout(function initOnePager() {
             c.addEventListener('click', () => {
                 state.category = c.dataset.category;
                 page.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((x) => {
+                    const on = x === c;
+                    x.classList.toggle('active', on);
+                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                renderCandidates();
+            }));
+
+        page.querySelectorAll('#trendPlatformFilter .trend-cat-chip').forEach((c) =>
+            c.addEventListener('click', () => {
+                state.platform = c.dataset.platform;
+                page.querySelectorAll('#trendPlatformFilter .trend-cat-chip').forEach((x) => {
                     const on = x === c;
                     x.classList.toggle('active', on);
                     x.setAttribute('aria-pressed', on ? 'true' : 'false');

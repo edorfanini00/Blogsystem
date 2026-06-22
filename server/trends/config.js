@@ -36,12 +36,10 @@ export const INGEST_DAYS = 7;
 // pulled from its own actor in one call per cycle. Override via the
 // TREND_PLATFORMS env var (comma-separated, e.g. "tiktok,instagram,youtube").
 //
-// YouTube is supported but OFF by default: its actor is slow/unreliable and,
-// running long, holds Apify memory and starves the other actors (free-plan
-// concurrent-memory cap), causing TikTok 402s. Re-enable with TREND_PLATFORMS
-// once on a plan with more memory headroom or a more stable YT actor.
+// All three on by default. YouTube uses a fast HTTP-only actor (no browser)
+// so three actors fit inside the free-plan concurrent-memory cap.
 const SUPPORTED = ['tiktok', 'instagram', 'youtube'];
-const DEFAULT_PLATFORMS = ['tiktok', 'instagram'];
+const DEFAULT_PLATFORMS = ['tiktok', 'instagram', 'youtube'];
 export const PLATFORMS = (process.env.TREND_PLATFORMS
     ? process.env.TREND_PLATFORMS.split(',')
     : DEFAULT_PLATFORMS
@@ -55,7 +53,7 @@ export const PLATFORMS = (process.env.TREND_PLATFORMS
 export const APIFY_ACTORS = {
     tiktok: 'scrapecore~tiktok-cheerio-hashtag-scraper',
     instagram: 'khadinakbar~instagram-hashtag-scraper',
-    youtube: 'khadinakbar~youtube-shorts-scraper',
+    youtube: 'simpleapi~youtube-shorts-scraper',
 };
 
 // Top N posts to pull per hashtag per platform. Lower = cheaper (Apify bills
@@ -123,10 +121,12 @@ export const SEARCH_TERMS = (process.env.TREND_SEARCH_TERMS
 // search, so it only participates in the hashtag net).
 export const SEARCH_PLATFORMS = ['tiktok', 'youtube'];
 
-// Search-net actors. TikTok uses a search API that can sort by mostViews.
+// Search-net actors. TikTok uses a search API that can sort by mostViews;
+// YouTube uses a fast HTTP-only Shorts scraper that searches by keyword and
+// can sort by popularity (views).
 export const APIFY_SEARCH_ACTORS = {
     tiktok: 'sentry~tiktok-search-api',
-    youtube: 'khadinakbar~youtube-shorts-scraper',
+    youtube: 'simpleapi~youtube-shorts-scraper',
 };
 
 // mostViews = rank by actual performance, not tag relevance. Options:
