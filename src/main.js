@@ -5713,9 +5713,12 @@ setTimeout(function initOnePager() {
             list = list.filter((c) => (c.category || 'companies') === state.category);
         }
 
+        const num = (v) => Number(v) || 0;
         list.sort((a, b) => {
-            if (state.sort === 'views') return (Number(b.play_count) || 0) - (Number(a.play_count) || 0);
-            if (state.sort === 'snapshots') return (Number(b.snapshot_count) || 0) - (Number(a.snapshot_count) || 0);
+            if (state.sort === 'views') return num(b.play_count) - num(a.play_count);
+            if (state.sort === 'likes') return num(b.like_count) - num(a.like_count);
+            if (state.sort === 'comments') return num(b.comment_count) - num(a.comment_count);
+            if (state.sort === 'snapshots') return num(b.snapshot_count) - num(a.snapshot_count);
             if (state.sort === 'recent') return new Date(b.first_seen_at) - new Date(a.first_seen_at);
             // composite: scored desc, then most recent
             const cs = (Number(b.composite_score) || -1) - (Number(a.composite_score) || -1);
@@ -5723,16 +5726,11 @@ setTimeout(function initOnePager() {
             return new Date(b.first_seen_at) - new Date(a.first_seen_at);
         });
 
-        const surfaced = [];
-        const discarded = [];
-        for (const c of list) {
-            if (c.bucket === 'discard') discarded.push(c);
-            else surfaced.push(c);
-        }
-
-        cards.innerHTML = surfaced.map(buildCard).join('');
-        discardWrap.innerHTML = discarded.map(buildCard).join('');
-        divider.style.display = discarded.length ? '' : 'none';
+        // No more "below threshold" pile — a weak video just carries a low
+        // score and sorts to the bottom. Everything renders in one grid.
+        cards.innerHTML = list.map(buildCard).join('');
+        if (discardWrap) discardWrap.innerHTML = '';
+        if (divider) divider.style.display = 'none';
 
         bindCardActions();
     }
