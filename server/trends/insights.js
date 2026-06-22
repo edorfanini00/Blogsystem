@@ -296,10 +296,13 @@ export async function generateReport({ days = 7 } = {}) {
                 : `Comparing ${signals.totals.candidatesThisWeek} videos this week vs ${signals.totals.candidatesPrevWeek} last week.`,
         };
         try {
-            const parsed = await claudeJSON(SYSTEM, JSON.stringify(brief, null, 2), { maxTokens: 1600 });
+            const parsed = await claudeJSON(SYSTEM, JSON.stringify(brief, null, 2), { maxTokens: 3000 });
             if (parsed) {
                 summary = String(parsed.summary || '').trim();
                 recommendations = Array.isArray(parsed.recommendations) ? parsed.recommendations.slice(0, 8) : [];
+            }
+            if (!summary && !recommendations.length) {
+                summary = 'The analyst could not produce a written brief this run, but the measured signals below (per-platform views, category momentum, top videos, rising topics) are accurate. Try regenerating.';
             }
         } catch (err) {
             summary = `Analyst LLM error: ${err.message}. The measured signals below are still accurate.`;
