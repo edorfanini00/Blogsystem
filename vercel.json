@@ -5,6 +5,12 @@
             "maxDuration": 300
         }
     },
+    "crons": [
+        {
+            "path": "/api/trends/cron",
+            "schedule": "30 0 * * *"
+        }
+    ],
     "rewrites": [
         {
             "source": "/api/(.*)",

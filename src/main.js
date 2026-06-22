@@ -5836,6 +5836,17 @@ setTimeout(function initOnePager() {
             const data = await res.json();
             if (!res.ok) {
                 toast(data.error || 'Ingest unavailable', 'error');
+            } else if ((data.totalCandidates || 0) === 0 && Array.isArray(data.errors) && data.errors.length) {
+                // Every hashtag failed — surface the real reason instead of a
+                // misleading "0 candidates" success message.
+                const first = data.errors[0].error || '';
+                const quota = /HTTP 495|Maximum requests limit/i.test(first);
+                toast(
+                    quota
+                        ? 'EnsembleData daily quota reached. It resets at 00:00 UTC — try again then or upgrade the plan.'
+                        : `Ingest failed: ${first.slice(0, 140)}`,
+                    'error'
+                );
             } else {
                 toast(`Ingest complete: ${data.totalCandidates || 0} candidates, ${data.totalSnapshots || 0} snapshots`);
                 await loadHealth();
