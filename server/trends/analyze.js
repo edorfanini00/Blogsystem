@@ -41,7 +41,7 @@ Return ONLY JSON in this exact shape:
   "summary": "<2-3 sentences: what happens in the video and why it performs>",
   "hook": "<the first ~3 seconds: exactly what grabs attention (visual + words)>",
   "onScreenText": ["<each distinct text overlay / caption burned into the video, in order>"],
-  "transcript": "<full spoken transcript; empty string if no speech>",
+  "transcript": "<the key spoken lines or a close paraphrase of the narration; do NOT copy long verbatim passages; empty string if no speech>",
   "sound": "<describe the audio: voiceover, music genre/mood, trending sound, sfx>",
   "visualBreakdown": ["<beat-by-beat: what is shown in each segment>"],
   "format": "<e.g. talking head, b-roll montage, text-on-screen explainer, skit, POV, tutorial>",
@@ -131,7 +131,7 @@ async function callGemini(model, videoPart, candidate) {
     ).slice(0, 300)}`;
     const body = {
         contents: [{ role: 'user', parts: [videoPart, { text: contextText }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 2048, responseMimeType: 'application/json' },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: 'application/json' },
     };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
@@ -153,10 +153,20 @@ async function callGemini(model, videoPart, candidate) {
         throw err;
     }
     const data = await res.json();
-    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const cand = data?.candidates?.[0];
+    const finish = cand?.finishReason;
+    const parts = cand?.content?.parts || [];
     const text = parts.map((p) => p.text || '').join('').trim();
+    if (!text) {
+        // Empty output usually means RECITATION/SAFETY blocked the response or
+        // the prompt was blocked. Surface it so we can try the next model.
+        throw new Error(`Gemini ${model} returned no text (finishReason=${finish || data?.promptFeedback?.blockReason || 'unknown'})`);
+    }
     const parsed = parseJsonLoose(text);
-    if (!parsed) throw new Error(`Gemini ${model} returned unparseable output`);
+    if (!parsed) {
+        const reason = finish === 'MAX_TOKENS' ? 'output truncated (MAX_TOKENS)' : `unparseable (finishReason=${finish})`;
+        throw new Error(`Gemini ${model} ${reason}`);
+    }
     return parsed;
 }
 
