@@ -7,8 +7,15 @@
 // ═══════════════════════════════════════════════════════════════════
 import { query } from './db.js';
 import { getHashtagRecentPosts } from './ensembledata.js';
-import { isApifyConfigured, ingestPlatform } from './apify.js';
-import { SEED_HASHTAGS, INGEST_DAYS, PLATFORMS } from './config.js';
+import { isApifyConfigured, ingestPlatform, searchPlatform } from './apify.js';
+import {
+    SEED_HASHTAGS,
+    INGEST_DAYS,
+    PLATFORMS,
+    TREND_DISCOVERY,
+    SEARCH_TERMS,
+    SEARCH_PLATFORMS,
+} from './config.js';
 
 // Upsert a candidate by url; returns its id.
 async function upsertCandidate(c) {
@@ -78,35 +85,57 @@ export async function runIngestCycle({
     };
 
     if (isApifyConfigured) {
-        // Run platforms in parallel so the whole cycle fits the function
-        // time budget; each platform is one actor call for all hashtags.
         const enabled = (platforms && platforms.length ? platforms : PLATFORMS);
-        const results = await Promise.allSettled(
-            enabled.map((p) => ingestPlatform(p, hashtags))
-        );
+        summary.discovery = TREND_DISCOVERY;
 
-        for (let i = 0; i < enabled.length; i++) {
-            const platform = enabled[i];
-            const r = results[i];
-            if (r.status === 'fulfilled') {
-                try {
-                    const posts = r.value;
-                    const snaps = await persistPosts(posts);
-                    summary.platforms.push({ platform, candidates: posts.length, snapshots: snaps });
-                    summary.totalCandidates += posts.length;
-                    summary.totalSnapshots += snaps;
-                    console.log(`📈 Trend ingest [${platform}]: ${posts.length} candidates, ${snaps} snapshots`);
-                } catch (err) {
-                    console.error(`❌ Trend ingest [${platform}] persist failed:`, err.message);
-                    summary.platforms.push({ platform, error: err.message });
-                    summary.errors.push({ tag: platform, error: err.message });
-                }
-            } else {
-                console.error(`❌ Trend ingest [${platform}] failed:`, r.reason?.message);
-                summary.platforms.push({ platform, error: r.reason?.message });
-                summary.errors.push({ tag: platform, error: r.reason?.message || 'failed' });
+        // Build the discovery tasks. Two nets:
+        //  • hashtag net — tagged posts per platform (broad coverage)
+        //  • search net  — keyword search ranked by views (catches virals that
+        //    skipped your hashtags); only platforms with keyword search.
+        const tasks = [];
+        if (TREND_DISCOVERY !== 'search') {
+            for (const p of enabled) {
+                tasks.push({ label: `${p}:hashtag`, platform: p, run: () => ingestPlatform(p, hashtags) });
             }
         }
+        if (TREND_DISCOVERY !== 'hashtag') {
+            for (const p of enabled) {
+                if (SEARCH_PLATFORMS.includes(p)) {
+                    tasks.push({ label: `${p}:search`, platform: p, run: () => searchPlatform(p, SEARCH_TERMS) });
+                }
+            }
+        }
+
+        // Run every task in parallel to fit the function time budget.
+        const results = await Promise.allSettled(tasks.map((t) => t.run()));
+
+        // Dedup across nets/platforms by url before persisting, so a video
+        // found by both a hashtag and a search only gets one snapshot.
+        const byUrl = new Map();
+        for (let i = 0; i < tasks.length; i++) {
+            const t = tasks[i];
+            const r = results[i];
+            if (r.status === 'fulfilled') {
+                let n = 0;
+                for (const post of r.value) {
+                    if (post && post.url && !byUrl.has(post.url)) {
+                        byUrl.set(post.url, post);
+                        n++;
+                    }
+                }
+                summary.platforms.push({ source: t.label, candidates: r.value.length, unique: n });
+            } else {
+                console.error(`❌ Trend ingest [${t.label}] failed:`, r.reason?.message);
+                summary.platforms.push({ source: t.label, error: r.reason?.message });
+                summary.errors.push({ tag: t.label, error: r.reason?.message || 'failed' });
+            }
+        }
+
+        const unique = [...byUrl.values()];
+        const snaps = await persistPosts(unique);
+        summary.totalCandidates = unique.length;
+        summary.totalSnapshots = snaps;
+        console.log(`📈 Trend ingest (${TREND_DISCOVERY}): ${unique.length} unique candidates, ${snaps} snapshots`);
 
         summary.finishedAt = new Date().toISOString();
         return summary;

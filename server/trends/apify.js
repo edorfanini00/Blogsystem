@@ -13,7 +13,16 @@
 // Graceful: when APIFY_TOKEN is absent, isApifyConfigured is false and
 // ingest falls back to the EnsembleData provider.
 // ═══════════════════════════════════════════════════════════════════
-import { APIFY_ACTORS, APIFY_RESULTS_PER_HASHTAG, APIFY_TIKTOK_SORT } from './config.js';
+import {
+    APIFY_ACTORS,
+    APIFY_RESULTS_PER_HASHTAG,
+    APIFY_TIKTOK_SORT,
+    APIFY_SEARCH_ACTORS,
+    APIFY_SEARCH_SORT,
+    APIFY_SEARCH_DATE,
+    APIFY_SEARCH_RESULTS,
+    APIFY_SEARCH_MIN_VIEWS,
+} from './config.js';
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN || process.env.APIFY_API_TOKEN || null;
 const BASE_URL = 'https://api.apify.com/v2';
@@ -114,6 +123,29 @@ function normalizeInstagram(item) {
     };
 }
 
+// Search-net TikTok actor (sentry/tiktok-search-api) returns a flatter shape
+// than the hashtag actor, so it needs its own normalizer.
+function normalizeTikTokSearch(item) {
+    const url = item.url || null;
+    if (!url) return null;
+    return {
+        platform: 'tiktok',
+        url,
+        authorId: item.author || null,
+        authorFollowers: item.followers ?? null,
+        caption: item.desc ?? '',
+        audioId: item.musicTitle ? String(item.musicTitle) : null,
+        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+        createdAt: item.createdAt || null,
+        stats: {
+            playCount: item.plays ?? null,
+            likeCount: item.likes ?? null,
+            commentCount: item.comments ?? null,
+            shareCount: item.shares ?? null,
+        },
+    };
+}
+
 function normalizeYouTube(item) {
     const url = item.url || null;
     if (!url) return null;
@@ -181,4 +213,52 @@ export async function ingestPlatform(platform, hashtags, { resultsPerHashtag } =
 
     const normalize = NORMALIZERS[platform];
     return items.map((it) => normalize(it)).filter(Boolean);
+}
+
+// ─── Performance-based discovery (search net) ───────────────────
+// Search topic phrases and rank by actual views, so videos that go viral
+// without using your hashtags still enter the candidate pool.
+
+function buildSearchInput(platform, terms, results) {
+    switch (platform) {
+        case 'tiktok':
+            return {
+                keywords: terms,
+                maxVideosPerKeyword: results,
+                sortOrder: APIFY_SEARCH_SORT,
+                datePosted: APIFY_SEARCH_DATE,
+            };
+        case 'youtube':
+            return {
+                searchQueries: terms,
+                maxResults: results,
+            };
+        default:
+            throw new Error(`Search not supported for platform: ${platform}`);
+    }
+}
+
+const SEARCH_NORMALIZERS = {
+    tiktok: normalizeTikTokSearch,
+    youtube: normalizeYouTube,
+};
+
+// Search one platform across all terms in a single actor run. Applies the
+// minimum-views floor so only real performers enter the pool.
+export async function searchPlatform(platform, terms, { results } = {}) {
+    const actorId = APIFY_SEARCH_ACTORS[platform];
+    if (!actorId) throw new Error(`No Apify search actor configured for platform: ${platform}`);
+
+    const cleanTerms = (terms || []).map((t) => String(t || '').trim()).filter(Boolean);
+    if (!cleanTerms.length) return [];
+
+    const limit = results || APIFY_SEARCH_RESULTS;
+    const input = buildSearchInput(platform, cleanTerms, limit);
+    const items = await runActor(actorId, input);
+
+    const normalize = SEARCH_NORMALIZERS[platform];
+    const minViews = APIFY_SEARCH_MIN_VIEWS;
+    return items
+        .map((it) => normalize(it))
+        .filter((c) => c && (!minViews || (c.stats.playCount || 0) >= minViews));
 }

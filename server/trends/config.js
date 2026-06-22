@@ -75,6 +75,41 @@ export const TOPIC_KEYWORDS = [
     'cross-border logistics',
 ];
 
+// ─── Performance-based discovery (search net) ───────────────────
+// Instead of only pulling tagged posts, search topic phrases and rank by
+// actual views, so videos that go viral WITHOUT your hashtags still surface.
+// Discovery mode: 'both' (default), 'search' (views-only), or 'hashtag'.
+export const TREND_DISCOVERY = (process.env.TREND_DISCOVERY || 'both').toLowerCase();
+
+// Search phrases to hunt by. Defaults to the listening-layer topics; override
+// with TREND_SEARCH_TERMS (comma-separated) for a dedicated hunt list.
+export const SEARCH_TERMS = (process.env.TREND_SEARCH_TERMS
+    ? process.env.TREND_SEARCH_TERMS.split(',')
+    : TOPIC_KEYWORDS
+)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+// Platforms that support keyword search (Instagram has no public keyword
+// search, so it only participates in the hashtag net).
+export const SEARCH_PLATFORMS = ['tiktok', 'youtube'];
+
+// Search-net actors. TikTok uses a search API that can sort by mostViews.
+export const APIFY_SEARCH_ACTORS = {
+    tiktok: 'sentry~tiktok-search-api',
+    youtube: 'khadinakbar~youtube-shorts-scraper',
+};
+
+// mostViews = rank by actual performance, not tag relevance. Options:
+// relevance, mostRecent, mostViews.
+export const APIFY_SEARCH_SORT = process.env.APIFY_SEARCH_SORT || 'mostViews';
+// Recency window: allTime, today, thisWeek, thisMonth, 3months, 6months.
+export const APIFY_SEARCH_DATE = process.env.APIFY_SEARCH_DATE || 'thisWeek';
+// Results per search term per platform.
+export const APIFY_SEARCH_RESULTS = Number(process.env.APIFY_SEARCH_RESULTS) || 30;
+// Drop anything below this view count (0 = keep all). Raise to focus on virals.
+export const APIFY_SEARCH_MIN_VIEWS = Number(process.env.APIFY_SEARCH_MIN_VIEWS) || 0;
+
 // ─── Composite score weights (section 6.3) ──────────────────────
 // Starting points. Tune from real data.
 export const SCORE_WEIGHTS = {
