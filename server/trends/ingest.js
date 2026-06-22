@@ -88,21 +88,23 @@ export async function runIngestCycle({
         const enabled = (platforms && platforms.length ? platforms : PLATFORMS);
         summary.discovery = TREND_DISCOVERY;
 
-        // Build the discovery tasks. Two nets:
-        //  • hashtag net — tagged posts per platform (broad coverage)
-        //  • search net  — keyword search ranked by views (catches virals that
-        //    skipped your hashtags); only platforms with keyword search.
+        // Pick ONE net per platform (avoids redundant actor runs that trip the
+        // account memory cap). Search-capable platforms (TikTok, YouTube) use
+        // the views-ranked search net; the rest (Instagram) use the hashtag net.
+        //   discovery=search  → only search-capable platforms
+        //   discovery=hashtag → every platform via hashtag
+        //   discovery=both    → search where supported, hashtag otherwise
         const tasks = [];
-        if (TREND_DISCOVERY !== 'search') {
-            for (const p of enabled) {
-                tasks.push({ label: `${p}:hashtag`, platform: p, run: () => ingestPlatform(p, hashtags) });
-            }
-        }
-        if (TREND_DISCOVERY !== 'hashtag') {
-            for (const p of enabled) {
-                if (SEARCH_PLATFORMS.includes(p)) {
-                    tasks.push({ label: `${p}:search`, platform: p, run: () => searchPlatform(p, SEARCH_TERMS) });
-                }
+        for (const p of enabled) {
+            const canSearch = SEARCH_PLATFORMS.includes(p);
+            if (TREND_DISCOVERY === 'hashtag') {
+                tasks.push({ label: `${p}:hashtag`, run: () => ingestPlatform(p, hashtags) });
+            } else if (TREND_DISCOVERY === 'search') {
+                if (canSearch) tasks.push({ label: `${p}:search`, run: () => searchPlatform(p, SEARCH_TERMS) });
+            } else {
+                // 'both' — best net per platform
+                if (canSearch) tasks.push({ label: `${p}:search`, run: () => searchPlatform(p, SEARCH_TERMS) });
+                else tasks.push({ label: `${p}:hashtag`, run: () => ingestPlatform(p, hashtags) });
             }
         }
 

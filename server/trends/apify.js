@@ -22,14 +22,15 @@ import {
     APIFY_SEARCH_DATE,
     APIFY_SEARCH_RESULTS,
     APIFY_SEARCH_MIN_VIEWS,
+    APIFY_MEMORY_MB,
 } from './config.js';
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN || process.env.APIFY_API_TOKEN || null;
 const BASE_URL = 'https://api.apify.com/v2';
 
-// Wait up to ~4.5 min for an actor run (Vercel functions cap at 5 min;
-// platforms run in parallel so the cycle stays under that budget).
-const RUN_TIMEOUT_MS = 270000;
+// Per-actor wall-clock cap. Kept under the Vercel 5-min function limit with
+// buffer so one slow actor can't starve the whole cycle (others still return).
+const RUN_TIMEOUT_MS = Number(process.env.APIFY_RUN_TIMEOUT_MS) || 210000;
 
 export const isApifyConfigured = !!APIFY_TOKEN;
 export const SUPPORTED_PLATFORMS = Object.keys(APIFY_ACTORS);
@@ -43,9 +44,12 @@ function cleanTag(tag) {
 async function runActor(actorId, input) {
     if (!APIFY_TOKEN) throw new Error('APIFY_TOKEN not configured');
 
+    // Cap memory per run so several actors fit inside the account's total
+    // concurrent-memory limit (free plan = 8192MB). Without this, parallel
+    // runs trip "actor-memory-limit-exceeded" (HTTP 402).
     const url = `${BASE_URL}/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(
         APIFY_TOKEN
-    )}&clean=true`;
+    )}&clean=true&memory=${APIFY_MEMORY_MB}`;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);

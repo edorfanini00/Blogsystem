@@ -61,6 +61,11 @@ export const APIFY_RESULTS_PER_HASHTAG = Number(process.env.APIFY_RESULTS_PER_HA
 // diggCount, shareCount, createTime.
 export const APIFY_TIKTOK_SORT = process.env.APIFY_TIKTOK_SORT || 'createTime';
 
+// Memory (MB) per actor run. Must be a power of 2. Lower lets more actors run
+// concurrently within the account cap (free plan = 8192MB total): 2048 lets ~3
+// run at once. Raise on paid plans for faster runs.
+export const APIFY_MEMORY_MB = Number(process.env.APIFY_MEMORY_MB) || 2048;
+
 // ─── Listening layer keywords (added in step 8) ─────────────────
 export const TOPIC_KEYWORDS = [
     'FSMA 204',
