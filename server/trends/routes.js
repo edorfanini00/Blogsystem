@@ -17,6 +17,7 @@ import {
 import { scoreBatch } from './scorer.js';
 import { runClustering, listClusters } from './cluster.js';
 import { runTopicCycle, listTopics } from './topics.js';
+import { generateReport, getLatestReport, listReports, getReport } from './insights.js';
 import { isLlmConfigured } from './llm.js';
 import {
     createGeneration, refreshGeneration, listGenerations,
@@ -358,6 +359,76 @@ async function runCron(req, res) {
 }
 router.get('/cron', runCron);
 router.post('/cron', runCron);
+
+// ═══════════════════════════════════════════════════════════════
+// ─── Weekly intelligence reports (trend-spotting analyst) ──────
+// POST /api/trends/report      → generate a fresh weekly report now
+// GET  /api/trends/report/latest → most recent stored report
+// GET  /api/trends/reports     → history (id + summary)
+// GET  /api/trends/report/:id  → one full report
+// GET/POST /api/trends/report/cron → scheduled weekly generation
+// NOTE: order matters — specific paths declared before '/report/:id'.
+router.post('/report', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const days = Math.min(Math.max(parseInt(req.body?.days) || 7, 1), 30);
+        const report = await generateReport({ days });
+        res.json(report);
+    } catch (err) {
+        console.error('❌ Trend report error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/report/latest', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json(await getLatestReport());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/reports', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json(await listReports({ limit: Math.min(parseInt(req.query.limit) || 12, 50) }));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+async function runReportCron(req, res) {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+        const auth = req.headers.authorization || '';
+        const token = auth.replace(/^Bearer\s+/i, '');
+        if (token !== cronSecret && req.query.secret !== cronSecret) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+    }
+    if (!requireDb(res)) return;
+    try {
+        const report = await generateReport({ days: 7 });
+        res.json({ ok: true, reportId: report.id, confidence: report.confidence });
+    } catch (err) {
+        console.error('❌ Trend report cron error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+router.get('/report/cron', runReportCron);
+router.post('/report/cron', runReportCron);
+
+router.get('/report/:id', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const report = await getReport(req.params.id);
+        if (!report) return res.status(404).json({ error: 'Report not found' });
+        res.json(report);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // ─── Solutions knowledge base ("the brain") ────────────────────

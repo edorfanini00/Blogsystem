@@ -152,3 +152,26 @@ create index if not exists idx_solution_files_solution on solution_files (soluti
 
 -- Link a generation to the solution it was created for.
 alter table generations add column if not exists solution_id uuid references solutions (id) on delete set null;
+
+-- ─── trend_reports (weekly intelligence) ────────────────────────
+-- One row per weekly analysis run. The factual parts (signals, trending,
+-- rising/forecast) are computed deterministically from the data above; the
+-- analyst LLM only writes the narrative summary + content recommendations,
+-- and is constrained to cite the computed numbers. Storing each run builds
+-- the history that makes week-over-week prediction increasingly accurate.
+create table if not exists trend_reports (
+    id              uuid primary key default gen_random_uuid(),
+    period_start    timestamptz not null,
+    period_end      timestamptz not null,
+    generated_at    timestamptz not null default now(),
+    model           text,
+    confidence      text,                 -- overall data-confidence: building | low | medium | high
+    signals         jsonb,                -- raw computed metrics (audit trail)
+    trending        jsonb,                -- what is hot now (deterministic)
+    rising          jsonb,                -- momentum + forecast (deterministic)
+    summary         text,                 -- analyst narrative (LLM)
+    recommendations jsonb,                -- content ideas to make (LLM, evidence-cited)
+    status          text default 'complete'
+);
+
+create index if not exists idx_trend_reports_generated on trend_reports (generated_at desc);
