@@ -28,11 +28,38 @@ export const SEED_HASHTAGS = [
 // Watchlist of B2B and ops creator accounts (expand later).
 export const WATCHLIST_ACCOUNTS = [];
 
-// How many days back to bound the hashtag recent-posts pull.
+// How many days back to bound the hashtag recent-posts pull (EnsembleData
+// fallback only; the Apify actors are bounded by results-per-hashtag instead).
 export const INGEST_DAYS = 7;
 
-// Platforms the engine ingests from (step 1 implements tiktok).
-export const PLATFORMS = ['tiktok'];
+// Platforms the engine ingests from. With Apify configured, each platform is
+// pulled from its own actor in one call per cycle. Override via the
+// TREND_PLATFORMS env var (comma-separated, e.g. "tiktok,instagram").
+const SUPPORTED = ['tiktok', 'instagram', 'youtube'];
+export const PLATFORMS = (process.env.TREND_PLATFORMS
+    ? process.env.TREND_PLATFORMS.split(',')
+    : SUPPORTED
+)
+    .map((p) => p.trim().toLowerCase())
+    .filter((p) => SUPPORTED.includes(p));
+
+// ─── Apify provider config ──────────────────────────────────────
+// Actor IDs (use "~" form for the API path). Swap here to switch actors
+// without touching provider code.
+export const APIFY_ACTORS = {
+    tiktok: 'scrapecore~tiktok-cheerio-hashtag-scraper',
+    instagram: 'khadinakbar~instagram-hashtag-scraper',
+    youtube: 'khadinakbar~youtube-shorts-scraper',
+};
+
+// Top N posts to pull per hashtag per platform. Lower = cheaper (Apify bills
+// per result). 30 is plenty for trend detection; bump for wider coverage.
+export const APIFY_RESULTS_PER_HASHTAG = Number(process.env.APIFY_RESULTS_PER_HASHTAG) || 30;
+
+// TikTok sort: createTime keeps the time series anchored on fresh posts so
+// velocity/acceleration are meaningful. Options: relevance, playCount,
+// diggCount, shareCount, createTime.
+export const APIFY_TIKTOK_SORT = process.env.APIFY_TIKTOK_SORT || 'createTime';
 
 // ─── Listening layer keywords (added in step 8) ─────────────────
 export const TOPIC_KEYWORDS = [

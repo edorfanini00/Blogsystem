@@ -7,7 +7,8 @@
 // ═══════════════════════════════════════════════════════════════════
 import { query } from './db.js';
 import { getHashtagRecentPosts } from './ensembledata.js';
-import { SEED_HASHTAGS, INGEST_DAYS } from './config.js';
+import { isApifyConfigured, ingestPlatform } from './apify.js';
+import { SEED_HASHTAGS, INGEST_DAYS, PLATFORMS } from './config.js';
 
 // Upsert a candidate by url; returns its id.
 async function upsertCandidate(c) {
@@ -44,28 +45,78 @@ async function insertSnapshot(candidateId, stats) {
     );
 }
 
-// Run one ingest cycle across all seed hashtags.
-// Returns a per-hashtag summary so a scheduler/endpoint can prove the
-// time series is building.
-export async function runIngestCycle({ hashtags = SEED_HASHTAGS, days = INGEST_DAYS } = {}) {
+// Persist a batch of normalized posts (upsert candidate + append snapshot).
+async function persistPosts(posts) {
+    let snapshots = 0;
+    for (const post of posts) {
+        const id = await upsertCandidate(post);
+        await insertSnapshot(id, post.stats);
+        snapshots++;
+    }
+    return snapshots;
+}
+
+// Run one ingest cycle. When Apify is configured, pull each enabled platform
+// (TikTok / Instagram / YouTube Shorts) in one actor call per platform across
+// all hashtags. Otherwise fall back to the EnsembleData per-hashtag TikTok
+// pull. Returns a summary so a scheduler/endpoint can prove the time series
+// is building.
+export async function runIngestCycle({
+    hashtags = SEED_HASHTAGS,
+    days = INGEST_DAYS,
+    platforms = PLATFORMS,
+} = {}) {
     const summary = {
         startedAt: new Date().toISOString(),
+        provider: isApifyConfigured ? 'apify' : 'ensembledata',
         days,
         hashtags: [],
+        platforms: [],
         totalCandidates: 0,
         totalSnapshots: 0,
         errors: [],
     };
 
+    if (isApifyConfigured) {
+        // Run platforms in parallel so the whole cycle fits the function
+        // time budget; each platform is one actor call for all hashtags.
+        const enabled = (platforms && platforms.length ? platforms : PLATFORMS);
+        const results = await Promise.allSettled(
+            enabled.map((p) => ingestPlatform(p, hashtags))
+        );
+
+        for (let i = 0; i < enabled.length; i++) {
+            const platform = enabled[i];
+            const r = results[i];
+            if (r.status === 'fulfilled') {
+                try {
+                    const posts = r.value;
+                    const snaps = await persistPosts(posts);
+                    summary.platforms.push({ platform, candidates: posts.length, snapshots: snaps });
+                    summary.totalCandidates += posts.length;
+                    summary.totalSnapshots += snaps;
+                    console.log(`📈 Trend ingest [${platform}]: ${posts.length} candidates, ${snaps} snapshots`);
+                } catch (err) {
+                    console.error(`❌ Trend ingest [${platform}] persist failed:`, err.message);
+                    summary.platforms.push({ platform, error: err.message });
+                    summary.errors.push({ tag: platform, error: err.message });
+                }
+            } else {
+                console.error(`❌ Trend ingest [${platform}] failed:`, r.reason?.message);
+                summary.platforms.push({ platform, error: r.reason?.message });
+                summary.errors.push({ tag: platform, error: r.reason?.message || 'failed' });
+            }
+        }
+
+        summary.finishedAt = new Date().toISOString();
+        return summary;
+    }
+
+    // ─── EnsembleData fallback (TikTok only, per-hashtag) ───────────
     for (const tag of hashtags) {
         try {
             const posts = await getHashtagRecentPosts(tag, days);
-            let snapshots = 0;
-            for (const post of posts) {
-                const id = await upsertCandidate(post);
-                await insertSnapshot(id, post.stats);
-                snapshots++;
-            }
+            const snapshots = await persistPosts(posts);
             summary.hashtags.push({ tag, candidates: posts.length, snapshots });
             summary.totalCandidates += posts.length;
             summary.totalSnapshots += snapshots;

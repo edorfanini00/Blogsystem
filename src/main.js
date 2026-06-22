@@ -5586,9 +5586,16 @@ setTimeout(function initOnePager() {
             dbPill.className = 'trend-status-pill ' + (dbOk ? 'ok' : 'off');
             dbPill.innerHTML = `<span class="trend-dot"></span> Database: ${dbOk ? 'connected' : (h.db && h.db.configured ? 'error' : 'not configured')}`;
 
-            const edOk = h.ensembleData && h.ensembleData.configured;
-            edPill.className = 'trend-status-pill ' + (edOk ? 'ok' : 'off');
-            edPill.innerHTML = `<span class="trend-dot"></span> EnsembleData: ${edOk ? 'ready' : 'no key'}`;
+            const ingest = h.ingest || {};
+            const provider = ingest.provider;
+            const platforms = Array.isArray(ingest.platforms) ? ingest.platforms : [];
+            const providerLabel = provider === 'apify'
+                ? `Apify: ${platforms.join(', ') || 'ready'}`
+                : provider === 'ensembledata'
+                    ? 'EnsembleData: TikTok'
+                    : 'Ingest: no provider';
+            edPill.className = 'trend-status-pill ' + (provider ? 'ok' : 'off');
+            edPill.innerHTML = `<span class="trend-dot"></span> ${esc(providerLabel)}`;
 
             if (meta) {
                 const seeds = (h.seedHashtags || []).length;

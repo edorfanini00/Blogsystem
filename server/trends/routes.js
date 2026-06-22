@@ -8,6 +8,7 @@ import express from 'express';
 import multer from 'multer';
 import { isDbConfigured, dbSource, migrate, pingDb } from './db.js';
 import { isEnsembleConfigured } from './ensembledata.js';
+import { isApifyConfigured } from './apify.js';
 import { runIngestCycle, listCandidates, getCandidateSnapshots } from './ingest.js';
 import {
     createSolution, listSolutions, getSolution, updateSolution, deleteSolution,
@@ -28,6 +29,7 @@ import {
     SCORE_WEIGHTS,
     MESSAGE_BANK,
     TOPIC_KEYWORDS,
+    PLATFORMS,
 } from './config.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
@@ -51,6 +53,11 @@ function requireDb(res) {
 router.get('/health', async (req, res) => {
     const out = {
         db: { configured: isDbConfigured, ok: false, source: dbSource },
+        ingest: {
+            provider: isApifyConfigured ? 'apify' : (isEnsembleConfigured ? 'ensembledata' : null),
+            platforms: isApifyConfigured ? PLATFORMS : (isEnsembleConfigured ? ['tiktok'] : []),
+        },
+        apify: { configured: isApifyConfigured },
         ensembleData: { configured: isEnsembleConfigured },
         llm: { configured: isLlmConfigured },
         video: { configured: isVideoConfigured, model: videoModel },
@@ -89,14 +96,14 @@ router.post('/migrate', async (req, res) => {
 // Run one ingest cycle. Body: { hashtags?: string[], days?: number }.
 router.post('/ingest', async (req, res) => {
     if (!requireDb(res)) return;
-    if (!isEnsembleConfigured) {
+    if (!isApifyConfigured && !isEnsembleConfigured) {
         return res.status(503).json({
-            error: 'ENSEMBLEDATA_API_KEY not configured. Add the key to run a live ingest cycle.',
+            error: 'No ingest provider configured. Set APIFY_TOKEN (multi-platform) or ENSEMBLEDATA_API_KEY (TikTok).',
         });
     }
     try {
-        const { hashtags, days } = req.body || {};
-        const summary = await runIngestCycle({ hashtags, days });
+        const { hashtags, days, platforms } = req.body || {};
+        const summary = await runIngestCycle({ hashtags, days, platforms });
         res.json(summary);
     } catch (err) {
         console.error('❌ Trend ingest error:', err.message);
@@ -324,10 +331,10 @@ async function runCron(req, res) {
     if (!isDbConfigured) return res.status(503).json({ error: 'DATABASE_URL not configured' });
     const out = { startedAt: new Date().toISOString(), stages: {} };
     try {
-        if (isEnsembleConfigured) {
+        if (isApifyConfigured || isEnsembleConfigured) {
             out.stages.ingest = await runIngestCycle({});
         } else {
-            out.stages.ingest = { skipped: 'ENSEMBLEDATA_API_KEY not configured' };
+            out.stages.ingest = { skipped: 'No ingest provider configured (APIFY_TOKEN or ENSEMBLEDATA_API_KEY)' };
         }
     } catch (err) { out.stages.ingest = { error: err.message }; }
 
