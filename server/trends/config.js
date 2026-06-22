@@ -109,11 +109,22 @@ export const APIFY_SEARCH_ACTORS = {
 // relevance, mostRecent, mostViews.
 export const APIFY_SEARCH_SORT = process.env.APIFY_SEARCH_SORT || 'mostViews';
 // Recency window: allTime, today, thisWeek, thisMonth, 3months, 6months.
-export const APIFY_SEARCH_DATE = process.env.APIFY_SEARCH_DATE || 'thisWeek';
+// thisMonth gives the views-sort enough volume to find real performers in a
+// niche where a single week is often too thin.
+export const APIFY_SEARCH_DATE = process.env.APIFY_SEARCH_DATE || 'thisMonth';
 // Results per search term per platform.
 export const APIFY_SEARCH_RESULTS = Number(process.env.APIFY_SEARCH_RESULTS) || 30;
 // Drop anything below this view count (0 = keep all). Raise to focus on virals.
 export const APIFY_SEARCH_MIN_VIEWS = Number(process.env.APIFY_SEARCH_MIN_VIEWS) || 0;
+
+// ─── Quality floor (applied to EVERY net, not just search) ───────
+// Niche search terms attract spam/dropship bot accounts that post low-view
+// junk. A view floor is the cleanest filter: it drops the junk while still
+// letting a genuine viral from a tiny account through (high views, few
+// followers = a real hit). Tune with TREND_MIN_VIEWS; set 0 to disable.
+export const TREND_MIN_VIEWS = process.env.TREND_MIN_VIEWS != null
+    ? Number(process.env.TREND_MIN_VIEWS)
+    : 1000;
 
 // ─── Composite score weights (section 6.3) ──────────────────────
 // Starting points. Tune from real data.

@@ -83,6 +83,7 @@ function normalizeTikTok(item) {
     if (!url) return null;
     const author = item.authorMeta || {};
     const music = item.musicMeta || {};
+    const video = item.videoMeta || {};
     const hashtags = (item.hashtags || [])
         .map((h) => (typeof h === 'string' ? h : h?.name))
         .filter(Boolean);
@@ -94,6 +95,10 @@ function normalizeTikTok(item) {
         caption: item.text ?? '',
         audioId: music.musicId ? String(music.musicId) : null,
         hashtags,
+        thumbnail:
+            video.coverUrl || video.originalCoverUrl ||
+            (Array.isArray(item.covers) ? item.covers[0] : null) ||
+            item.cover || null,
         createdAt:
             item.createTimeISO ||
             (item.createTime ? new Date(Number(item.createTime) * 1000).toISOString() : null),
@@ -117,6 +122,9 @@ function normalizeInstagram(item) {
         caption: item.caption ?? '',
         audioId: item.audio_id ? String(item.audio_id) : null,
         hashtags: item.caption_hashtags || [],
+        thumbnail:
+            item.thumbnail_url || item.display_url || item.image_url ||
+            item.thumbnail || item.displayUrl || null,
         createdAt: item.posted_at || null,
         stats: {
             playCount: item.play_count ?? null,
@@ -140,6 +148,7 @@ function normalizeTikTokSearch(item) {
         caption: item.desc ?? '',
         audioId: item.musicTitle ? String(item.musicTitle) : null,
         hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+        thumbnail: item.cover || item.dynamicCover || item.originCover || item.thumbnail || null,
         createdAt: item.createdAt || null,
         stats: {
             playCount: item.plays ?? null,
@@ -150,9 +159,15 @@ function normalizeTikTokSearch(item) {
     };
 }
 
+function ytIdFromUrl(u) {
+    const m = String(u || '').match(/(?:shorts\/|v=|youtu\.be\/)([\w-]{6,})/);
+    return m ? m[1] : null;
+}
+
 function normalizeYouTube(item) {
     const url = item.url || null;
     if (!url) return null;
+    const ytId = ytIdFromUrl(url);
     return {
         platform: 'youtube',
         url,
@@ -161,6 +176,9 @@ function normalizeYouTube(item) {
         caption: item.title ?? '',
         audioId: item.audio_title ? String(item.audio_title) : null,
         hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+        thumbnail:
+            item.thumbnail || item.thumbnailUrl || item.thumbnail_url ||
+            (ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : null),
         createdAt: item.published_at || null,
         stats: {
             playCount: item.view_count ?? null,

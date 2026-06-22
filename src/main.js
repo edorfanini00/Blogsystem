@@ -5750,14 +5750,19 @@ setTimeout(function initOnePager() {
         else if (genStatus === 'rendering') recreateLabel = 'Rendering…';
         else if (genStatus && ['review', 'approved', 'posted'].includes(genStatus)) recreateLabel = 'Recreate again';
 
+        const thumb = c.thumbnail
+            ? `<img class="trend-card-thumb" src="${esc(c.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
+            : '';
         return `
         <div class="trend-card" data-id="${esc(c.id)}">
-          <div class="trend-card-media">
+          <a class="trend-card-media" href="${esc(c.url)}" target="_blank" rel="noopener" title="Open original video">
+            ${thumb}
             <span class="trend-platform-glyph">${glyph}</span>
+            <span class="trend-card-play" aria-hidden="true">▶</span>
             <span class="trend-card-bucket ${bm.cls}">${bm.label}</span>
             <span class="trend-card-age">${ageStr(c.created_at)}</span>
             ${composite != null ? `<span class="trend-card-composite" title="Composite score">${composite.toFixed(2)}</span>` : ''}
-          </div>
+          </a>
           <div class="trend-card-body">
             <div class="trend-card-author">${author}${followers ? ' · ' + followers : ''}</div>
             <div class="trend-card-caption">${esc(c.caption) || '<span style="color:var(--text-muted)">No caption</span>'}</div>

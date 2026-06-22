@@ -15,19 +15,21 @@ import {
     TREND_DISCOVERY,
     SEARCH_TERMS,
     SEARCH_PLATFORMS,
+    TREND_MIN_VIEWS,
 } from './config.js';
 
 // Upsert a candidate by url; returns its id.
 async function upsertCandidate(c) {
     const r = await query(
         `insert into candidates
-            (platform, url, author_id, author_followers, caption, audio_id, hashtags, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)
+            (platform, url, author_id, author_followers, caption, audio_id, hashtags, thumbnail, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          on conflict (url) do update set
             author_followers = excluded.author_followers,
             caption = excluded.caption,
             audio_id = excluded.audio_id,
-            hashtags = excluded.hashtags
+            hashtags = excluded.hashtags,
+            thumbnail = coalesce(excluded.thumbnail, candidates.thumbnail)
          returning id`,
         [
             c.platform,
@@ -37,10 +39,20 @@ async function upsertCandidate(c) {
             c.caption,
             c.audioId,
             c.hashtags || [],
+            c.thumbnail || null,
             c.createdAt,
         ]
     );
     return r.rows[0].id;
+}
+
+// Quality floor: drop low-view junk before it ever hits the pool. A view
+// count is the cleanest spam signal — it filters dropship/bot posts while
+// still letting a genuine viral from a tiny account through.
+function passesQuality(post) {
+    if (!TREND_MIN_VIEWS) return true;
+    const views = Number(post?.stats?.playCount) || 0;
+    return views >= TREND_MIN_VIEWS;
 }
 
 async function insertSnapshot(candidateId, stats) {
@@ -133,11 +145,14 @@ export async function runIngestCycle({
             }
         }
 
-        const unique = [...byUrl.values()];
+        const deduped = [...byUrl.values()];
+        const unique = deduped.filter(passesQuality);
+        summary.belowViewFloor = deduped.length - unique.length;
+        summary.minViews = TREND_MIN_VIEWS;
         const snaps = await persistPosts(unique);
         summary.totalCandidates = unique.length;
         summary.totalSnapshots = snaps;
-        console.log(`📈 Trend ingest (${TREND_DISCOVERY}): ${unique.length} unique candidates, ${snaps} snapshots`);
+        console.log(`📈 Trend ingest (${TREND_DISCOVERY}): ${unique.length} kept / ${deduped.length} found (>= ${TREND_MIN_VIEWS} views), ${snaps} snapshots`);
 
         summary.finishedAt = new Date().toISOString();
         return summary;
@@ -146,9 +161,10 @@ export async function runIngestCycle({
     // ─── EnsembleData fallback (TikTok only, per-hashtag) ───────────
     for (const tag of hashtags) {
         try {
-            const posts = await getHashtagRecentPosts(tag, days);
+            const raw = await getHashtagRecentPosts(tag, days);
+            const posts = raw.filter(passesQuality);
             const snapshots = await persistPosts(posts);
-            summary.hashtags.push({ tag, candidates: posts.length, snapshots });
+            summary.hashtags.push({ tag, candidates: posts.length, found: raw.length, snapshots });
             summary.totalCandidates += posts.length;
             summary.totalSnapshots += snapshots;
             console.log(`📈 Trend ingest #${tag}: ${posts.length} candidates, ${snapshots} snapshots`);

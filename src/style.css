@@ -5814,9 +5814,47 @@ body.light-theme .campaign-stat {
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  text-decoration: none;
 }
 
 .trend-card-media .trend-platform-glyph { font-size: 2.2rem; }
+
+.trend-card-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+/* Play affordance sits above the thumbnail; only obvious on hover. */
+.trend-card-play {
+  position: absolute;
+  z-index: 2;
+  font-size: 1.4rem;
+  color: #fff;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 3px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.trend-card-media:hover .trend-card-play { opacity: 1; transform: scale(1); }
+
+/* Keep the corner overlays above the thumbnail. */
+.trend-card-bucket,
+.trend-card-age,
+.trend-card-composite { z-index: 2; }
 
 .trend-card-bucket {
   position: absolute;

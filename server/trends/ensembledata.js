@@ -75,6 +75,14 @@ export function normalizePost(post, platform = 'tiktok') {
     const createUnix = post.create_time || post.createTime;
     const createdAt = createUnix ? new Date(Number(createUnix) * 1000).toISOString() : null;
 
+    const video = post.video || {};
+    const cover =
+        (Array.isArray(video.cover) ? video.cover[0] : video.cover) ||
+        (video.origin_cover && (Array.isArray(video.origin_cover.url_list) ? video.origin_cover.url_list[0] : video.origin_cover)) ||
+        (video.cover_url_list ? video.cover_url_list[0] : null) ||
+        post.cover ||
+        null;
+
     return {
         platform,
         url,
@@ -84,6 +92,7 @@ export function normalizePost(post, platform = 'tiktok') {
         caption: post.desc ?? post.title ?? '',
         audioId: music.id ? String(music.id) : (music.mid || null),
         hashtags,
+        thumbnail: cover,
         createdAt,
         stats: {
             playCount: stats.play_count ?? stats.playCount ?? null,

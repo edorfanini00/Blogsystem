@@ -22,6 +22,10 @@ create table if not exists candidates (
     first_seen_at     timestamptz not null default now()
 );
 
+-- Thumbnail / cover image so the dashboard can show the actual video frame
+-- instead of just a platform glyph. Idempotent add for existing deployments.
+alter table candidates add column if not exists thumbnail text;
+
 create index if not exists idx_candidates_author on candidates (author_id);
 create index if not exists idx_candidates_audio on candidates (audio_id);
 create index if not exists idx_candidates_created on candidates (created_at);
