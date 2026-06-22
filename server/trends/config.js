@@ -53,7 +53,7 @@ export const PLATFORMS = (process.env.TREND_PLATFORMS
 export const APIFY_ACTORS = {
     tiktok: 'scrapecore~tiktok-cheerio-hashtag-scraper',
     instagram: 'khadinakbar~instagram-hashtag-scraper',
-    youtube: 'simpleapi~youtube-shorts-scraper',
+    youtube: 'lentic_clockss~youtube-shorts-scraper',
 };
 
 // Top N posts to pull per hashtag per platform. Lower = cheaper (Apify bills
@@ -126,7 +126,7 @@ export const SEARCH_PLATFORMS = ['tiktok', 'youtube'];
 // can sort by popularity (views).
 export const APIFY_SEARCH_ACTORS = {
     tiktok: 'sentry~tiktok-search-api',
-    youtube: 'simpleapi~youtube-shorts-scraper',
+    youtube: 'lentic_clockss~youtube-shorts-scraper',
 };
 
 // mostViews = rank by actual performance, not tag relevance. Options:

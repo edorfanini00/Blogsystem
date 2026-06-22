@@ -192,19 +192,6 @@ function normalizeYouTube(item) {
     };
 }
 
-// Convert the TikTok-style date window (thisWeek/thisMonth/...) to the
-// relative form the YouTube actor expects (e.g. "7 days", "1 month").
-function ytPublishedAfter(window) {
-    switch (String(window || '').toLowerCase()) {
-        case 'today': return '1 day';
-        case 'thisweek': return '7 days';
-        case 'thismonth': return '1 month';
-        case '3months': return '3 months';
-        case '6months': return '6 months';
-        default: return '1 month';
-    }
-}
-
 // ─── Per-platform input builders ────────────────────────────────
 
 function buildInput(platform, tags, resultsPerHashtag) {
@@ -221,11 +208,10 @@ function buildInput(platform, tags, resultsPerHashtag) {
                 maxPostsPerHashtag: resultsPerHashtag,
             };
         case 'youtube':
-            // simpleapi actor takes keywords/handles/URLs in startUrls.
+            // lentic_clockss actor searches by keyword (appends #shorts).
             return {
-                startUrls: tags,
+                searchQueries: tags,
                 maxResults: resultsPerHashtag,
-                sortOrder: 'popular',
             };
         default:
             throw new Error(`Unsupported platform: ${platform}`);
@@ -269,11 +255,11 @@ function buildSearchInput(platform, terms, results) {
                 datePosted: APIFY_SEARCH_DATE,
             };
         case 'youtube':
+            // Searches keywords (appends #shorts) and returns view counts;
+            // sorting/date are handled downstream by our quality floor + ranking.
             return {
-                startUrls: terms,
+                searchQueries: terms,
                 maxResults: results,
-                sortOrder: 'popular',
-                publishedAfter: ytPublishedAfter(APIFY_SEARCH_DATE),
             };
         default:
             throw new Error(`Search not supported for platform: ${platform}`);
