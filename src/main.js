@@ -5527,7 +5527,7 @@ setTimeout(function initOnePager() {
         bucket: 'all',
         category: 'all',
         platform: 'all',
-        sort: 'composite',
+        sort: 'performance',
         candidates: [],
         health: null,
         dismissed: new Set(),
@@ -5696,6 +5696,21 @@ setTimeout(function initOnePager() {
         renderCandidates();
     }
 
+    // Performance score (0..1), no LLM needed. Rewards absolute reach, breakout
+    // (views >> followers), momentum, and real engagement — so "very high views"
+    // and "high views from a small account" both float to the top, junk sinks.
+    function perfScore(c) {
+        const views = Number(c.play_count) || 0;
+        const ratio = Number(c.baseline_ratio) || 0;          // views / followers
+        const vel = Number(c.velocity) || 0;                  // plays / hour
+        const eng = views > 0 ? ((Number(c.like_count) || 0) + (Number(c.comment_count) || 0)) / views : 0;
+        const viewsN = views > 0 ? Math.min(Math.log10(views) / 7, 1) : 0; // 10M -> 1
+        const breakoutN = Math.min(ratio / 100, 1);           // 100x -> 1
+        const velN = Math.min(vel / 100000, 1);
+        const engN = Math.min(eng / 0.1, 1);                  // 10% -> 1
+        return 0.5 * viewsN + 0.3 * breakoutN + 0.12 * velN + 0.08 * engN;
+    }
+
     function updateStats(list) {
         const surfaced = list.filter((c) => Number(c.composite_score) >= (state.health?.surfaceThreshold ?? 0.6));
         const scored = list.filter((c) => c.composite_score != null);
@@ -5730,15 +5745,17 @@ setTimeout(function initOnePager() {
 
         const num = (v) => Number(v) || 0;
         list.sort((a, b) => {
+            if (state.sort === 'performance') return perfScore(b) - perfScore(a);
             if (state.sort === 'views') return num(b.play_count) - num(a.play_count);
+            if (state.sort === 'breakout') return num(b.baseline_ratio) - num(a.baseline_ratio);
             if (state.sort === 'likes') return num(b.like_count) - num(a.like_count);
             if (state.sort === 'comments') return num(b.comment_count) - num(a.comment_count);
             if (state.sort === 'snapshots') return num(b.snapshot_count) - num(a.snapshot_count);
             if (state.sort === 'recent') return new Date(b.first_seen_at) - new Date(a.first_seen_at);
-            // composite: scored desc, then most recent
+            // composite: scored desc, then performance
             const cs = (Number(b.composite_score) || -1) - (Number(a.composite_score) || -1);
             if (cs !== 0) return cs;
-            return new Date(b.first_seen_at) - new Date(a.first_seen_at);
+            return perfScore(b) - perfScore(a);
         });
 
         // No more "below threshold" pile — a weak video just carries a low

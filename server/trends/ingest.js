@@ -16,6 +16,9 @@ import {
     SEARCH_TERMS,
     SEARCH_PLATFORMS,
     TREND_MIN_VIEWS,
+    TREND_BREAKOUT_RATIO,
+    TREND_BREAKOUT_MIN_VIEWS,
+    TREND_MIN_ENGAGEMENT,
     TREND_LANG,
 } from './config.js';
 
@@ -49,13 +52,31 @@ async function upsertCandidate(c) {
     return r.rows[0].id;
 }
 
-// Quality floor: drop low-view junk before it ever hits the pool. A view
-// count is the cleanest spam signal — it filters dropship/bot posts while
-// still letting a genuine viral from a tiny account through.
+// Quality gate. Keep a candidate if it's a real performer:
+//   • high absolute views (>= TREND_MIN_VIEWS), OR
+//   • a breakout: views >= TREND_BREAKOUT_RATIO × followers, above a floor.
+// Then drop bought-view bots (high views, ~0 likes). This is the core filter
+// that removes 1-3k-view junk while surfacing both big hits and small-account
+// breakouts. Works on the normalized post shape (stats + authorFollowers).
+function qualifies(views, followers, likes) {
+    if (!views) return false;
+    const highViews = !TREND_MIN_VIEWS || views >= TREND_MIN_VIEWS;
+    const ratio = followers > 0 ? views / followers : 0;
+    const breakout = ratio >= TREND_BREAKOUT_RATIO && views >= TREND_BREAKOUT_MIN_VIEWS;
+    if (!highViews && !breakout) return false;
+    // Bot guard: only when likes are known and views are sizeable.
+    if (TREND_MIN_ENGAGEMENT > 0 && likes != null && views >= 20000) {
+        if (likes / views < TREND_MIN_ENGAGEMENT) return false;
+    }
+    return true;
+}
+
 function passesQuality(post) {
-    if (!TREND_MIN_VIEWS) return true;
-    const views = Number(post?.stats?.playCount) || 0;
-    return views >= TREND_MIN_VIEWS;
+    return qualifies(
+        Number(post?.stats?.playCount) || 0,
+        Number(post?.authorFollowers) || 0,
+        post?.stats?.likeCount != null ? Number(post.stats.likeCount) : null
+    );
 }
 
 // Scripts that immediately mean "not US/English" content.
@@ -284,11 +305,17 @@ export async function listCandidates({ limit = 50 } = {}) {
          limit $1`,
         [limit]
     );
-    // Also filter existing rows at read time so non-US/English candidates that
-    // were stored before the language gate existed drop out of the UI + reports
-    // immediately, without needing a re-ingest or a destructive purge.
-    if (TREND_LANG === 'en') return r.rows.filter((row) => looksEnglish(row.caption));
-    return r.rows;
+    // Filter existing rows at read time so candidates stored before the current
+    // language + quality gates drop out of the UI + reports immediately, without
+    // needing a re-ingest or a destructive purge.
+    return r.rows.filter((row) => {
+        if (TREND_LANG === 'en' && !looksEnglish(row.caption)) return false;
+        return qualifies(
+            Number(row.play_count) || 0,
+            Number(row.author_followers) || 0,
+            row.like_count != null ? Number(row.like_count) : null
+        );
+    });
 }
 
 // Full snapshot time series for one candidate.

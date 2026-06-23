@@ -141,14 +141,33 @@ export const APIFY_SEARCH_RESULTS = Number(process.env.APIFY_SEARCH_RESULTS) || 
 // Drop anything below this view count (0 = keep all). Raise to focus on virals.
 export const APIFY_SEARCH_MIN_VIEWS = Number(process.env.APIFY_SEARCH_MIN_VIEWS) || 0;
 
-// ─── Quality floor (applied to EVERY net, not just search) ───────
-// Niche search terms attract spam/dropship bot accounts that post low-view
-// junk. A view floor is the cleanest filter: it drops the junk while still
-// letting a genuine viral from a tiny account through (high views, few
-// followers = a real hit). Tune with TREND_MIN_VIEWS; set 0 to disable.
+// ─── Quality gate (applied to EVERY net, not just search) ───────
+// We keep a candidate only if it is a real performer. Two ways to qualify:
+//   1. High absolute views (TREND_MIN_VIEWS) — proven reach, and
+//   2. Breakout: views >= TREND_BREAKOUT_RATIO × the creator's followers
+//      (a small account going viral) as long as it clears a sane floor
+//      (TREND_BREAKOUT_MIN_VIEWS) so micro-noise doesn't sneak in.
+// This is what kills the 1-3k-view junk while still surfacing both
+// "very high views" and "high views from a small account".
 export const TREND_MIN_VIEWS = process.env.TREND_MIN_VIEWS != null
     ? Number(process.env.TREND_MIN_VIEWS)
-    : 1000;
+    : 10000;
+// Breakout = views / followers. 15x means the algorithm pushed it well beyond
+// the creator's own audience — the cleanest "this is actually trending" signal.
+export const TREND_BREAKOUT_RATIO = process.env.TREND_BREAKOUT_RATIO != null
+    ? Number(process.env.TREND_BREAKOUT_RATIO)
+    : 15;
+// A breakout still needs a sane absolute floor so a 500-view/10-follower post
+// doesn't qualify on ratio alone.
+export const TREND_BREAKOUT_MIN_VIEWS = process.env.TREND_BREAKOUT_MIN_VIEWS != null
+    ? Number(process.env.TREND_BREAKOUT_MIN_VIEWS)
+    : 3000;
+// Bot guard: bought-view accounts have near-zero engagement. When likes are
+// known and views are high, drop anything below this like:view ratio. Set 0
+// to disable. Only applied above 20k views so we don't punish early videos.
+export const TREND_MIN_ENGAGEMENT = process.env.TREND_MIN_ENGAGEMENT != null
+    ? Number(process.env.TREND_MIN_ENGAGEMENT)
+    : 0.0005;
 
 // Region / language targeting. TikTok's search actor already defaults to US
 // results, but the Instagram and YouTube actors have no country option and
