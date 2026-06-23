@@ -179,6 +179,27 @@ export const TREND_LANG = process.env.TREND_LANG != null
     ? process.env.TREND_LANG.trim().toLowerCase()
     : 'en';
 
+// ─── Higgsfield image/video model router (Video Generation spec §5) ─
+// The Director sets model_choice per shot; we map it to a Higgsfield
+// application slug (CLI job_set_type). Override any via env if Higgsfield
+// renames a slug. Defaults: Nano Banana Pro (precision/text/dashboards),
+// Seedream (multi-shot subject continuity), Grok (fast scroll-stoppers).
+export const HF_IMAGE_MODELS = {
+    nano_banana_pro: process.env.HF_MODEL_NANO_BANANA || 'nano_banana_2',
+    seedream: process.env.HF_MODEL_SEEDREAM || 'seedream_v4_5',
+    grok: process.env.HF_MODEL_GROK || 'grok_image',
+};
+// Vertical short-form by default.
+export const HF_IMAGE_ASPECT = process.env.HF_IMAGE_ASPECT || '9:16';
+// Hero shots render at higher resolution; supporting shots stay cheaper.
+export const HF_IMAGE_RESOLUTION = process.env.HF_IMAGE_RESOLUTION || '2k';
+export const HF_VIDEO_MODELS = {
+    default: process.env.HF_MODEL_KLING || 'kling3_0',
+    simple: process.env.HF_MODEL_KLING_SIMPLE || 'kling2_6',
+};
+// Per-shot image generation retry cap (spec §7: cap regenerations at 3).
+export const REMAKE_MAX_REGENS = Number(process.env.REMAKE_MAX_REGENS) || 3;
+
 // ─── Composite score weights (section 6.3) ──────────────────────
 // Starting points. Tune from real data.
 export const SCORE_WEIGHTS = {

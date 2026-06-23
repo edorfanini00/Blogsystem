@@ -26,6 +26,8 @@ import {
 import { notify, isNotifyConfigured, notifyChannels } from './notify.js';
 import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
 import { runDirector, directAndSave } from './director.js';
+import { runImages, isImageConfigured } from './image.js';
+import { runQc, isQcConfigured } from './qc.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -36,6 +38,7 @@ import {
     TREND_DISCOVERY,
     SEARCH_TERMS,
     TREND_LANG,
+    HF_IMAGE_MODELS,
 } from './config.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
@@ -125,6 +128,8 @@ router.get('/health', async (req, res) => {
         voiceover: { configured: !!ELEVENLABS_KEY },
         analyze: { configured: isAnalyzeConfigured },
         director: { configured: isLlmConfigured },
+        image: { configured: isImageConfigured, models: HF_IMAGE_MODELS },
+        qc: { configured: isQcConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -317,6 +322,48 @@ router.post('/candidates/:id/direct', async (req, res) => {
         res.json({ ok: true, generationId: generation.id, status: generation.status, plan });
     } catch (err) {
         console.error('❌ Director error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Image agent (spec §6): render the shot plan into stills ────
+// POST /api/trends/generations/:id/images  → render every shot (idempotent)
+router.post('/generations/:id/images', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isImageConfigured) {
+        return res.status(503).json({ error: 'Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.' });
+    }
+    try {
+        res.json(await runImages(req.params.id));
+    } catch (err) {
+        console.error('❌ Image agent error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── QC gate (spec §7): grade stills, regenerate failures ──────
+// POST /api/trends/generations/:id/qc  → grade + improve-loop each shot
+router.post('/generations/:id/qc', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isQcConfigured) {
+        return res.status(503).json({ error: 'GEMINI_API_KEY not configured (needed for QC grading).' });
+    }
+    try {
+        res.json(await runQc(req.params.id));
+    } catch (err) {
+        console.error('❌ QC gate error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/trends/generations/:id → one generation with shots (chain state)
+router.get('/generations/:id', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const g = await getGeneration(req.params.id);
+        if (!g) return res.status(404).json({ error: 'Generation not found' });
+        res.json(g);
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
