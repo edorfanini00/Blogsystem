@@ -160,6 +160,26 @@ create index if not exists idx_solution_files_solution on solution_files (soluti
 -- Link a generation to the solution it was created for.
 alter table generations add column if not exists solution_id uuid references solutions (id) on delete set null;
 
+-- ─── Product knowledge base fields (Video Generation spec §2) ────
+-- The image-first remake chain needs a richer, self-contained product entry
+-- than the original scorer message bank. Each field maps to the spec contract.
+-- Idempotent adds so existing solutions migrate forward.
+alter table solutions add column if not exists one_liner       text;       -- plain "what it is and does"
+alter table solutions add column if not exists proof_points    text[] default '{}'; -- concrete outcomes/numbers
+alter table solutions add column if not exists visual_cues     text[] default '{}'; -- what it looks like on screen
+alter table solutions add column if not exists message_bank    text[] default '{}'; -- approved angles/phrasings
+alter table solutions add column if not exists editorial       jsonb;      -- { banned_terms[], required_framing, notes }
+
+-- ─── Remake / Director fields on generations (Video Generation spec) ─
+-- The image-first chain replaces the old text-to-video shortcut. We persist
+-- the remake config + the Director's shot plan so the rest of the chain
+-- (image → qc → motion → video → assembly) reads from one row.
+alter table generations add column if not exists target_mode     text;    -- product | custom | auto
+alter table generations add column if not exists custom_prompt   text;    -- set when target_mode = custom
+alter table generations add column if not exists resolved_target text;    -- product name | custom | auto-selected
+alter table generations add column if not exists director_json   jsonb;   -- full shot plan { format, shots[] }
+alter table generations add column if not exists shots           jsonb;   -- per-shot pipeline state (image/video urls, qc)
+
 -- ─── trend_reports (weekly intelligence) ────────────────────────
 -- One row per weekly analysis run. The factual parts (signals, trending,
 -- rising/forecast) are computed deterministically from the data above; the

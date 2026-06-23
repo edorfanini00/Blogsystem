@@ -1,0 +1,44 @@
+[
+  {
+    "name": "EZ solutions",
+    "one_liner": "Software that gives food and beverage manufacturers and oil and gas operators real-time visibility they do not get from spreadsheets, across inventory, demand, and the plant floor.",
+    "description": "Operational visibility software for food & beverage manufacturers and oil & gas operators, including cross-border US to Venezuela operations.",
+    "buyer": "Operations and supply-chain leaders at food and beverage manufacturers and oil and gas operators; plant managers tired of running blind on spreadsheets.",
+    "pains": [
+      "demand surges they cannot see coming",
+      "inventory and reconciliation done by hand",
+      "no real-time visibility on the plant floor",
+      "FSMA 204 traceability pressure",
+      "finding out about a problem only when they run out"
+    ],
+    "proof_points": [
+      "real-time view of inventory and demand in one screen",
+      "automatic reconciliation instead of manual spreadsheets",
+      "FSMA 204 traceability records generated as product moves",
+      "alerts on demand surges before stockouts happen"
+    ],
+    "visual_cues": [
+      "a clean live dashboard on a laptop showing inventory and demand",
+      "a plant floor with product moving on a line",
+      "a phone alert about a demand surge",
+      "a shipping container or pallet being scanned",
+      "a spreadsheet being replaced by a single clear screen"
+    ],
+    "message_bank": [
+      "the plant was running blind on spreadsheets, now it is on one screen",
+      "you find out about the surge before you run out, not after",
+      "traceability is recorded as the product moves, not rebuilt later",
+      "mechanism first: see it, then act on it"
+    ],
+    "hooks": [
+      "FSMA 204 compliance",
+      "demand surge visibility",
+      "the plant running blind on spreadsheets"
+    ],
+    "editorial": {
+      "banned_terms": ["ERP", "SAP partner"],
+      "required_framing": "EZ solutions, not an ERP, not an SAP partner",
+      "notes": "Voice is dry, plain, mechanism first. No em dashes, no exclamation points, no AI-sounding phrasing."
+    }
+  }
+]

@@ -25,6 +25,7 @@ import {
 } from './generate.js';
 import { notify, isNotifyConfigured, notifyChannels } from './notify.js';
 import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
+import { runDirector, directAndSave } from './director.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -123,6 +124,7 @@ router.get('/health', async (req, res) => {
         video: { configured: isVideoConfigured, model: videoModel },
         voiceover: { configured: !!ELEVENLABS_KEY },
         analyze: { configured: isAnalyzeConfigured },
+        director: { configured: isLlmConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -285,6 +287,36 @@ router.get('/topics', async (req, res) => {
     try {
         res.json(await listTopics());
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ─── Video Generation chain — Director agent (spec §4) ─────────
+// POST /api/trends/candidates/:id/direct
+//   { target_mode: "product"|"custom"|"auto", product_id?, custom_prompt?, dryRun? }
+// Image-first remake: produces the shot plan that mirrors the source format and
+// retargets it. dryRun returns the plan without persisting (for confirmation).
+router.post('/candidates/:id/direct', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isLlmConfigured) {
+        return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured. Add it to run the Director.' });
+    }
+    try {
+        const { target_mode, product_id, custom_prompt, dryRun } = req.body || {};
+        const opts = {
+            targetMode: target_mode || 'auto',
+            productId: product_id || null,
+            customPrompt: custom_prompt || null,
+        };
+        if (dryRun) {
+            const plan = await runDirector(req.params.id, opts);
+            return res.json({ ok: true, dryRun: true, plan });
+        }
+        const { generation, plan } = await directAndSave(req.params.id, opts);
+        res.json({ ok: true, generationId: generation.id, status: generation.status, plan });
+    } catch (err) {
+        console.error('❌ Director error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -524,9 +556,9 @@ router.get('/solutions', async (req, res) => {
 router.post('/solutions', async (req, res) => {
     if (!requireDb(res)) return;
     try {
-        const { name, description, buyer, pains, hooks } = req.body || {};
-        if (!name || !name.trim()) return res.status(400).json({ error: 'Solution name is required' });
-        const sol = await createSolution({ name: name.trim(), description, buyer, pains, hooks });
+        const body = req.body || {};
+        if (!body.name || !body.name.trim()) return res.status(400).json({ error: 'Solution name is required' });
+        const sol = await createSolution({ ...body, name: body.name.trim() });
         res.json(sol);
     } catch (err) {
         console.error('❌ Solution create error:', err.message);

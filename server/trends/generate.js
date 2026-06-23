@@ -250,7 +250,8 @@ export async function listGenerations({ status = null, limit = 50 } = {}) {
 }
 
 const VALID_STATUSES = [
-    'drafted', 'script_only', 'rendering', 'review', 'approved', 'posted', 'killed', 'failed',
+    'drafted', 'directed', 'imaging', 'qc', 'animating', 'rendering', 'assembling',
+    'script_only', 'review', 'approved', 'posted', 'killed', 'failed',
 ];
 
 export async function updateGenerationStatus(id, status, approvedBy = 'web') {

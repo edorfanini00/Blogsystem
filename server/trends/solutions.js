@@ -32,12 +32,42 @@ export async function extractText(buffer, filename, mimeType) {
     }
 }
 
+// Coerce a field that may arrive as an array or a newline/comma string into a
+// clean string[] for the text[] product columns.
+function toArray(v) {
+    if (v == null) return null;
+    if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+    return String(v)
+        .split(/\r?\n|;|,/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+}
+
+function toEditorial(v) {
+    if (v == null) return null;
+    if (typeof v === 'object') return v;
+    try { return JSON.parse(v); } catch { return null; }
+}
+
 // ─── Solutions CRUD ─────────────────────────────────────────────
-export async function createSolution({ name, description, buyer, pains, hooks }) {
+export async function createSolution(fields = {}) {
+    const {
+        name, description, buyer, pains, hooks,
+        one_liner, proof_points, visual_cues, message_bank, editorial,
+    } = fields;
     const r = await query(
-        `insert into solutions (name, description, buyer, pains, hooks)
-         values ($1,$2,$3,$4,$5) returning *`,
-        [name, description || null, buyer || null, pains || null, hooks || null]
+        `insert into solutions
+            (name, description, buyer, pains, hooks,
+             one_liner, proof_points, visual_cues, message_bank, editorial)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
+        [
+            name, description || null, buyer || null, pains || null, hooks || null,
+            one_liner || null,
+            toArray(proof_points),
+            toArray(visual_cues),
+            toArray(message_bank),
+            editorial ? JSON.stringify(toEditorial(editorial)) : null,
+        ]
     );
     return r.rows[0];
 }
@@ -72,11 +102,21 @@ export async function updateSolution(id, fields) {
     const sets = [];
     const vals = [];
     let i = 1;
-    for (const key of ['name', 'description', 'buyer', 'pains', 'hooks']) {
+    for (const key of ['name', 'description', 'buyer', 'pains', 'hooks', 'one_liner']) {
         if (fields[key] !== undefined) {
             sets.push(`${key} = $${i++}`);
             vals.push(fields[key]);
         }
+    }
+    for (const key of ['proof_points', 'visual_cues', 'message_bank']) {
+        if (fields[key] !== undefined) {
+            sets.push(`${key} = $${i++}`);
+            vals.push(toArray(fields[key]));
+        }
+    }
+    if (fields.editorial !== undefined) {
+        sets.push(`editorial = $${i++}`);
+        vals.push(fields.editorial ? JSON.stringify(toEditorial(fields.editorial)) : null);
     }
     if (!sets.length) return getSolution(id);
     sets.push(`updated_at = now()`);
@@ -131,6 +171,40 @@ export async function getSolutionContext(id) {
         buyer: sol.buyer,
         pains: sol.pains,
         hooks: sol.hooks,
+        one_liner: sol.one_liner,
+        proof_points: sol.proof_points || [],
+        visual_cues: sol.visual_cues || [],
+        message_bank: sol.message_bank || [],
+        editorial: sol.editorial || null,
         knowledge: fileBlocks,
     };
+}
+
+// Full self-contained product entry per the Video Generation spec §2, used by
+// the Director. Same as the context but shaped as the spec's product object.
+export async function getProductEntry(id) {
+    const ctx = await getSolutionContext(id);
+    if (!ctx) return null;
+    return {
+        product_id: ctx.id,
+        name: ctx.name,
+        one_liner: ctx.one_liner || ctx.description || '',
+        buyer: ctx.buyer || '',
+        pains: Array.isArray(ctx.pains) ? ctx.pains : (ctx.pains ? toArray(ctx.pains) : []),
+        proof_points: ctx.proof_points || [],
+        visual_cues: ctx.visual_cues || [],
+        message_bank: ctx.message_bank || [],
+        editorial: ctx.editorial || { banned_terms: [], required_framing: '', notes: '' },
+        knowledge: ctx.knowledge || '',
+    };
+}
+
+// Lightweight list for the Director's auto-select (name + one_liner + buyer).
+export async function listProductsBrief() {
+    const r = await query(
+        `select id, name, coalesce(one_liner, description, '') as one_liner,
+                coalesce(buyer, '') as buyer
+         from solutions order by created_at desc`
+    );
+    return r.rows;
 }
