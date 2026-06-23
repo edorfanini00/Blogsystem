@@ -58,49 +58,93 @@ CeleriTech context (for celeritechAngle only):
 
 Rules: report only what is actually in the video. If something is absent (no speech, no on-screen text), use an empty string/array. Do not invent.`;
 
-// Build the media part Gemini should analyze.
-async function resolveVideoPart(candidate) {
-    if (candidate.platform === 'youtube') {
-        return { fileData: { fileUri: candidate.url } };
-    }
-    const mediaUrl = candidate.media_url;
-    if (!mediaUrl) {
-        throw new Error(
-            'No downloadable video link is stored for this post (the scraper did not return one). Re-run ingest to capture it.'
-        );
-    }
-    const headers = { 'User-Agent': UA };
-    if (candidate.platform === 'tiktok') headers.Referer = 'https://www.tiktok.com/';
-    if (candidate.platform === 'instagram') headers.Referer = 'https://www.instagram.com/';
+// Download a URL and return it as a Gemini inline part. Sends platform-aware
+// headers so CDN hotlink protection doesn't 403 us.
+async function downloadInline(url, platform) {
+    const headers = {
+        'User-Agent': UA,
+        Accept: '*/*',
+        Range: 'bytes=0-',
+    };
+    if (platform === 'tiktok') headers.Referer = 'https://www.tiktok.com/';
+    if (platform === 'instagram') headers.Referer = 'https://www.instagram.com/';
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
     let res;
     try {
-        res = await fetch(mediaUrl, { headers, signal: controller.signal });
+        res = await fetch(url, { headers, signal: controller.signal });
     } catch (err) {
         clearTimeout(timer);
         if (err.name === 'AbortError') throw new Error('Timed out downloading the video.');
-        throw new Error(`Could not download the video: ${err.message}`);
+        throw new Error(`download failed: ${err.message}`);
     }
     clearTimeout(timer);
-    if (!res.ok) {
-        throw new Error(
-            `Could not download the video (HTTP ${res.status}). The link likely expired — re-run ingest to refresh it.`
-        );
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const ct = res.headers.get('content-type') || 'video/mp4';
     const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length) throw new Error('Downloaded video was empty.');
-    if (buf.length > MAX_INLINE_BYTES) {
-        throw new Error('Video is too large to analyze inline (over ~18MB).');
-    }
+    if (!buf.length) throw new Error('empty body');
+    if (buf.length > MAX_INLINE_BYTES) throw new Error('video too large to analyze inline (over ~18MB)');
     return {
         inlineData: {
             mimeType: ct.startsWith('video/') ? ct : 'video/mp4',
             data: buf.toString('base64'),
         },
     };
+}
+
+// TikTok playback URLs are cookie-gated and 403 server-side. Resolve a clean,
+// downloadable no-watermark MP4 from the post page URL instead.
+async function resolveTikTokMp4(pageUrl) {
+    const api = `https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(pageUrl)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+    let j;
+    try {
+        const res = await fetch(api, { headers: { 'User-Agent': UA }, signal: controller.signal });
+        j = await res.json();
+    } finally {
+        clearTimeout(timer);
+    }
+    const play = j?.data?.hdplay || j?.data?.play || j?.data?.wmplay;
+    if (!play) throw new Error('resolver returned no video');
+    return play.startsWith('http') ? play : `https://www.tikwm.com${play}`;
+}
+
+// Build the media part Gemini should analyze.
+async function resolveVideoPart(candidate) {
+    if (candidate.platform === 'youtube') {
+        return { fileData: { fileUri: candidate.url } };
+    }
+
+    if (candidate.platform === 'tiktok') {
+        // Prefer the resolver (reliable, no-watermark); fall back to the stored
+        // playback URL if the resolver is down.
+        try {
+            const mp4 = await resolveTikTokMp4(candidate.url);
+            return await downloadInline(mp4, 'tiktok');
+        } catch (err) {
+            if (candidate.media_url) {
+                try { return await downloadInline(candidate.media_url, 'tiktok'); } catch { /* fall through */ }
+            }
+            throw new Error(`Could not fetch the TikTok video (${err.message}).`);
+        }
+    }
+
+    // Instagram (and anything else): use the stored CDN URL with referer.
+    const mediaUrl = candidate.media_url;
+    if (!mediaUrl) {
+        throw new Error(
+            'No downloadable video link is stored for this post. Re-run ingest to capture it.'
+        );
+    }
+    try {
+        return await downloadInline(mediaUrl, candidate.platform);
+    } catch (err) {
+        throw new Error(
+            `Could not download the video (${err.message}). The link may have expired — re-run ingest to refresh it.`
+        );
+    }
 }
 
 function sleep(ms) {
