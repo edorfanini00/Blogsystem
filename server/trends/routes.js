@@ -128,7 +128,17 @@ router.get('/health', async (req, res) => {
         voiceover: { configured: !!ELEVENLABS_KEY },
         analyze: { configured: isAnalyzeConfigured },
         director: { configured: isLlmConfigured },
-        image: { configured: isImageConfigured, models: HF_IMAGE_MODELS },
+        image: {
+            configured: isImageConfigured,
+            models: HF_IMAGE_MODELS,
+            // Non-secret diagnostic: which credential env vars are present.
+            env: {
+                HIGGSFIELD_API_KEY: !!process.env.HIGGSFIELD_API_KEY,
+                HIGGSFIELD_API_SECRET: !!process.env.HIGGSFIELD_API_SECRET,
+                HIGGSFIELD_KEY: !!process.env.HIGGSFIELD_KEY,
+                HF_KEY: !!process.env.HF_KEY,
+            },
+        },
         qc: { configured: isQcConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
