@@ -184,18 +184,29 @@ export const TREND_LANG = process.env.TREND_LANG != null
 // application slug (CLI job_set_type). Override any via env if Higgsfield
 // renames a slug. Defaults: Nano Banana Pro (precision/text/dashboards),
 // Seedream (multi-shot subject continuity), Grok (fast scroll-stoppers).
+// Higgsfield's platform API uses hierarchical path slugs (e.g.
+// 'flux-pro/kontext/max/text-to-image'), not the CLI short IDs. The valid set
+// is account/version-specific and not publicly listed, so these are env-
+// overridable. flux-pro/kontext/max is confirmed working and is a strong
+// all-rounder: excellent text rendering (dashboards/on-screen copy) and native
+// image-reference support (for use_source_frame). The Director still routes
+// per shot; map each lane to a specialized slug here once confirmed.
+const HF_DEFAULT_IMAGE_SLUG = process.env.HF_MODEL_DEFAULT || 'flux-pro/kontext/max/text-to-image';
 export const HF_IMAGE_MODELS = {
-    nano_banana_pro: process.env.HF_MODEL_NANO_BANANA || 'nano_banana_2',
-    seedream: process.env.HF_MODEL_SEEDREAM || 'seedream_v4_5',
-    grok: process.env.HF_MODEL_GROK || 'grok_image',
+    nano_banana_pro: process.env.HF_MODEL_NANO_BANANA || HF_DEFAULT_IMAGE_SLUG,
+    seedream: process.env.HF_MODEL_SEEDREAM || HF_DEFAULT_IMAGE_SLUG,
+    grok: process.env.HF_MODEL_GROK || HF_DEFAULT_IMAGE_SLUG,
 };
 // Vertical short-form by default.
 export const HF_IMAGE_ASPECT = process.env.HF_IMAGE_ASPECT || '9:16';
-// Hero shots render at higher resolution; supporting shots stay cheaper.
-export const HF_IMAGE_RESOLUTION = process.env.HF_IMAGE_RESOLUTION || '2k';
+// Param name the image model expects for a reference frame (use_source_frame).
+// Empty disables passing a reference (safe default until confirmed per model).
+export const HF_IMAGE_REF_PARAM = process.env.HF_IMAGE_REF_PARAM || '';
+// Image-to-video endpoint (confirmed: v1/image2video/dop). Kling slugs were not
+// resolvable on this account; DoP is the stable image-to-video path.
 export const HF_VIDEO_MODELS = {
-    default: process.env.HF_MODEL_KLING || 'kling3_0',
-    simple: process.env.HF_MODEL_KLING_SIMPLE || 'kling2_6',
+    default: process.env.HF_MODEL_VIDEO || 'v1/image2video/dop',
+    simple: process.env.HF_MODEL_VIDEO_SIMPLE || 'v1/image2video/dop',
 };
 // Per-shot image generation retry cap (spec §7: cap regenerations at 3).
 export const REMAKE_MAX_REGENS = Number(process.env.REMAKE_MAX_REGENS) || 3;

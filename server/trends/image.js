@@ -12,7 +12,7 @@ import {
     isHiggsfieldConfigured, subscribe, upload, pickImageUrl,
 } from './higgsfield.js';
 import {
-    HF_IMAGE_MODELS, HF_IMAGE_ASPECT, HF_IMAGE_RESOLUTION,
+    HF_IMAGE_MODELS, HF_IMAGE_ASPECT, HF_IMAGE_REF_PARAM,
 } from './config.js';
 
 export const isImageConfigured = isHiggsfieldConfigured;
@@ -66,11 +66,11 @@ export async function generateShotImage(shot, { sourceFrameUrl = null, promptOve
         prompt: promptOverride || shot.image_prompt,
         aspect_ratio: HF_IMAGE_ASPECT,
     };
-    // Hero renders sharper; supporting shots cheaper.
-    args.resolution = shot.role === 'hero' ? HF_IMAGE_RESOLUTION : '1k';
-    // Structural reference when the source composition should be copied.
-    if (shot.use_source_frame && sourceFrameUrl) {
-        args.image = [sourceFrameUrl];
+    // Structural reference when the source composition should be copied. Only
+    // attached when a reference param name is configured for the model (the
+    // accepted field name varies per model and is set via HF_IMAGE_REF_PARAM).
+    if (shot.use_source_frame && sourceFrameUrl && HF_IMAGE_REF_PARAM) {
+        args[HF_IMAGE_REF_PARAM] = sourceFrameUrl;
     }
     const out = await subscribe(application, args, { deadlineMs: 70000 });
     if (out.pending) {
@@ -110,9 +110,10 @@ export async function runImages(generationId, { max = Infinity } = {}) {
 
     await query(`update generations set status = 'imaging' where id = $1`, [generationId]);
 
-    // Upload the source frame once if any shot needs it.
+    // Upload the source frame once if any shot needs it (only when the model's
+    // reference param is configured — otherwise the upload would go unused).
     let sourceFrameUrl = null;
-    if (shots.some((s) => s.use_source_frame && !s.image_url)) {
+    if (HF_IMAGE_REF_PARAM && shots.some((s) => s.use_source_frame && !s.image_url)) {
         sourceFrameUrl = await uploadSourceFrame(gen.thumbnail);
     }
 
