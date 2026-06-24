@@ -139,10 +139,19 @@ export async function runQc(generationId) {
 
     await query(`update generations set status = 'qc' where id = $1`, [generationId]);
 
+    // A shot is "resolved" once it passes OR has exhausted its regen budget.
+    // Resolved shots are never re-graded (saves credits) and no longer block
+    // the batch — a single stubborn shot (e.g. garbled AI headline text) must
+    // not starve the others or stall the whole generation forever.
+    const resolved = (s) => !s.image_url || (s.qc && (s.qc.pass || (s.regens || 0) >= REMAKE_MAX_REGENS));
+    // Bound the heavy regen work per call so one /advance tick stays well under
+    // the serverless limit; the next tick continues any remaining shots.
+    const REGEN_BUDGET_PER_CALL = Number(process.env.QC_REGENS_PER_CALL) || 3;
+
     let passed = 0, failed = 0, regens = 0, errored = 0;
     for (const shot of shots) {
-        if (!shot.image_url) { failed++; continue; }
-        if (shot.qc?.pass) { passed++; continue; }
+        if (resolved(shot)) { if (shot.qc?.pass) passed++; else failed++; continue; }
+        if (regens >= REGEN_BUDGET_PER_CALL && shot.qc) break; // defer the rest to the next tick
 
         let grade;
         try {
@@ -158,8 +167,9 @@ export async function runQc(generationId) {
         shot.qc = grade;
         shot.qc_error = null;
 
-        // Improve-this-prompt loop: regenerate with the grader's notes appended.
-        while (!grade.pass && (shot.regens || 0) < REMAKE_MAX_REGENS) {
+        // Improve-this-prompt loop: regenerate with the grader's notes appended,
+        // capped per shot AND per call.
+        while (!grade.pass && (shot.regens || 0) < REMAKE_MAX_REGENS && regens < REGEN_BUDGET_PER_CALL) {
             shot.regens = (shot.regens || 0) + 1;
             regens++;
             const refined = `${shot.image_prompt}\n\nFix these issues from the previous attempt: ${grade.notes || 'improve composition, legibility, and scroll-stop impact.'}`;
@@ -182,8 +192,12 @@ export async function runQc(generationId) {
         await query(`update generations set shots = $2 where id = $1`, [generationId, JSON.stringify(shots)]);
     }
 
-    const allPass = shots.every((s) => s.qc?.pass);
-    const status = allPass ? 'animating' : 'qc';
+    // Advance once every shot is resolved (passed or out of regens), animating
+    // the best still we have for any that never passed. Otherwise stay in 'qc'
+    // so the next tick finishes the remaining regen work.
+    const allResolved = shots.every(resolved);
+    const anyPass = shots.some((s) => s.qc?.pass);
+    const status = allResolved ? 'animating' : 'qc';
     await query(`update generations set shots = $2, status = $3 where id = $1`, [generationId, JSON.stringify(shots), status]);
-    return { generationId, total: shots.length, passed, failed, errored, regens, status };
+    return { generationId, total: shots.length, passed, failed, errored, regens, allResolved, anyPass, status };
 }
