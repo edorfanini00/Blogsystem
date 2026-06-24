@@ -104,6 +104,17 @@ export async function runVideo(generationId, { max = 2 } = {}) {
         if (re && Array.isArray(re.shots)) shots.splice(0, shots.length, ...re.shots);
     }
 
+    // Self-heal: infra errors (submit-shape bug, concurrency cap, rate limits)
+    // are retryable and must not consume a shot's regen budget. Reset those so
+    // they animate cleanly; genuine rejections (nsfw/failed) keep their count.
+    for (const s of shots) {
+        if (!s.video_url && !s.video_status_url && s.video_error
+            && /missing ids|concurrent|429|\b400\b|rate limit|timed out/i.test(s.video_error)) {
+            s.video_regens = 0;
+            s.video_error = null;
+        }
+    }
+
     await query(`update generations set status = 'animating' where id = $1`, [generationId]);
 
     let made = 0, pending = 0, failed = 0, processed = 0, capped = false;
@@ -126,7 +137,7 @@ export async function runVideo(generationId, { max = 2 } = {}) {
         }
 
         let attempt = shot.video_regens || 0;
-        let ok = false;
+        let ok = false, concurrencyHit = false;
         while (attempt <= VIDEO_MAX_REGENS && !ok) {
             try {
                 const out = await animateShot(shot);
@@ -144,6 +155,14 @@ export async function runVideo(generationId, { max = 2 } = {}) {
                     ok = true;
                 }
             } catch (err) {
+                // Concurrency cap / rate limit: stop submitting this tick and
+                // resume next tick when jobs free up — do NOT spend the regen
+                // budget on an infra throttle.
+                if (/concurrent|429|rate limit/i.test(err.message)) {
+                    shot.video_error = err.message;
+                    concurrencyHit = true;
+                    break;
+                }
                 attempt++;
                 shot.video_regens = attempt;
                 shot.video_error = err.message;
@@ -151,6 +170,7 @@ export async function runVideo(generationId, { max = 2 } = {}) {
             }
         }
         await save(generationId, shots);
+        if (concurrencyHit) break; // back off; the next tick continues
     }
 
     const allDone = shots.every((s) => s.video_url);

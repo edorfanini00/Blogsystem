@@ -46,8 +46,14 @@ export async function submit(application, args) {
     let data;
     try { data = JSON.parse(text); } catch { throw new Error(`Higgsfield submit non-JSON (${res.status}): ${text.slice(0, 200)}`); }
     if (!res.ok) throw new Error(`Higgsfield submit ${res.status}: ${text.slice(0, 240)}`);
-    if (!data.status_url || !data.request_id) throw new Error(`Higgsfield submit missing ids: ${text.slice(0, 200)}`);
-    return data;
+    // Response shape varies by endpoint family: the flux application slugs return
+    // { request_id, status_url }, while the v1 endpoints (e.g. image2video/dop)
+    // return { id, ... }. Normalize to request_id + status_url so callers and the
+    // poller work for both.
+    const request_id = data.request_id || data.id;
+    let status_url = data.status_url || (request_id ? `${BASE}/requests/${request_id}/status` : null);
+    if (!status_url || !request_id) throw new Error(`Higgsfield submit missing ids: ${text.slice(0, 200)}`);
+    return { ...data, request_id, status_url };
 }
 
 export async function getStatus(statusUrl) {
