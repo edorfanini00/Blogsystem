@@ -14,15 +14,20 @@ import { claudeJSON, isLlmConfigured } from './llm.js';
 import { getProductEntry } from './solutions.js';
 import {
     EDITORIAL_RULES, MESSAGE_BANK, PUBLISH_PLATFORMS,
-    VIDEO_TARGET_MIN, VIDEO_TARGET_MAX,
+    VIDEO_TARGET_MIN, VIDEO_TARGET_MAX, MATCH_SOURCE_LENGTH,
 } from './config.js';
 
 export const isCopyConfigured = isLlmConfigured;
 
-const SYSTEM = `You write the voiceover and posting copy for a finished short-form vertical video (a remake of a viral video, retargeted to a product). You are given the shot-by-shot plan (what is on screen, including any on-screen text) and the target.
+// The sales-oriented VO system prompt, sized to the actual target runtime so a
+// 34s remake gets ~34s of narration (≈2.6 words/sec) instead of a fixed window.
+function buildSystem(loSec, hiSec) {
+    const loW = Math.round(loSec * 2.6);
+    const hiW = Math.round(hiSec * 2.6);
+    return `You write the voiceover and posting copy for a finished short-form vertical video (a remake of a viral video, retargeted to a product). You are given the shot-by-shot plan (what is on screen, including any on-screen text) and the target.
 
 Write:
-- voiceover: ONE continuous narration that tracks the shots in order and fits a ${VIDEO_TARGET_MIN}-${VIDEO_TARGET_MAX} second read (roughly ${Math.round(VIDEO_TARGET_MIN * 2.6)}-${Math.round(VIDEO_TARGET_MAX * 2.6)} words). Mechanism first, plain and human, in the brand voice. It must NOT just repeat the on-screen text; it complements it. Open with the hook in the first line.
+- voiceover: ONE continuous narration that tracks the shots in order and fits a ${loSec}-${hiSec} second read (roughly ${loW}-${hiW} words). Pace it to the per-shot timings given in the plan. Mechanism first, plain and human, in the brand voice. It must NOT just repeat the on-screen text; it complements it. Open with the hook in the first line.
 - captions: one posting caption per requested platform. TikTok = punchy, native, lowercase-ok, hook-led. Instagram = a touch more polished, can use line breaks. YouTube = a clear, search-friendly first line. No hashtags inside the caption text.
 - hashtags: 4-8 relevant, mostly the buyer's world (not consumer spam).
 
@@ -34,12 +39,26 @@ Return JSON only:
   "captions": { "tiktok": "...", "instagram": "...", "youtube": "..." },
   "hashtags": ["...", "..."]
 }`;
+}
+
+// Resolve the VO target window from the source-length plan (Director total or
+// the sum of per-shot targets), falling back to the fixed config window.
+function voWindow(gen, shots) {
+    const total = Number(gen.director_json?.target_duration_total)
+        || shots.reduce((n, s) => n + (Number(s.target_duration) || 0), 0)
+        || null;
+    if (MATCH_SOURCE_LENGTH && total) {
+        return { lo: Math.max(3, Math.round(total * 0.85)), hi: Math.max(4, Math.round(total)) };
+    }
+    return { lo: VIDEO_TARGET_MIN, hi: VIDEO_TARGET_MAX };
+}
 
 function shotsBlock(shots) {
     return shots.map((s, i) => {
         const idx = typeof s.index === 'number' ? s.index : i;
+        const dur = Number(s.target_duration) > 0 ? ` [~${s.target_duration}s]` : '';
         return [
-            `Shot ${idx} (${s.role}): ${String(s.image_prompt || '').slice(0, 220)}`,
+            `Shot ${idx} (${s.role})${dur}: ${String(s.image_prompt || '').slice(0, 220)}`,
             s.on_screen_text ? `   on-screen text: "${s.on_screen_text}"` : '',
         ].filter(Boolean).join('\n');
     }).join('\n');
@@ -146,7 +165,8 @@ export async function runCopy(generationId) {
         ].filter(Boolean).join('\n');
     } else {
         const product = gen.solution_id ? await getProductEntry(gen.solution_id).catch(() => null) : null;
-        system = SYSTEM;
+        const win = voWindow(gen, shots);
+        system = buildSystem(win.lo, win.hi);
         user = [
             `Requested platforms: ${platforms.join(', ')}`,
             `Source platform: ${gen.platform}`,

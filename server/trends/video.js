@@ -45,10 +45,24 @@ function dopArgs(imageUrl, motionPrompt) {
     };
 }
 
+// Pick the clip length to REQUEST so the generated clip is long enough to be
+// trimmed down to the shot's target_duration in assembly. Kling only offers
+// "5"|"10"; Seedance takes an integer 3..12. Falls back to the configured
+// default when no target is set.
+function falVideoDuration(targetDuration) {
+    const t = Number(targetDuration);
+    if (!t || t <= 0) return FAL_VIDEO_DURATION;
+    if (/seedance/i.test(FAL_VIDEO_MODEL)) {
+        return String(Math.min(Math.max(Math.ceil(t), 3), 12));
+    }
+    // Kling (and unknown models): quantize up to the nearest supported option.
+    return t <= 5 ? '5' : '10';
+}
+
 // Build the fal image-to-video input. Kling takes { prompt, image_url,
 // duration }; Seedance additionally accepts resolution/aspect_ratio.
-function falVideoInput(imageUrl, motionPrompt) {
-    const input = { prompt: motionPrompt, image_url: imageUrl, duration: FAL_VIDEO_DURATION };
+function falVideoInput(imageUrl, motionPrompt, targetDuration) {
+    const input = { prompt: motionPrompt, image_url: imageUrl, duration: falVideoDuration(targetDuration) };
     if (/seedance/i.test(FAL_VIDEO_MODEL)) {
         input.resolution = '1080p';
         input.aspect_ratio = 'auto';
@@ -61,7 +75,7 @@ function falVideoInput(imageUrl, motionPrompt) {
 async function animateShot(shot, { deadlineMs = 110000 } = {}) {
     const motion = shot.motion_prompt || shot.motion_intent || DEFAULT_MOTION;
     if (USE_FAL_VIDEO) {
-        const out = await fal.subscribe(FAL_VIDEO_MODEL, falVideoInput(shot.image_url, motion), { deadlineMs, pollMs: 4000 });
+        const out = await fal.subscribe(FAL_VIDEO_MODEL, falVideoInput(shot.image_url, motion, shot.target_duration), { deadlineMs, pollMs: 4000 });
         if (out.pending) {
             return {
                 pending: true, request_id: out.request_id,

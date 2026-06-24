@@ -24,8 +24,14 @@ const MODELS = [
 
 const GEMINI_TIMEOUT_MS = 60000;
 
-function gradePrompt(shot, productName) {
-    return `You are a strict art director grading a single AI-generated still for a short-form vertical (9:16) video remake before it is animated.
+function gradePrompt(shot, productName, hasRef) {
+    const refLines = hasRef
+        ? `\nYou are given TWO images: the FIRST is the generated still to grade; the SECOND is the SOURCE reference frame for this beat. The generated still should structurally match the source: same framing, camera angle, subject placement, and overall composition (only the subject/context may be swapped for the target).`
+        : '';
+    const fidelityField = hasRef
+        ? '\n  "fidelity_ok": true,           // the generated still matches the SECOND (source) image\'s framing/composition/subject placement'
+        : '';
+    return `You are a strict art director grading a single AI-generated still for a short-form vertical (9:16) video remake before it is animated.${refLines}
 
 The shot intent was:
 - Role: ${shot.role}
@@ -34,18 +40,18 @@ The shot intent was:
 - Should copy the source composition: ${shot.use_source_frame ? 'yes' : 'no'}
 - Target product: ${productName || 'CeleriTech'}
 
-Grade the actual image you see. Return ONLY JSON:
+Grade the actual ${hasRef ? 'FIRST (generated) ' : ''}image. Return ONLY JSON:
 {
   "composition_ok": true,        // matches the intended framing/camera; if use_source_frame, the layout is preserved
   "product_clear": true,         // when the product/dashboard/subject should read on screen, it is clear; true if not applicable
   "text_correct": true,          // any on-screen text is present, spelled correctly, and legible; true if none expected
   "scroll_stop": true,           // clear subject, strong contrast, emotion or tension; would stop a scroll
-  "no_artifacts": true,          // no obvious AI artifacts (broken hands, garbled text, melted objects)
+  "no_artifacts": true,          // no obvious AI artifacts (broken hands, garbled text, melted objects)${fidelityField}
   "pass": true,                  // overall: good enough to animate
   "notes": "<one or two concrete fixes if anything fails; empty if pass>"
 }
 
-Be strict about garbled/misspelled on-screen text and broken anatomy. If text is expected and wrong, set text_correct false and pass false.`;
+Be strict about garbled/misspelled on-screen text and broken anatomy. If text is expected and wrong, set text_correct false and pass false.${hasRef ? ' If the framing clearly does not match the source reference, set fidelity_ok false and add a concrete fix.' : ''}`;
 }
 
 async function downloadImage(url) {
@@ -76,11 +82,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Grade one image. Returns the parsed grade object. Retries transient Gemini
 // overload (503/429) with backoff before falling through to the next model.
-export async function gradeImage(imageUrl, shot, productName) {
+export async function gradeImage(imageUrl, shot, productName, { sourceFrameUrl = null } = {}) {
     if (!isQcConfigured) throw new Error('GEMINI_API_KEY not configured');
     const inline = await downloadImage(imageUrl);
+    // Fidelity check: when we have the matching source beat frame, hand it to
+    // the grader as a second image so it can verify the composition matches.
+    let refInline = null;
+    if (sourceFrameUrl) {
+        try { refInline = await downloadImage(sourceFrameUrl); } catch { refInline = null; }
+    }
+    const parts = [{ inlineData: inline }];
+    if (refInline) parts.push({ inlineData: refInline });
+    parts.push({ text: gradePrompt(shot, productName, !!refInline) });
     const body = {
-        contents: [{ role: 'user', parts: [{ inlineData: inline }, { text: gradePrompt(shot, productName) }] }],
+        contents: [{ role: 'user', parts }],
         generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: 'application/json' },
     };
     let lastErr = null;
@@ -164,7 +179,7 @@ export async function runQc(generationId) {
 
         let grade;
         try {
-            grade = await gradeImage(shot.image_url, shot, productName);
+            grade = await gradeImage(shot.image_url, shot, productName, { sourceFrameUrl: shot.source_frame_url });
         } catch (err) {
             // Don't let one shot's grading failure abort the batch; record it,
             // count the attempt (so a persistently-unavailable grader resolves
@@ -185,11 +200,11 @@ export async function runQc(generationId) {
             regens++;
             const refined = `${shot.image_prompt}\n\nFix these issues from the previous attempt: ${grade.notes || 'improve composition, legibility, and scroll-stop impact.'}`;
             try {
-                const out = await generateShotImage(shot, { promptOverride: refined });
+                const out = await generateShotImage(shot, { promptOverride: refined, sourceFrameUrl: shot.source_frame_url });
                 if (out.image_url) {
                     shot.image_url = out.image_url;
                     shot.image_model = out.model;
-                    grade = await gradeImage(shot.image_url, shot, productName);
+                    grade = await gradeImage(shot.image_url, shot, productName, { sourceFrameUrl: shot.source_frame_url });
                     shot.qc = grade;
                 } else {
                     break; // pending render — stop the loop, resume later

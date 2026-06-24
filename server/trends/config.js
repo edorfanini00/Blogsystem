@@ -266,6 +266,21 @@ export const VIDEO_MAX_REGENS = Number(process.env.VIDEO_MAX_REGENS) || 3;
 // voiceover to fit, and Assembly caps total runtime to TARGET_MAX.
 export const VIDEO_TARGET_MIN = Number(process.env.VIDEO_TARGET_MIN) || 15;
 export const VIDEO_TARGET_MAX = Number(process.env.VIDEO_TARGET_MAX) || 25;
+
+// ─── Length replication (match the source video's runtime) ──────
+// When on (default), the Director makes one shot per source cut with a
+// target_duration, the Video agent requests a clip long enough to cover it,
+// and Assembly trims each clip + caps the final cut to the measured source
+// length — so a 34s source yields a ~34s remake. MATCH_SOURCE_LENGTH=off
+// reverts to the fixed VIDEO_TARGET_MIN..MAX window.
+export const MATCH_SOURCE_LENGTH = (process.env.MATCH_SOURCE_LENGTH || 'on').toLowerCase() !== 'off';
+// Cap on shots per remake (cost guard). Sources with more cuts get adjacent
+// cuts merged so the total length is still preserved.
+export const REMAKE_MAX_SHOTS = Math.min(Math.max(Number(process.env.REMAKE_MAX_SHOTS) || 10, 1), 20);
+// A single generated clip's allowed length window (seconds). Kling tops out at
+// 10s; we round a shot's target up to the model's nearest option, then trim.
+export const VIDEO_CLIP_MIN = Number(process.env.VIDEO_CLIP_MIN) || 2;
+export const VIDEO_CLIP_MAX = Number(process.env.VIDEO_CLIP_MAX) || 10;
 // ElevenLabs voiceover. Voice id + model are env-overridable; VO is optional —
 // assembly produces a (silent) cut when ElevenLabs is not configured.
 export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';

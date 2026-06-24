@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import ffmpegPath from 'ffmpeg-static';
 import { query } from './db.js';
-import { VIDEO_TARGET_MAX, MUSIC_URL, MUSIC_GAIN } from './config.js';
+import { VIDEO_TARGET_MAX, MUSIC_URL, MUSIC_GAIN, MATCH_SOURCE_LENGTH } from './config.js';
 import {
     synthVoiceoverTimed, cuesFromAlignment, buildAss,
     CAPTION_FONT_PATH, isCaptionsConfigured,
@@ -125,18 +125,19 @@ function finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen }
 // Normalize one clip to a uniform 9:16 / 30fps / h264+aac file so the concat
 // demuxer can stream-copy them together. A silent stereo track is added so
 // every segment has audio (required for clean concat) before the VO overlay.
-async function normalizeClip(src, dest) {
-    await ffmpeg([
-        '-y',
-        '-i', src,
+// When `trimTo` (seconds) is set, the clip is cut to that length so the
+// assembled cut reproduces the source's per-shot pacing and total runtime.
+async function normalizeClip(src, dest, trimTo = null) {
+    const args = ['-y', '-i', src,
         '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
         '-map', '0:v:0', '-map', '1:a:0',
         '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p',
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-        '-c:a', 'aac', '-ar', '44100', '-ac', '2',
-        '-shortest',
-        dest,
-    ]);
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2'];
+    if (trimTo && trimTo > 0) args.push('-t', String(trimTo));
+    else args.push('-shortest');
+    args.push(dest);
+    await ffmpeg(args);
     return dest;
 }
 
@@ -166,15 +167,27 @@ export async function runAssembly(generationId) {
 
     await query(`update generations set status = 'assembling' where id = $1`, [generationId]);
 
+    // Length replication: trim each clip to its Director-assigned target so the
+    // assembled total matches the source video's runtime. Falls back to the
+    // fixed window when targets are absent or the feature is off.
+    const hasTargets = MATCH_SOURCE_LENGTH && clips.some((s) => Number(s.target_duration) > 0);
+    const totalTarget = hasTargets
+        ? Math.round(clips.reduce((n, s) => n + (Number(s.target_duration) || 0), 0) * 10) / 10
+        : null;
+    const finalCap = (hasTargets && totalTarget > 0)
+        ? totalTarget
+        : (Number(gen.director_json?.target_duration_total) || VIDEO_TARGET_MAX);
+
     const work = await fs.mkdtemp(path.join(os.tmpdir(), `asm-${generationId.slice(0, 8)}-`));
     try {
-        // 1. Download + normalize every clip in order.
+        // 1. Download + normalize (and length-trim) every clip in order.
         const normalized = [];
         for (let i = 0; i < clips.length; i++) {
             const raw = path.join(work, `raw-${i}.mp4`);
             await download(clips[i].video_url, raw);
             const norm = path.join(work, `norm-${i}.mp4`);
-            await normalizeClip(raw, norm);
+            const trimTo = hasTargets ? (Number(clips[i].target_duration) || null) : null;
+            await normalizeClip(raw, norm, trimTo);
             normalized.push(norm);
         }
 
@@ -214,7 +227,7 @@ export async function runAssembly(generationId) {
             catch { musicPath = null; }
         }
 
-        await ffmpeg(finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen: VIDEO_TARGET_MAX }), { timeoutMs: 200000 });
+        await ffmpeg(finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen: finalCap }), { timeoutMs: 200000 });
 
         if (voPath) {
             try { voUrl = await uploadAsset(await fs.readFile(voPath), `remakes/${generationId}-vo.mp3`, 'audio/mpeg'); }
@@ -238,7 +251,8 @@ export async function runAssembly(generationId) {
             voiceover: !!voPath,
             captions: captionCount,
             music: !!musicPath,
-            cappedAt: VIDEO_TARGET_MAX,
+            cappedAt: finalCap,
+            matchedSourceLength: hasTargets,
             generation: upd.rows[0],
         };
     } finally {

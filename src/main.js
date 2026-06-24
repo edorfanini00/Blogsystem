@@ -5986,8 +5986,10 @@ setTimeout(function initOnePager() {
         renderCandidates();
         switchSubtab('queue');
         try {
-            // 1) Director — build the shot plan retargeted to the chosen target.
-            toast('Directing the remake…');
+            // 1) Director — analyze the source (timing + structure) and build the
+            //    shot plan retargeted to the chosen target. Auto-analyze can take
+            //    a moment for a never-analyzed video.
+            toast('Analyzing the source and directing the remake…');
             const dres = await fetch(tApi(`/api/trends/candidates/${candidateId}/direct`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5997,7 +5999,9 @@ setTimeout(function initOnePager() {
             if (!dres.ok) { toast(ddata.error || 'Director failed', 'error'); return; }
             const genId = ddata.generationId;
             await loadGenerations();
-            toast(`Shot plan ready (${ddata.plan?.shots?.length || 0} shots). Rendering images…`);
+            const planLen = ddata.plan?.target_duration_total;
+            const lenNote = planLen ? `, ~${Math.round(planLen)}s to match the source` : '';
+            toast(`Shot plan ready (${ddata.plan?.shots?.length || 0} shots${lenNote}). Rendering images…`);
 
             // 2) Image agent — render every shot (image-first).
             const ires = await fetch(tApi(`/api/trends/generations/${genId}/images`), {

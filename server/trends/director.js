@@ -12,8 +12,12 @@
 // ═══════════════════════════════════════════════════════════════════
 import { query } from './db.js';
 import { getProductEntry, listProductsBrief } from './solutions.js';
+import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
 import { claudeJSON, isLlmConfigured } from './llm.js';
-import { EDITORIAL_RULES, MESSAGE_BANK, REMAKE_VARIANTS } from './config.js';
+import {
+    EDITORIAL_RULES, MESSAGE_BANK, REMAKE_VARIANTS,
+    MATCH_SOURCE_LENGTH, REMAKE_MAX_SHOTS, VIDEO_CLIP_MIN, VIDEO_CLIP_MAX,
+} from './config.js';
 
 const MODEL_CHOICES = ['nano_banana_pro', 'seedream', 'grok'];
 const SHOT_ROLES = ['hero', 'setup', 'action', 'resolution'];
@@ -34,6 +38,58 @@ function mapDeepAnalysis(analysis) {
 }
 
 function safeParse(s) { try { return JSON.parse(s); } catch { return null; } }
+
+function round1(n) { return Math.round(n * 10) / 10; }
+
+// Merge a clip list down to at most `max` contiguous groups, preserving order
+// and total duration (adjacent cuts are combined, durations summed, the first
+// description kept). Used when a source has more cuts than the shot cap.
+function mergeClipsToMax(clips, max) {
+    if (clips.length <= max) return clips;
+    const out = [];
+    const per = Math.ceil(clips.length / max);
+    for (let i = 0; i < clips.length; i += per) {
+        const group = clips.slice(i, i + per);
+        out.push({
+            durationSeconds: round1(group.reduce((n, c) => n + (Number(c.durationSeconds) || 0), 0)),
+            description: group.map((c) => c.description).filter(Boolean).join('; '),
+        });
+    }
+    return out;
+}
+
+// Derive the shot-timing plan from the analysis: an ordered list of
+// { durationSeconds, description } (one per intended shot) plus the total
+// target length and whether it was measured (vs. the model's estimate).
+function buildShotTiming(analysis) {
+    const a = typeof analysis === 'string' ? safeParse(analysis) : analysis;
+    let clips = Array.isArray(a?.clips)
+        ? a.clips.filter((c) => c && Number(c.durationSeconds) > 0)
+        : [];
+    const totalFromClips = clips.reduce((n, c) => n + (Number(c.durationSeconds) || 0), 0);
+    const total = Number(a?.durationSeconds) || totalFromClips || null;
+    clips = mergeClipsToMax(clips, REMAKE_MAX_SHOTS);
+    return { clips, total, measured: !!a?.durationMeasured };
+}
+
+// Human-readable timing instruction block for the Director.
+function timingBriefText(timing) {
+    if (!MATCH_SOURCE_LENGTH || !timing.total) return '';
+    const lines = [
+        'LENGTH (match the source exactly):',
+        `Total target length: ${round1(timing.total)}s${timing.measured ? ' (measured)' : ' (estimated)'}.`,
+    ];
+    if (timing.clips.length) {
+        lines.push(`Produce EXACTLY ${timing.clips.length} shots, in this order, each lasting about:`);
+        timing.clips.forEach((c, i) => {
+            lines.push(`  ${i + 1}. ~${round1(c.durationSeconds)}s — ${String(c.description || '').slice(0, 160)}`);
+        });
+        lines.push('Set "target_duration" (seconds) on each shot to the value shown. Clips are trimmed to these lengths so the final cut equals the source length.');
+    } else {
+        lines.push('Pace the shots so their target_duration values sum to the total target length.');
+    }
+    return lines.join('\n');
+}
 
 // Build the human-readable analysis block fed to the Director.
 function analysisBriefText(deep) {
@@ -188,6 +244,7 @@ ${refRule}
 - The first shot (role "hero") must match the energy of the source hook and stop the scroll: clear subject, strong contrast, emotion or tension.
 ${textRule}
 - model_choice per shot: "nano_banana_pro" (default; precision, on-screen text, packaging, dashboards, branded headlines), "seedream" (multi-shot stories where the same generated subject must look identical across shots), "grok" (fast photographic meme/trendjack scroll-stoppers).
+- target_duration: seconds this shot stays on screen. When a LENGTH plan is given, follow it exactly (one shot per listed beat, with the listed seconds). The clip lengths must add up to the source length.
 ${editorialNote}
 
 Return JSON only:
@@ -201,7 +258,8 @@ Return JSON only:
       "use_source_frame": true,
       "on_screen_text": "",
       "model_choice": "nano_banana_pro | seedream | grok",
-      "motion_intent": "what should move when this still is animated"
+      "motion_intent": "what should move when this still is animated",
+      "target_duration": 0
     }
   ]
 }`;
@@ -217,7 +275,33 @@ function normalizeShots(raw) {
         on_screen_text: String(s.on_screen_text || '').trim(),
         model_choice: MODEL_CHOICES.includes(s.model_choice) ? s.model_choice : 'nano_banana_pro',
         motion_intent: String(s.motion_intent || '').trim(),
+        target_duration: Number(s.target_duration) > 0 ? round1(Number(s.target_duration)) : null,
     })).filter((s) => s.image_prompt);
+}
+
+// Force the shot durations to reproduce the source length. When the shot count
+// matches the timing plan we copy each beat's duration; otherwise we distribute
+// the total across the shots. Clamps each clip to the model-supported window and
+// fixes rounding drift on the last shot so the sum equals the target exactly.
+function applyTiming(shots, timing) {
+    if (!MATCH_SOURCE_LENGTH || !timing.total || !shots.length) return shots;
+    const clamp = (n) => Math.min(Math.max(round1(n), VIDEO_CLIP_MIN), VIDEO_CLIP_MAX);
+    let durations;
+    if (timing.clips.length === shots.length) {
+        durations = timing.clips.map((c) => clamp(c.durationSeconds));
+    } else {
+        const even = timing.total / shots.length;
+        durations = shots.map(() => clamp(even));
+    }
+    // Nudge the last shot so the realized total matches the target length when
+    // it fits inside the per-clip window (otherwise we just keep the clamps).
+    const sum = durations.reduce((n, d) => n + d, 0);
+    const drift = round1(timing.total - sum);
+    if (drift !== 0) {
+        const adj = clamp(durations[durations.length - 1] + drift);
+        durations[durations.length - 1] = adj;
+    }
+    return shots.map((s, i) => ({ ...s, target_duration: durations[i] }));
 }
 
 // Load a candidate plus its latest score (bridge line + bucket).
@@ -238,10 +322,27 @@ async function loadCandidate(candidateId) {
 // Run the Director. Returns the shot plan + the concept brief it consumed.
 export async function runDirector(candidateId, { targetMode = 'auto', productId = null, customPrompt = null } = {}) {
     if (!isLlmConfigured) throw new Error('ANTHROPIC_API_KEY not configured');
-    const candidate = await loadCandidate(candidateId);
+    let candidate = await loadCandidate(candidateId);
     if (!candidate) throw new Error('Candidate not found');
 
+    // Auto-analyze when the source has never been analyzed (or the analysis is
+    // pre-timing, i.e. has no clip plan): the Director needs the deep analysis
+    // AND the per-clip timing to mirror structure and length. Best-effort —
+    // degrade to a generic plan if analysis is unavailable (e.g. video too large).
+    const needsAnalysis = !candidate.analysis
+        || !Array.isArray(candidate.analysis?.clips)
+        || candidate.analysis?.clips?.length === 0;
+    if (needsAnalysis && isAnalyzeConfigured) {
+        try {
+            await analyzeCandidate(candidateId);
+            candidate = await loadCandidate(candidateId);
+        } catch (err) {
+            console.error(`director auto-analyze [${candidateId}]: ${err.message}`);
+        }
+    }
+
     const deep = mapDeepAnalysis(candidate.analysis);
+    const timing = buildShotTiming(candidate.analysis);
     const target = await resolveTarget({ targetMode, productId, customPrompt }, candidate, { bridge_line: candidate.bridge_line });
 
     const sourceMediaUrl = candidate.media_url || candidate.url || '';
@@ -254,14 +355,26 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
         '',
         analysisBriefText(deep),
         '',
+        timingBriefText(timing),
+        '',
         target.block,
     ].filter(Boolean).join('\n');
 
-    const plan = await claudeJSON(buildSystem(target.mode), user, { maxTokens: 2600 });
-    if (!plan) throw new Error('Director returned no parsable JSON');
+    // Retry once on transient/no-JSON (Claude occasionally returns prose or
+    // trips a content filter on the first pass).
+    let plan = null;
+    for (let attempt = 0; attempt < 2 && !plan; attempt++) {
+        try {
+            plan = await claudeJSON(buildSystem(target.mode), user, { maxTokens: 2600 });
+        } catch (err) {
+            if (attempt === 1) throw err;
+        }
+        if (!plan && attempt === 1) throw new Error('Director returned no parsable JSON');
+    }
 
-    const shots = normalizeShots(plan.shots);
+    let shots = normalizeShots(plan.shots);
     if (!shots.length) throw new Error('Director produced no usable shots');
+    shots = applyTiming(shots, timing);
 
     return {
         candidate_id: candidateId,
@@ -272,6 +385,8 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
         resolved_target: plan.resolved_target || target.resolvedHint,
         format: plan.format === 'story' ? 'story' : (shots.length > 1 ? 'story' : 'single'),
         has_deep_analysis: !!deep,
+        target_duration_total: MATCH_SOURCE_LENGTH ? timing.total : null,
+        duration_measured: timing.measured,
         shots,
     };
 }

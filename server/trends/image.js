@@ -12,6 +12,7 @@ import {
     isHiggsfieldConfigured, subscribe, upload, pickImageUrl,
 } from './higgsfield.js';
 import * as fal from './fal.js';
+import { extractBeatFrames, isKeyframesSupported } from './keyframes.js';
 import {
     HF_IMAGE_MODELS, HF_IMAGE_ASPECT, HF_IMAGE_REF_PARAM, MAX_IMAGE_RENDERS,
     IMAGE_PROVIDER, FAL_IMAGE_MODELS,
@@ -143,6 +144,36 @@ async function loadDirected(generationId) {
     return rows[0] || null;
 }
 
+// Midpoint timestamp (seconds) of each shot, from the Director's per-shot
+// target_duration (falls back to 3s/beat). Used to pull the matching source
+// frame for that beat.
+function beatTimestamps(shots) {
+    let t = 0;
+    return shots.map((s) => {
+        const d = Number(s.target_duration) > 0 ? Number(s.target_duration) : 3;
+        const mid = Math.round((t + d / 2) * 10) / 10;
+        t += d;
+        return mid;
+    });
+}
+
+// Pull a per-beat source frame for each shot that wants one and host it, so the
+// image /edit lane carries the source composition beat-by-beat. Runs at most
+// once per generation (marks shots tried). Best-effort: on any failure the
+// single cover thumbnail remains the fallback. Mutates shots in place.
+async function ensureBeatFrames(gen, shots) {
+    if (!isSourceFrameSupported || !isKeyframesSupported) return;
+    const wants = shots.filter((s) => s.use_source_frame && !s.image_url && !s.source_frame_url && !s.source_frame_tried);
+    if (!wants.length) return;
+    const candidate = { platform: gen.platform, url: gen.source_url, media_url: gen.media_url };
+    let frames = null;
+    try { frames = await extractBeatFrames(candidate, beatTimestamps(shots)); } catch { frames = null; }
+    shots.forEach((s, i) => {
+        s.source_frame_tried = true;
+        if (frames && frames[i] && s.use_source_frame && !s.source_frame_url) s.source_frame_url = frames[i];
+    });
+}
+
 async function saveShots(generationId, shots, status) {
     await query(
         `update generations set shots = $2, status = $3 where id = $1`,
@@ -166,11 +197,16 @@ export async function runImages(generationId, { max = Infinity } = {}) {
 
     await query(`update generations set status = 'imaging' where id = $1`, [generationId]);
 
-    // Upload the source frame once if any shot needs it and the provider can
-    // actually use it (fal /edit + Blob, or Higgsfield with a reference param).
-    let sourceFrameUrl = null;
-    if (isSourceFrameSupported && shots.some((s) => s.use_source_frame && !s.image_url)) {
-        sourceFrameUrl = await uploadSourceFrame(gen.thumbnail);
+    // Per-beat source frames (TikTok/IG): one extracted frame per shot so each
+    // still copies the matching source composition. Best-effort, runs once.
+    await ensureBeatFrames(gen, shots);
+
+    // Cover-thumbnail fallback, uploaded once, used for any shot that wants a
+    // source frame but didn't get a per-beat one (e.g. YouTube, or extraction
+    // failed).
+    let thumbFrameUrl = null;
+    if (isSourceFrameSupported && shots.some((s) => s.use_source_frame && !s.image_url && !s.source_frame_url)) {
+        thumbFrameUrl = await uploadSourceFrame(gen.thumbnail);
     }
 
     let made = 0, pending = 0, failed = 0, rendered = 0, capped = false;
@@ -180,6 +216,7 @@ export async function runImages(generationId, { max = Infinity } = {}) {
         if (MAX_IMAGE_RENDERS && imageRendersSpent(shots) >= MAX_IMAGE_RENDERS) { capped = true; break; }
         rendered++;
         try {
+            const sourceFrameUrl = shot.source_frame_url || thumbFrameUrl;
             const out = await generateShotImage(shot, { sourceFrameUrl });
             if (out.pending) {
                 shot.image_request_id = out.request_id;
@@ -203,5 +240,9 @@ export async function runImages(generationId, { max = Infinity } = {}) {
     const allDone = shots.every((s) => s.image_url);
     const status = allDone ? 'qc' : 'imaging';
     await saveShots(generationId, shots, status);
-    return { generationId, total: shots.length, made, pending, failed, status, capped, sourceFrameUsed: !!sourceFrameUrl };
+    const beatFrames = shots.filter((s) => s.source_frame_url).length;
+    return {
+        generationId, total: shots.length, made, pending, failed, status, capped,
+        beatFrames, sourceFrameUsed: beatFrames > 0 || !!thumbFrameUrl,
+    };
 }

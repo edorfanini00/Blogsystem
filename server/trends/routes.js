@@ -51,7 +51,10 @@ import {
     VIDEO_PROVIDER,
     FAL_VIDEO_MODEL,
     MUSIC_URL,
+    MATCH_SOURCE_LENGTH,
+    REMAKE_MAX_SHOTS,
 } from './config.js';
+import { isKeyframesSupported } from './keyframes.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
 
@@ -140,6 +143,11 @@ router.get('/health', async (req, res) => {
         voiceover: { configured: !!ELEVENLABS_KEY },
         analyze: { configured: isAnalyzeConfigured },
         director: { configured: isLlmConfigured },
+        lengthMatch: {
+            enabled: MATCH_SOURCE_LENGTH,
+            maxShots: REMAKE_MAX_SHOTS,
+            keyframes: isKeyframesSupported,
+        },
         image: {
             configured: isImageConfigured,
             provider: IMAGE_PROVIDER,

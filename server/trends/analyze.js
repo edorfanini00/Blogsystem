@@ -14,6 +14,11 @@
 // Graceful: when GEMINI_API_KEY is absent, isAnalyzeConfigured is false and
 // the route returns a clear 503.
 // ═══════════════════════════════════════════════════════════════════
+import { spawn } from 'node:child_process';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import ffmpegPath from 'ffmpeg-static';
 import { query } from './db.js';
 import { MESSAGE_BANK } from './config.js';
 
@@ -44,6 +49,10 @@ Return ONLY JSON in this exact shape:
   "transcript": "<the key spoken lines or a close paraphrase of the narration; do NOT copy long verbatim passages; empty string if no speech>",
   "sound": "<describe the audio: voiceover, music genre/mood, trending sound, sfx>",
   "visualBreakdown": ["<beat-by-beat: what is shown in each segment>"],
+  "durationSeconds": <total length of the video in seconds, as a number — your best estimate from watching it>,
+  "clips": [
+    { "durationSeconds": <how many seconds THIS distinct shot/cut stays on screen>, "description": "<what is shown in this shot>" }
+  ],
   "format": "<e.g. talking head, b-roll montage, text-on-screen explainer, skit, POV, tutorial>",
   "pacing": "<cut speed and rhythm, e.g. 'fast 1-2s cuts' or 'single take'>",
   "whyItWorks": ["<concrete reasons this gets views: hook, relatability, payoff, loop, emotion>"],
@@ -51,6 +60,8 @@ Return ONLY JSON in this exact shape:
   "topics": ["<key subjects / themes>"],
   "language": "<spoken/on-screen language>"
 }
+
+For "clips": list every distinct shot/cut in chronological order, each with how long it is on screen. The sum of clip durations should roughly equal durationSeconds. This drives an exact-length recreation, so be careful: a 34-second video with six cuts must yield six clips whose durations add up to about 34.
 
 CeleriTech context (for celeritechAngle only):
 - Product: ${MESSAGE_BANK.product}
@@ -86,11 +97,62 @@ async function downloadInline(url, platform) {
     if (!buf.length) throw new Error('empty body');
     if (buf.length > MAX_INLINE_BYTES) throw new Error('video too large to analyze inline (over ~18MB)');
     return {
-        inlineData: {
-            mimeType: ct.startsWith('video/') ? ct : 'video/mp4',
-            data: buf.toString('base64'),
+        part: {
+            inlineData: {
+                mimeType: ct.startsWith('video/') ? ct : 'video/mp4',
+                data: buf.toString('base64'),
+            },
         },
+        buffer: buf,
     };
+}
+
+// Measure the exact video duration (seconds) from raw bytes using the bundled
+// ffmpeg. Returns null when ffmpeg is unavailable or the probe fails.
+async function probeDurationSeconds(buffer) {
+    if (!ffmpegPath || !buffer || !buffer.length) return null;
+    const tmp = path.join(os.tmpdir(), `probe-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`);
+    try {
+        await fs.writeFile(tmp, buffer);
+        return await new Promise((resolve) => {
+            const proc = spawn(ffmpegPath, ['-i', tmp], { stdio: ['ignore', 'ignore', 'pipe'] });
+            let err = '';
+            proc.stderr.on('data', (d) => { err += d.toString(); });
+            proc.on('error', () => resolve(null));
+            proc.on('close', () => {
+                const m = err.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+                if (!m) return resolve(null);
+                resolve((+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]));
+            });
+        });
+    } catch {
+        return null;
+    } finally {
+        fs.rm(tmp, { force: true }).catch(() => {});
+    }
+}
+
+// Reconcile the analyzer's timing with the measured duration: scale the per-clip
+// durations so they sum to the real length, and record clipCount. When no
+// measurement is available we keep the model's estimate.
+function reconcileTiming(analysis, measured) {
+    let clips = Array.isArray(analysis.clips)
+        ? analysis.clips.filter((c) => c && Number(c.durationSeconds) > 0)
+        : [];
+    if (measured && measured > 0) {
+        const sum = clips.reduce((n, c) => n + (Number(c.durationSeconds) || 0), 0);
+        if (clips.length && sum > 0) {
+            const k = measured / sum;
+            clips = clips.map((c) => ({ ...c, durationSeconds: Math.round((Number(c.durationSeconds) || 0) * k * 10) / 10 }));
+        }
+        analysis.durationSeconds = Math.round(measured * 10) / 10;
+        analysis.durationMeasured = true;
+    } else {
+        analysis.durationSeconds = Number(analysis.durationSeconds) || (clips.reduce((n, c) => n + (Number(c.durationSeconds) || 0), 0) || null);
+        analysis.durationMeasured = false;
+    }
+    analysis.clips = clips;
+    analysis.clipCount = clips.length || null;
 }
 
 // TikTok playback URLs are cookie-gated and 403 server-side. Resolve a clean,
@@ -114,7 +176,9 @@ async function resolveTikTokMp4(pageUrl) {
 // Build the media part Gemini should analyze.
 async function resolveVideoPart(candidate) {
     if (candidate.platform === 'youtube') {
-        return { fileData: { fileUri: candidate.url } };
+        // No direct MP4 for YouTube — Gemini ingests the URL, so we cannot probe
+        // an exact duration (buffer is null; we fall back to the model estimate).
+        return { part: { fileData: { fileUri: candidate.url } }, buffer: null };
     }
 
     if (candidate.platform === 'tiktok') {
@@ -220,7 +284,7 @@ export async function analyzeCandidate(candidateId) {
     const c = (await query('select * from candidates where id = $1', [candidateId])).rows[0];
     if (!c) throw new Error('Candidate not found');
 
-    const videoPart = await resolveVideoPart(c);
+    const { part: videoPart, buffer } = await resolveVideoPart(c);
 
     let analysis = null;
     let lastErr = null;
@@ -246,6 +310,13 @@ export async function analyzeCandidate(candidateId) {
         }
     }
     if (!analysis) throw lastErr || new Error('All analysis models failed');
+
+    // Lock the recreation length to the real video: measure the exact duration
+    // from the downloaded bytes when we have them (TikTok/IG), then rescale the
+    // per-clip timings to match. YouTube keeps the model's estimate.
+    let measured = null;
+    try { measured = await probeDurationSeconds(buffer); } catch { measured = null; }
+    reconcileTiming(analysis, measured);
 
     analysis.analyzedAt = new Date().toISOString();
     await query('update candidates set analysis = $1, analyzed_at = now() where id = $2', [
