@@ -96,8 +96,11 @@ export async function gradeImage(imageUrl, shot, productName) {
                 });
                 if (!res.ok) {
                     lastErr = new Error(`Gemini ${model} HTTP ${res.status}`);
-                    if ((res.status === 503 || res.status === 429) && attempt < 2) { await sleep(3000 * (attempt + 1)); continue; }
-                    break; // non-transient → next model
+                    // 503 = transient overload → short backoff retry. 429 =
+                    // quota; backing off won't help in-call, so fail over to the
+                    // next model immediately instead of burning time.
+                    if (res.status === 503 && attempt < 2) { await sleep(3000 * (attempt + 1)); continue; }
+                    break; // 429 / other → next model
                 }
                 const data = await res.json();
                 const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
@@ -143,7 +146,13 @@ export async function runQc(generationId) {
     // Resolved shots are never re-graded (saves credits) and no longer block
     // the batch — a single stubborn shot (e.g. garbled AI headline text) must
     // not starve the others or stall the whole generation forever.
-    const resolved = (s) => !s.image_url || (s.qc && (s.qc.pass || (s.regens || 0) >= REMAKE_MAX_REGENS));
+    // After this many failed grading attempts (e.g. Gemini quota/429), stop
+    // blocking on QC and let the shot through — QC is a quality gate, not a hard
+    // gate; an unavailable grader must not stall the whole pipeline.
+    const QC_MAX_ATTEMPTS = Number(process.env.QC_MAX_ATTEMPTS) || 2;
+    const resolved = (s) => !s.image_url
+        || (s.qc && (s.qc.pass || (s.regens || 0) >= REMAKE_MAX_REGENS))
+        || (s.qc_attempts || 0) >= QC_MAX_ATTEMPTS;
     // Bound the heavy regen work per call so one /advance tick stays well under
     // the serverless limit; the next tick continues any remaining shots.
     const REGEN_BUDGET_PER_CALL = Number(process.env.QC_REGENS_PER_CALL) || 3;
@@ -157,9 +166,11 @@ export async function runQc(generationId) {
         try {
             grade = await gradeImage(shot.image_url, shot, productName);
         } catch (err) {
-            // Don't let one shot's transient grading failure abort the batch;
-            // record it and move on so the rest still get graded.
+            // Don't let one shot's grading failure abort the batch; record it,
+            // count the attempt (so a persistently-unavailable grader resolves
+            // to pass-through), and move on so the rest still get graded.
             shot.qc_error = err.message;
+            shot.qc_attempts = (shot.qc_attempts || 0) + 1;
             errored++;
             await query(`update generations set shots = $2 where id = $1`, [generationId, JSON.stringify(shots)]);
             continue;
