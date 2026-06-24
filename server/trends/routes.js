@@ -28,6 +28,10 @@ import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
 import { runDirector, directAndSave } from './director.js';
 import { runImages, isImageConfigured } from './image.js';
 import { runQc, isQcConfigured } from './qc.js';
+import { runMotion, isMotionConfigured } from './motion.js';
+import { runVideo, isVideoAgentConfigured } from './video.js';
+import { runCopy, isCopyConfigured } from './copy.js';
+import { runAssembly, isAssemblyConfigured, isVoiceoverConfigured } from './assembly.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -140,6 +144,10 @@ router.get('/health', async (req, res) => {
             },
         },
         qc: { configured: isQcConfigured },
+        motion: { configured: isMotionConfigured },
+        videoAgent: { configured: isVideoAgentConfigured },
+        copy: { configured: isCopyConfigured },
+        assembly: { configured: isAssemblyConfigured, voiceover: isVoiceoverConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -363,6 +371,71 @@ router.post('/generations/:id/qc', async (req, res) => {
         res.json(await runQc(req.params.id));
     } catch (err) {
         console.error('❌ QC gate error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Motion agent (spec §8): write per-shot DoP motion prompts ─
+// POST /api/trends/generations/:id/motion
+router.post('/generations/:id/motion', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isMotionConfigured) {
+        return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured (needed for the Motion agent).' });
+    }
+    try {
+        res.json(await runMotion(req.params.id));
+    } catch (err) {
+        console.error('❌ Motion agent error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Video agent (spec §9): animate stills into clips (DoP) ────
+// POST /api/trends/generations/:id/video  { max? }  → staged + resumable
+router.post('/generations/:id/video', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isVideoAgentConfigured) {
+        return res.status(503).json({ error: 'Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.' });
+    }
+    try {
+        const max = req.body?.max ?? req.query?.max;
+        res.json(await runVideo(req.params.id, { max: max ? parseInt(max) : 2 }));
+    } catch (err) {
+        console.error('❌ Video agent error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Copy agent (spec §10): voiceover + per-platform captions ──
+// POST /api/trends/generations/:id/copy
+router.post('/generations/:id/copy', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isCopyConfigured) {
+        return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured (needed for the Copy agent).' });
+    }
+    try {
+        res.json(await runCopy(req.params.id));
+    } catch (err) {
+        console.error('❌ Copy agent error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Assembly agent (spec §11): stitch clips + VO → final cut ──
+// POST /api/trends/generations/:id/assemble  → asset_url, status 'review'
+router.post('/generations/:id/assemble', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isAssemblyConfigured) {
+        return res.status(503).json({ error: 'Assembly not available (needs Higgsfield credentials + ffmpeg runtime).' });
+    }
+    try {
+        const out = await runAssembly(req.params.id);
+        if (out?.asset_url) {
+            await notify(`🎬 CeleriTech remake assembled and ready for review.\nTarget: ${out.generation?.resolved_target || ''}\nReview it in Trend Analysis → Queue.`).catch(() => {});
+        }
+        res.json(out);
+    } catch (err) {
+        console.error('❌ Assembly agent error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

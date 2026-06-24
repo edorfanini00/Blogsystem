@@ -6015,17 +6015,80 @@ setTimeout(function initOnePager() {
                 });
                 const qdata = await qres.json();
                 await loadGenerations();
-                if (qres.ok) toast(`QC done: ${qdata.passed || 0} passed, ${qdata.failed || 0} need work`, 'success');
+                if (qres.ok) toast(`QC done: ${qdata.passed || 0} passed, ${qdata.failed || 0} need work. Writing motion…`, 'success');
                 else toast('QC will retry — images are ready to view', 'info');
             } catch {
                 toast('Images ready — QC can be re-run from the Queue', 'info');
             }
+
+            // 4) Motion agent — write a camera/subject motion prompt per shot.
+            try {
+                await fetch(tApi(`/api/trends/generations/${genId}/motion`), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                });
+            } catch { /* video agent falls back to motion_intent */ }
+
+            // 5) Video agent — animate stills into clips. Staged + resumable, so
+            // call repeatedly until every shot has a clip (status leaves 'animating').
+            toast('Animating shots into clips…');
+            const ranVideo = await runVideoLoop(genId);
+            await loadGenerations();
+            if (!ranVideo.done) {
+                toast(ranVideo.message || 'Clips still rendering — resume from the Queue', 'info');
+                return;
+            }
+            toast('All clips rendered. Writing voiceover and captions…');
+
+            // 6) Copy agent — voiceover + per-platform captions/hashtags.
+            try {
+                await fetch(tApi(`/api/trends/generations/${genId}/copy`), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                });
+            } catch { /* assembly produces a silent cut if copy is missing */ }
+
+            // 7) Assembly — stitch clips + VO into the final cut.
+            toast('Assembling the final video…');
+            const ares = await fetch(tApi(`/api/trends/generations/${genId}/assemble`), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+            });
+            const adata = await ares.json();
+            await loadGenerations();
+            if (ares.ok && adata.asset_url) toast('Final video ready for review.', 'success');
+            else toast(adata.error || 'Assembly will retry — clips are ready in the Queue', 'info');
         } catch (err) {
             toast('Recreate failed: ' + err.message, 'error');
         } finally {
             state.recreating.delete(candidateId);
             renderCandidates();
         }
+    }
+
+    // Drive the staged Video agent to completion. Each call animates up to a
+    // couple of shots and may leave some still rendering on Higgsfield; we loop
+    // until all shots have a clip or we stop making progress.
+    async function runVideoLoop(genId, { maxCalls = 12 } = {}) {
+        let lastMade = -1, stalls = 0;
+        for (let i = 0; i < maxCalls; i++) {
+            let data;
+            try {
+                const res = await fetch(tApi(`/api/trends/generations/${genId}/video`), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max: 2 }),
+                });
+                data = await res.json();
+                if (!res.ok) return { done: false, message: data.error };
+            } catch (err) {
+                return { done: false, message: err.message };
+            }
+            await loadGenerations();
+            if (data.status === 'assembling') return { done: true };
+            const progress = (data.made || 0) + (data.pending || 0);
+            if (progress <= lastMade) { stalls++; } else { stalls = 0; }
+            lastMade = progress;
+            if (stalls >= 3) return { done: false, message: 'Some clips are still rendering — resume from the Queue' };
+            toast(`Clips: ${data.made || 0} done, ${data.pending || 0} rendering…`);
+            await new Promise((r) => setTimeout(r, 3000));
+        }
+        return { done: false, message: 'Clips are taking a while — resume from the Queue' };
     }
 
     // Small modal to pick the remake target: product / custom / auto.
@@ -6407,7 +6470,12 @@ setTimeout(function initOnePager() {
         const title = script.title || g.resolved_target || g.caption || 'Remake';
         const hook = script.hook || '';
         const onScreen = Array.isArray(script.on_screen_text) ? script.on_screen_text : [];
-        const hashtags = Array.isArray(script.hashtags) ? script.hashtags : [];
+        let copyJson = {};
+        try { copyJson = typeof g.copy_json === 'string' ? JSON.parse(g.copy_json) : (g.copy_json || {}); } catch { copyJson = {}; }
+        const platCaptions = copyJson.captions && typeof copyJson.captions === 'object' ? copyJson.captions : {};
+        const hashtags = Array.isArray(copyJson.hashtags) && copyJson.hashtags.length
+            ? copyJson.hashtags
+            : (Array.isArray(script.hashtags) ? script.hashtags : []);
 
         // Image-first chain shots (Director → Image → QC).
         let shots = [];
@@ -6420,13 +6488,20 @@ setTimeout(function initOnePager() {
         } else if (isChain && shots.length) {
             media = `<div class="trend-shot-grid">${shots.map((s) => {
                 const ok = s.qc?.pass;
-                const badge = s.image_url
-                    ? (s.qc ? (ok ? '<span class="shot-badge ok">✓ QC</span>' : '<span class="shot-badge bad">✕ QC</span>') : '')
-                    : '<span class="shot-badge wait">…</span>';
-                const inner = s.image_url
-                    ? `<img src="${esc(s.image_url)}" alt="" loading="lazy">`
-                    : `<div class="shot-empty">${s.image_error ? '⚠' : '⏳'}</div>`;
-                return `<div class="trend-shot" title="${esc(s.role || '')}${s.qc?.notes ? ' — ' + esc(s.qc.notes) : (s.image_error ? ' — ' + esc(s.image_error) : '')}">${inner}<span class="shot-role">${esc(s.role || '')}</span>${badge}</div>`;
+                // Clip state wins the badge once a shot is animated.
+                let badge;
+                if (s.video_url) badge = '<span class="shot-badge ok">▶ clip</span>';
+                else if (s.video_status_url) badge = '<span class="shot-badge wait">▶ …</span>';
+                else if (s.video_error && !s.image_url) badge = '<span class="shot-badge bad">⚠</span>';
+                else if (s.image_url) badge = (s.qc ? (ok ? '<span class="shot-badge ok">✓ QC</span>' : '<span class="shot-badge bad">✕ QC</span>') : '');
+                else badge = '<span class="shot-badge wait">…</span>';
+                const inner = s.video_url
+                    ? `<video src="${esc(s.video_url)}" muted loop preload="metadata" onmouseover="this.play()" onmouseout="this.pause()"></video><span class="shot-play">▶</span>`
+                    : (s.image_url
+                        ? `<img src="${esc(s.image_url)}" alt="" loading="lazy">`
+                        : `<div class="shot-empty">${s.image_error ? '⚠' : '⏳'}</div>`);
+                const tip = s.video_error || s.qc?.notes || s.image_error || s.role || '';
+                return `<div class="trend-shot" title="${esc(s.role || '')}${tip && tip !== s.role ? ' — ' + esc(tip) : ''}">${inner}<span class="shot-role">${esc(s.role || '')}</span>${badge}</div>`;
             }).join('')}</div>`;
         } else {
             media = `<div class="trend-gen-media-placeholder">${g.status === 'rendering' ? '<span class="spinner-orange"></span> Rendering video…' : (g.status === 'failed' ? '⚠ Render failed' : '📝 Script only')}</div>`;
@@ -6439,6 +6514,15 @@ setTimeout(function initOnePager() {
         }
         if (g.status === 'qc' || (isChain && shots.some((s) => s.image_url && !s.qc?.pass))) {
             actions.push(`<button class="btn-ghost" data-gen-qc="${esc(g.id)}">Run QC</button>`);
+        }
+        // Animate: all images present but not every shot has a clip yet.
+        if (isChain && !g.asset_url && shots.length && shots.every((s) => s.image_url) && shots.some((s) => !s.video_url)) {
+            actions.push(`<button class="btn-ghost" data-gen-video="${esc(g.id)}">Animate clips</button>`);
+        }
+        // Assemble: every shot has a clip but there is no final cut yet.
+        if (isChain && !g.asset_url && shots.length && shots.every((s) => s.video_url)) {
+            actions.push(`<button class="btn-ghost" data-gen-copy="${esc(g.id)}">Copy</button>`);
+            actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-assemble="${esc(g.id)}">Assemble video</button>`);
         }
         if (g.status === 'review') {
             actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-approve="${esc(g.id)}">✓ Approve</button>`);
@@ -6461,7 +6545,9 @@ setTimeout(function initOnePager() {
             ${hook ? `<div class="trend-gen-hook">"${esc(hook)}"</div>` : ''}
             ${g.script ? `<div class="trend-gen-vo"><b>Voiceover:</b> ${esc(g.script)}</div>` : ''}
             ${onScreen.length ? `<div class="trend-gen-onscreen">${onScreen.map((t) => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
-            ${g.caption ? `<div class="trend-gen-caption"><b>Caption:</b> ${esc(g.caption)}</div>` : ''}
+            ${Object.keys(platCaptions).length
+                ? Object.entries(platCaptions).map(([p, c]) => c ? `<div class="trend-gen-caption"><b>${esc(p)}:</b> ${esc(c)}</div>` : '').join('')
+                : (g.caption ? `<div class="trend-gen-caption"><b>Caption:</b> ${esc(g.caption)}</div>` : '')}
             ${hashtags.length ? `<div class="trend-gen-tags">${hashtags.map((t) => `<span>#${esc(String(t).replace(/^#/, ''))}</span>`).join('')}</div>` : ''}
             ${g.error ? `<div class="trend-gen-error">${esc(g.error)}</div>` : ''}
             <div class="trend-gen-actions">${actions.join('')}</div>
@@ -6483,12 +6569,26 @@ setTimeout(function initOnePager() {
             b.addEventListener('click', () => runChainStage(b.dataset.genImages, 'images', b)));
         list.querySelectorAll('[data-gen-qc]').forEach((b) =>
             b.addEventListener('click', () => runChainStage(b.dataset.genQc, 'qc', b)));
+        list.querySelectorAll('[data-gen-video]').forEach((b) =>
+            b.addEventListener('click', () => runChainStage(b.dataset.genVideo, 'video', b)));
+        list.querySelectorAll('[data-gen-copy]').forEach((b) =>
+            b.addEventListener('click', () => runChainStage(b.dataset.genCopy, 'copy', b)));
+        list.querySelectorAll('[data-gen-assemble]').forEach((b) =>
+            b.addEventListener('click', () => runChainStage(b.dataset.genAssemble, 'assemble', b)));
     }
 
-    // Resume a chain stage (render images / run QC) from the Queue.
+    // Resume a chain stage from the Queue: images / qc / video / copy / assemble.
     async function runChainStage(genId, stage, btn) {
-        if (btn) { btn.disabled = true; btn.textContent = stage === 'images' ? 'Rendering…' : 'Grading…'; }
+        const busyLabel = { images: 'Rendering…', qc: 'Grading…', video: 'Animating…', copy: 'Writing…', assemble: 'Assembling…' }[stage] || 'Working…';
+        if (btn) { btn.disabled = true; btn.dataset.orig = btn.textContent; btn.textContent = busyLabel; }
         try {
+            // Video is staged + resumable; drive it to completion in a loop.
+            if (stage === 'video') {
+                const out = await runVideoLoop(genId);
+                await loadGenerations();
+                toast(out.done ? 'All clips rendered — ready to assemble' : (out.message || 'Clips still rendering'), out.done ? 'success' : 'info');
+                return;
+            }
             const res = await fetch(tApi(`/api/trends/generations/${genId}/${stage}`), {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
             });
@@ -6496,9 +6596,13 @@ setTimeout(function initOnePager() {
             await loadGenerations();
             if (!res.ok) { toast(data.error || `${stage} failed`, 'error'); return; }
             if (stage === 'images') toast(`Rendered ${data.made || 0}/${data.total || 0} images`, 'success');
-            else toast(`QC: ${data.passed || 0} passed, ${data.failed || 0} need work`, 'success');
+            else if (stage === 'qc') toast(`QC: ${data.passed || 0} passed, ${data.failed || 0} need work`, 'success');
+            else if (stage === 'copy') toast('Voiceover and captions written', 'success');
+            else if (stage === 'assemble') toast(data.asset_url ? 'Final video ready for review' : (data.error || 'Assembly will retry'), data.asset_url ? 'success' : 'info');
         } catch (err) {
             toast(`${stage} failed: ` + err.message, 'error');
+        } finally {
+            if (btn && btn.dataset.orig) { btn.disabled = false; btn.textContent = btn.dataset.orig; }
         }
     }
 

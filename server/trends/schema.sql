@@ -179,6 +179,8 @@ alter table generations add column if not exists custom_prompt   text;    -- set
 alter table generations add column if not exists resolved_target text;    -- product name | custom | auto-selected
 alter table generations add column if not exists director_json   jsonb;   -- full shot plan { format, shots[] }
 alter table generations add column if not exists shots           jsonb;   -- per-shot pipeline state (image/video urls, qc)
+alter table generations add column if not exists copy_json       jsonb;   -- Copy agent: { voiceover, captions{platform}, hashtags[] }
+alter table generations add column if not exists vo_url          text;    -- ElevenLabs voiceover asset (public URL)
 
 -- ─── trend_reports (weekly intelligence) ────────────────────────
 -- One row per weekly analysis run. The factual parts (signals, trending,

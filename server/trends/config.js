@@ -203,13 +203,31 @@ export const HF_IMAGE_ASPECT = process.env.HF_IMAGE_ASPECT || '9:16';
 // Empty disables passing a reference (safe default until confirmed per model).
 export const HF_IMAGE_REF_PARAM = process.env.HF_IMAGE_REF_PARAM || '';
 // Image-to-video endpoint (confirmed: v1/image2video/dop). Kling slugs were not
-// resolvable on this account; DoP is the stable image-to-video path.
+// resolvable on this account; DoP is the stable image-to-video path. The raw
+// endpoint wraps args in { params: {...} } (verified against the live API).
 export const HF_VIDEO_MODELS = {
     default: process.env.HF_MODEL_VIDEO || 'v1/image2video/dop',
     simple: process.env.HF_MODEL_VIDEO_SIMPLE || 'v1/image2video/dop',
 };
+// DoP quality tier: dop-turbo (fast, default) | dop-lite | dop-standard (best).
+export const HF_VIDEO_DOP_MODEL = process.env.HF_VIDEO_DOP_MODEL || 'dop-turbo';
 // Per-shot image generation retry cap (spec §7: cap regenerations at 3).
 export const REMAKE_MAX_REGENS = Number(process.env.REMAKE_MAX_REGENS) || 3;
+// Per-shot video (animation) retry cap (spec §8: cap regenerations at 3).
+export const VIDEO_MAX_REGENS = Number(process.env.VIDEO_MAX_REGENS) || 3;
+// Final assembled video target length window (seconds). The Copy agent writes a
+// voiceover to fit, and Assembly caps total runtime to TARGET_MAX.
+export const VIDEO_TARGET_MIN = Number(process.env.VIDEO_TARGET_MIN) || 15;
+export const VIDEO_TARGET_MAX = Number(process.env.VIDEO_TARGET_MAX) || 25;
+// ElevenLabs voiceover. Voice id + model are env-overridable; VO is optional —
+// assembly produces a (silent) cut when ElevenLabs is not configured.
+export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';
+export const ELEVENLABS_MODEL = process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2';
+// Platforms the Copy agent writes captions/hashtags for.
+export const PUBLISH_PLATFORMS = (process.env.PUBLISH_PLATFORMS
+    ? process.env.PUBLISH_PLATFORMS.split(',')
+    : ['tiktok', 'instagram', 'youtube']
+).map((p) => p.trim().toLowerCase()).filter(Boolean);
 
 // ─── Composite score weights (section 6.3) ──────────────────────
 // Starting points. Tune from real data.
