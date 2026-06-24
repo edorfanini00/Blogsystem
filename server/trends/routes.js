@@ -456,6 +456,20 @@ router.post('/generations/:id/assemble', async (req, res) => {
     }
 });
 
+// TEMP: Higgsfield slug/param probe (image-to-image discovery). Remove after.
+router.post('/hf-probe', async (req, res) => {
+    try {
+        const { hfProbe } = await import('./higgsfield.js');
+        const slugs = Array.isArray(req.body?.slugs) ? req.body.slugs : [req.body?.slug];
+        const body = req.body?.body || {};
+        const out = [];
+        for (const s of slugs) { if (s) out.push(await hfProbe(s, body)); }
+        res.json(out);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── Chain runner: advance a generation one step (manual resume) ──
 // POST /api/trends/generations/:id/advance
 router.post('/generations/:id/advance', async (req, res) => {

@@ -50,6 +50,17 @@ export async function submit(application, args) {
     return data;
 }
 
+// TEMP: raw probe for slug/param discovery. Returns {status, body} without
+// throwing so we can map valid slugs (422 = valid, lists required fields) vs
+// invalid (404). Remove once the image-to-image slug + ref param are locked.
+export async function hfProbe(slug, body = {}) {
+    const res = await fetch(`${BASE}/${String(slug).replace(/^\//, '')}`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    return { slug, status: res.status, body: text.slice(0, 700) };
+}
+
 export async function getStatus(statusUrl) {
     const res = await fetch(statusUrl, { headers: authHeaders() });
     const text = await res.text();
