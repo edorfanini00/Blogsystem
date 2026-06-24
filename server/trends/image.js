@@ -101,7 +101,7 @@ async function saveShots(generationId, shots, status) {
 // Render images for every shot of a directed generation that does not have one
 // yet. Idempotent: re-running only fills gaps. Leaves status at 'qc' when all
 // shots have images, 'imaging' if some are still pending (resume later).
-export async function runImages(generationId) {
+export async function runImages(generationId, { max = Infinity } = {}) {
     if (!isImageConfigured) throw new Error('Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.');
     const gen = await loadDirected(generationId);
     if (!gen) throw new Error('Generation not found');
@@ -112,13 +112,15 @@ export async function runImages(generationId) {
 
     // Upload the source frame once if any shot needs it.
     let sourceFrameUrl = null;
-    if (shots.some((s) => s.use_source_frame)) {
+    if (shots.some((s) => s.use_source_frame && !s.image_url)) {
         sourceFrameUrl = await uploadSourceFrame(gen.thumbnail);
     }
 
-    let made = 0, pending = 0, failed = 0;
+    let made = 0, pending = 0, failed = 0, rendered = 0;
     for (const shot of shots) {
         if (shot.image_url) continue;
+        if (rendered >= max) break;
+        rendered++;
         try {
             const out = await generateShotImage(shot, { sourceFrameUrl });
             if (out.pending) {

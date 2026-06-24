@@ -344,7 +344,8 @@ router.post('/generations/:id/images', async (req, res) => {
         return res.status(503).json({ error: 'Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.' });
     }
     try {
-        res.json(await runImages(req.params.id));
+        const max = req.body?.max ?? req.query?.max;
+        res.json(await runImages(req.params.id, { max: max ? parseInt(max) : Infinity }));
     } catch (err) {
         console.error('❌ Image agent error:', err.message);
         res.status(500).json({ error: err.message });
