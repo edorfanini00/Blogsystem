@@ -229,6 +229,29 @@ export const PUBLISH_PLATFORMS = (process.env.PUBLISH_PLATFORMS
     : ['tiktok', 'instagram', 'youtube']
 ).map((p) => p.trim().toLowerCase()).filter(Boolean);
 
+// ─── Burned captions (spec: short-form needs synced captions) ───
+// On by default; requires ElevenLabs (timestamp alignment). CAPTIONS=off to disable.
+export const CAPTIONS_ENABLED = (process.env.CAPTIONS || 'on').toLowerCase() !== 'off';
+// Max words per caption pop (1-3 reads punchiest on a 9:16 screen).
+export const CAPTION_MAX_WORDS = Number(process.env.CAPTION_MAX_WORDS) || 3;
+
+// ─── Music bed (optional) ───────────────────────────────────────
+// Assembly can lay a music track under the VO, ducked so narration stays clear.
+// A per-generation music_url overrides this default. Empty = no music bed.
+export const MUSIC_URL = process.env.TREND_MUSIC_URL || '';
+// Music level relative to VO (0-1). VO is full; music sits under it.
+export const MUSIC_GAIN = process.env.MUSIC_GAIN != null ? Number(process.env.MUSIC_GAIN) : 0.18;
+
+// ─── Cost guardrails + variants ─────────────────────────────────
+// Hard ceiling on image renders per generation (stills + QC regens) so a
+// runaway improve-loop can't burn credits. 0 = no cap.
+export const MAX_IMAGE_RENDERS = Number(process.env.MAX_IMAGE_RENDERS) || 24;
+// Hard ceiling on video (animation) submissions per generation. 0 = no cap.
+export const MAX_VIDEO_RENDERS = Number(process.env.MAX_VIDEO_RENDERS) || 12;
+// How many remake variants the Director produces per candidate (pick the best
+// in review). 1 = single. Kept modest to control spend.
+export const REMAKE_VARIANTS = Math.min(Math.max(Number(process.env.REMAKE_VARIANTS) || 1, 1), 3);
+
 // ─── Composite score weights (section 6.3) ──────────────────────
 // Starting points. Tune from real data.
 export const SCORE_WEIGHTS = {

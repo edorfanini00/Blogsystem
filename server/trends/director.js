@@ -13,7 +13,7 @@
 import { query } from './db.js';
 import { getProductEntry, listProductsBrief } from './solutions.js';
 import { claudeJSON, isLlmConfigured } from './llm.js';
-import { EDITORIAL_RULES, MESSAGE_BANK } from './config.js';
+import { EDITORIAL_RULES, MESSAGE_BANK, REMAKE_VARIANTS } from './config.js';
 
 const MODEL_CHOICES = ['nano_banana_pro', 'seedream', 'grok'];
 const SHOT_ROLES = ['hero', 'setup', 'action', 'resolution'];
@@ -249,4 +249,21 @@ export async function directAndSave(candidateId, opts = {}) {
         ]
     );
     return { generation: ins.rows[0], plan };
+}
+
+// Produce N remake variants for one candidate (the LLM's sampling gives each a
+// different take on the same source). The chain cron then renders all of them,
+// so the user picks the best in review. Returns the first generation (to drive
+// the foreground flow) plus the full list.
+export async function directVariants(candidateId, opts = {}) {
+    const n = Math.min(Math.max(opts.variants || REMAKE_VARIANTS, 1), 3);
+    const results = [];
+    for (let i = 0; i < n; i++) {
+        try {
+            results.push(await directAndSave(candidateId, opts));
+        } catch (err) {
+            if (!results.length && i === n - 1) throw err; // surface if none succeeded
+        }
+    }
+    return { primary: results[0], variants: results, count: results.length };
 }

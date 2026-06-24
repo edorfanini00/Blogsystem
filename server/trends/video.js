@@ -14,7 +14,13 @@ import {
     isHiggsfieldConfigured, subscribe, poll, pickVideoUrl,
 } from './higgsfield.js';
 import { runMotion } from './motion.js';
-import { HF_VIDEO_MODELS, HF_VIDEO_DOP_MODEL, VIDEO_MAX_REGENS } from './config.js';
+import { HF_VIDEO_MODELS, HF_VIDEO_DOP_MODEL, VIDEO_MAX_REGENS, MAX_VIDEO_RENDERS } from './config.js';
+
+// Total animation submissions consumed (clips + in-flight + regens) for the
+// cost ceiling.
+function videoRendersSpent(shots) {
+    return (shots || []).reduce((n, s) => n + ((s.video_url || s.video_status_url || s.video_error) ? 1 : 0) + (s.video_regens || 0), 0);
+}
 
 export const isVideoAgentConfigured = isHiggsfieldConfigured;
 
@@ -100,12 +106,15 @@ export async function runVideo(generationId, { max = 2 } = {}) {
 
     await query(`update generations set status = 'animating' where id = $1`, [generationId]);
 
-    let made = 0, pending = 0, failed = 0, processed = 0;
+    let made = 0, pending = 0, failed = 0, processed = 0, capped = false;
     for (const shot of shots) {
         if (shot.video_url) continue;
         if (!shot.image_url) { failed++; continue; }       // nothing to animate
         if (shot.qc && shot.qc.pass === false) { /* still animate best effort */ }
         if (processed >= max) break;
+        // Cost ceiling: only blocks brand-new submissions, not resuming a job
+        // already in flight on this shot.
+        if (MAX_VIDEO_RENDERS && !shot.video_status_url && videoRendersSpent(shots) >= MAX_VIDEO_RENDERS) { capped = true; break; }
         processed++;
 
         // Resume an in-flight job from a previous call first.
@@ -148,5 +157,5 @@ export async function runVideo(generationId, { max = 2 } = {}) {
     const anyPending = shots.some((s) => !s.video_url && s.video_status_url);
     const status = allDone ? 'assembling' : 'animating';
     await save(generationId, shots, status);
-    return { generationId, total: shots.length, made, pending, failed, anyPending, status };
+    return { generationId, total: shots.length, made, pending, failed, anyPending, capped, status };
 }

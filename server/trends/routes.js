@@ -25,13 +25,15 @@ import {
 } from './generate.js';
 import { notify, isNotifyConfigured, notifyChannels } from './notify.js';
 import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
-import { runDirector, directAndSave } from './director.js';
+import { runDirector, directAndSave, directVariants } from './director.js';
 import { runImages, isImageConfigured } from './image.js';
 import { runQc, isQcConfigured } from './qc.js';
 import { runMotion, isMotionConfigured } from './motion.js';
 import { runVideo, isVideoAgentConfigured } from './video.js';
 import { runCopy, isCopyConfigured } from './copy.js';
 import { runAssembly, isAssemblyConfigured, isVoiceoverConfigured } from './assembly.js';
+import { advanceGeneration, runChainSweep } from './chain.js';
+import { isCaptionsConfigured } from './captions.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -43,6 +45,7 @@ import {
     SEARCH_TERMS,
     TREND_LANG,
     HF_IMAGE_MODELS,
+    MUSIC_URL,
 } from './config.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
@@ -147,7 +150,12 @@ router.get('/health', async (req, res) => {
         motion: { configured: isMotionConfigured },
         videoAgent: { configured: isVideoAgentConfigured },
         copy: { configured: isCopyConfigured },
-        assembly: { configured: isAssemblyConfigured, voiceover: isVoiceoverConfigured },
+        assembly: {
+            configured: isAssemblyConfigured,
+            voiceover: isVoiceoverConfigured,
+            captions: isCaptionsConfigured,
+            music: !!MUSIC_URL,
+        },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -326,18 +334,26 @@ router.post('/candidates/:id/direct', async (req, res) => {
         return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured. Add it to run the Director.' });
     }
     try {
-        const { target_mode, product_id, custom_prompt, dryRun } = req.body || {};
+        const { target_mode, product_id, custom_prompt, dryRun, variants } = req.body || {};
         const opts = {
             targetMode: target_mode || 'auto',
             productId: product_id || null,
             customPrompt: custom_prompt || null,
+            variants: variants ? parseInt(variants) : undefined,
         };
         if (dryRun) {
             const plan = await runDirector(req.params.id, opts);
             return res.json({ ok: true, dryRun: true, plan });
         }
-        const { generation, plan } = await directAndSave(req.params.id, opts);
-        res.json({ ok: true, generationId: generation.id, status: generation.status, plan });
+        const { primary, variants: all, count } = await directVariants(req.params.id, opts);
+        res.json({
+            ok: true,
+            generationId: primary.generation.id,
+            status: primary.generation.status,
+            plan: primary.plan,
+            variants: count,
+            variantIds: all.map((v) => v.generation.id),
+        });
     } catch (err) {
         console.error('❌ Director error:', err.message);
         res.status(500).json({ error: err.message });
@@ -439,6 +455,47 @@ router.post('/generations/:id/assemble', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ─── Chain runner: advance a generation one step (manual resume) ──
+// POST /api/trends/generations/:id/advance
+router.post('/generations/:id/advance', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json(await advanceGeneration(req.params.id));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Chain cron: sweep all in-flight generations to completion ────
+// GET/POST /api/trends/chain/cron  (Vercel Cron + manual). Advances each
+// active generation one bounded step; call on a schedule to finish renders
+// without depending on the browser staying open.
+async function runChainCronHandler(req, res) {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+        const auth = req.headers.authorization || '';
+        const token = auth.replace(/^Bearer\s+/i, '');
+        if (token !== cronSecret && req.query.secret !== cronSecret) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+    }
+    if (!requireDb(res)) return;
+    try {
+        const out = await runChainSweep({});
+        // Notify on anything that just reached review this sweep.
+        const justReady = (out.steps || []).filter((s) => s.step === 'assemble' && s.status === 'review' && s.asset_url);
+        for (const s of justReady) {
+            await notify(`🎬 CeleriTech remake assembled and ready for review (Queue tab).`).catch(() => {});
+        }
+        res.json(out);
+    } catch (err) {
+        console.error('❌ Chain cron error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+router.get('/chain/cron', runChainCronHandler);
+router.post('/chain/cron', runChainCronHandler);
 
 // GET /api/trends/generations/:id → one generation with shots (chain state)
 router.get('/generations/:id', async (req, res) => {

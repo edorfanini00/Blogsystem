@@ -12,8 +12,14 @@ import {
     isHiggsfieldConfigured, subscribe, upload, pickImageUrl,
 } from './higgsfield.js';
 import {
-    HF_IMAGE_MODELS, HF_IMAGE_ASPECT, HF_IMAGE_REF_PARAM,
+    HF_IMAGE_MODELS, HF_IMAGE_ASPECT, HF_IMAGE_REF_PARAM, MAX_IMAGE_RENDERS,
 } from './config.js';
+
+// Total image generations a generation has consumed (stills + QC regens), used
+// to enforce the cost ceiling.
+export function imageRendersSpent(shots) {
+    return (shots || []).reduce((n, s) => n + ((s.image_url || s.image_error) ? 1 : 0) + (s.regens || 0), 0);
+}
 
 export const isImageConfigured = isHiggsfieldConfigured;
 
@@ -117,10 +123,11 @@ export async function runImages(generationId, { max = Infinity } = {}) {
         sourceFrameUrl = await uploadSourceFrame(gen.thumbnail);
     }
 
-    let made = 0, pending = 0, failed = 0, rendered = 0;
+    let made = 0, pending = 0, failed = 0, rendered = 0, capped = false;
     for (const shot of shots) {
         if (shot.image_url) continue;
         if (rendered >= max) break;
+        if (MAX_IMAGE_RENDERS && imageRendersSpent(shots) >= MAX_IMAGE_RENDERS) { capped = true; break; }
         rendered++;
         try {
             const out = await generateShotImage(shot, { sourceFrameUrl });
@@ -145,5 +152,5 @@ export async function runImages(generationId, { max = Infinity } = {}) {
     const allDone = shots.every((s) => s.image_url);
     const status = allDone ? 'qc' : 'imaging';
     await saveShots(generationId, shots, status);
-    return { generationId, total: shots.length, made, pending, failed, status, sourceFrameUsed: !!sourceFrameUrl };
+    return { generationId, total: shots.length, made, pending, failed, status, capped, sourceFrameUsed: !!sourceFrameUrl };
 }

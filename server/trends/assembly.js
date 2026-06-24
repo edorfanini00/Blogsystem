@@ -19,9 +19,11 @@ import path from 'node:path';
 import ffmpegPath from 'ffmpeg-static';
 import { query } from './db.js';
 import { isHiggsfieldConfigured, upload } from './higgsfield.js';
+import { VIDEO_TARGET_MAX, MUSIC_URL, MUSIC_GAIN } from './config.js';
 import {
-    VIDEO_TARGET_MAX, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL,
-} from './config.js';
+    synthVoiceoverTimed, cuesFromAlignment, buildAss,
+    CAPTION_FONT_PATH, isCaptionsConfigured,
+} from './captions.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
 export const isAssemblyConfigured = isHiggsfieldConfigured && !!ffmpegPath;
@@ -57,26 +59,53 @@ async function download(url, dest) {
     }
 }
 
-// Synthesize the voiceover with ElevenLabs → mp3 file on disk. Returns the path
-// or null when not configured / no text.
-async function synthVoiceover(text, dest) {
-    if (!ELEVENLABS_KEY || !text || !text.trim()) return null;
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-        method: 'POST',
-        headers: { 'xi-api-key': ELEVENLABS_KEY, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-        body: JSON.stringify({
-            text,
-            model_id: ELEVENLABS_MODEL,
-            voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-    });
-    if (!r.ok) {
-        const body = await r.text().catch(() => '');
-        throw new Error(`ElevenLabs ${r.status}: ${body.slice(0, 160)}`);
+// Escape a path for use inside an ffmpeg filtergraph argument.
+function filterPath(p) {
+    return p.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'");
+}
+
+// Build the final-mux ffmpeg args: optional burned captions (re-encode) and an
+// optional ducked music bed under the VO. Falls back to stream-copy when there
+// is nothing to overlay (fastest path).
+function finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen }) {
+    const inputs = ['-i', concatPath];
+    const voIdx = voPath ? 1 : null;
+    const musIdx = musicPath ? (voPath ? 2 : 1) : null;
+    if (voPath) inputs.push('-i', voPath);
+    if (musicPath) inputs.push('-i', musicPath);
+
+    const filters = [];
+    let vmap = '0:v:0';
+    if (assPath) {
+        filters.push(`[0:v]ass='${filterPath(assPath)}':fontsdir='${filterPath(path.dirname(CAPTION_FONT_PATH))}'[v]`);
+        vmap = '[v]';
     }
-    const buf = Buffer.from(await r.arrayBuffer());
-    await fs.writeFile(dest, buf);
-    return dest;
+
+    let amap;
+    if (voIdx != null && musIdx != null) {
+        // Split the VO: one copy keys the sidechain duck, the other is mixed in.
+        // (An ffmpeg filter output pad can only feed a single input.)
+        filters.push(`[${voIdx}:a]aresample=44100,asplit=2[vo1][vo2]`);
+        filters.push(`[${musIdx}:a]aresample=44100,volume=${MUSIC_GAIN}[mus]`);
+        filters.push('[mus][vo1]sidechaincompress=threshold=0.02:ratio=10:attack=15:release=250[duck]');
+        filters.push('[duck][vo2]amix=inputs=2:duration=longest:normalize=0[aout]');
+        amap = '[aout]';
+    } else if (voIdx != null) {
+        amap = `${voIdx}:a:0`;
+    } else if (musIdx != null) {
+        filters.push(`[${musIdx}:a]aresample=44100[aout]`);
+        amap = '[aout]';
+    } else {
+        amap = '0:a:0';
+    }
+
+    const args = ['-y', ...inputs];
+    if (filters.length) args.push('-filter_complex', filters.join(';'));
+    args.push('-map', vmap, '-map', amap);
+    if (assPath) args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p');
+    else args.push('-c:v', 'copy');
+    args.push('-c:a', 'aac', '-ar', '44100', '-ac', '2', '-t', String(maxLen), finalPath);
+    return args;
 }
 
 // Normalize one clip to a uniform 9:16 / 30fps / h264+aac file so the concat
@@ -141,33 +170,41 @@ export async function runAssembly(generationId) {
         const concatPath = path.join(work, 'concat.mp4');
         await ffmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', concatPath]);
 
-        // 3. Voiceover (optional) + final mux, capped to the target max length.
+        // 3. Voiceover (timestamped) → caption cues, optional music bed.
         const voText = gen.copy_json?.voiceover || gen.script || '';
-        let voUrl = null;
-        let finalPath = path.join(work, 'final.mp4');
-        let voPath = null;
+        const finalPath = path.join(work, 'final.mp4');
+        let voPath = null, alignment = null, voUrl = null, assPath = null, captionCount = 0;
         try {
-            voPath = await synthVoiceover(voText, path.join(work, 'vo.mp3'));
-        } catch (err) {
+            const vo = await synthVoiceoverTimed(voText, path.join(work, 'vo.mp3'));
+            if (vo) { voPath = vo.path; alignment = vo.alignment; }
+        } catch {
             voPath = null; // VO failure should not block the silent cut
         }
 
+        // Burned captions from the VO alignment (skip gracefully if disabled or
+        // the API returned no timing).
+        if (voPath && isCaptionsConfigured && alignment) {
+            const cues = cuesFromAlignment(alignment);
+            if (cues.length) {
+                assPath = path.join(work, 'captions.ass');
+                await fs.writeFile(assPath, buildAss(cues));
+                captionCount = cues.length;
+            }
+        }
+
+        // Optional music bed (per-generation override → env default).
+        let musicPath = null;
+        const musicUrl = gen.copy_json?.music_url || MUSIC_URL;
+        if (musicUrl) {
+            try { musicPath = await download(musicUrl, path.join(work, 'music.mp3')); }
+            catch { musicPath = null; }
+        }
+
+        await ffmpeg(finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen: VIDEO_TARGET_MAX }), { timeoutMs: 200000 });
+
         if (voPath) {
-            await ffmpeg([
-                '-y',
-                '-i', concatPath,
-                '-i', voPath,
-                '-map', '0:v:0', '-map', '1:a:0',
-                '-c:v', 'copy', '-c:a', 'aac',
-                '-t', String(VIDEO_TARGET_MAX),
-                finalPath,
-            ]);
-            try {
-                const voBytes = await fs.readFile(voPath);
-                voUrl = await upload(voBytes, 'audio/mpeg');
-            } catch { /* non-fatal: VO hosting is a nicety */ }
-        } else {
-            await ffmpeg(['-y', '-i', concatPath, '-t', String(VIDEO_TARGET_MAX), '-c', 'copy', finalPath]);
+            try { voUrl = await upload(await fs.readFile(voPath), 'audio/mpeg'); }
+            catch { /* non-fatal */ }
         }
 
         // 4. Host the final cut and record it.
@@ -185,6 +222,8 @@ export async function runAssembly(generationId) {
             vo_url: voUrl,
             clips: clips.length,
             voiceover: !!voPath,
+            captions: captionCount,
+            music: !!musicPath,
             cappedAt: VIDEO_TARGET_MAX,
             generation: upd.rows[0],
         };
