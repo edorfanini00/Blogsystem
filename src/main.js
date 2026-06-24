@@ -5855,8 +5855,8 @@ setTimeout(function initOnePager() {
         // generation linkage (step 6)
         const genStatus = c.gen_status || null;
         let recreateLabel = 'Recreate';
-        if (isRecreating) recreateLabel = 'Generating…';
-        else if (genStatus === 'rendering') recreateLabel = 'Rendering…';
+        if (isRecreating) recreateLabel = 'Working…';
+        else if (['directed', 'imaging', 'qc', 'animating', 'rendering', 'assembling'].includes(genStatus)) recreateLabel = 'In progress…';
         else if (genStatus && ['review', 'approved', 'posted'].includes(genStatus)) recreateLabel = 'Recreate again';
 
         // YouTube (i.ytimg.com) serves directly; Instagram/TikTok CDNs block
@@ -5900,7 +5900,7 @@ setTimeout(function initOnePager() {
               <button class="trend-btn-analyze" data-analyze="${esc(c.id)}" ${isAnalyzing ? 'disabled' : ''} title="Analyze the video: frames, on-screen text, audio">
                 ${isAnalyzing ? '<span class="spinner" style="width:12px;height:12px;"></span> Analyzing…' : (hasAnalysis ? '↻ Re-analyze' : '🔍 Analyze video')}
               </button>
-              <button class="trend-btn-recreate" data-recreate="${esc(c.id)}" ${scored && !isRecreating ? '' : 'disabled'} ${scored ? '' : 'title="Score this candidate first"'}>
+              <button class="trend-btn-recreate" data-recreate="${esc(c.id)}" ${isRecreating ? 'disabled' : ''} title="Remake this video for a product (image-first chain)">
                 ${isRecreating ? '<span class="spinner" style="border-color:rgba(255,255,255,0.4);border-top-color:#fff;width:13px;height:13px;"></span> ' : ''}${recreateLabel}
               </button>
               <button class="trend-btn-dismiss" data-dismiss="${esc(c.id)}" title="Dismiss">✕</button>
@@ -5969,36 +5969,114 @@ setTimeout(function initOnePager() {
         }
     }
 
-    // ─── Step 6: recreate (generate a branded video) ────────────
+    // ─── Recreate: image-first remake chain (Director → Image → QC) ──
     async function recreate(candidateId) {
         if (state.recreating.has(candidateId)) return;
+
+        // Make sure the product list is available for the dialog.
+        if (Array.isArray(solState.items) && !solState.items.length) {
+            try { await loadSolutions(); } catch { /* auto mode still works */ }
+        }
+
+        // Choose the target (product / custom / auto) before kicking off.
+        const target = await openRemakeDialog(candidateId);
+        if (!target) return; // cancelled
+
         state.recreating.add(candidateId);
         renderCandidates();
-        const solutionId = selectedSolutionId() || null;
+        switchSubtab('queue');
         try {
-            const res = await fetch(tApi(`/api/trends/candidates/${candidateId}/recreate`), {
+            // 1) Director — build the shot plan retargeted to the chosen target.
+            toast('Directing the remake…');
+            const dres = await fetch(tApi(`/api/trends/candidates/${candidateId}/direct`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ solutionId }),
+                body: JSON.stringify(target),
             });
-            const data = await res.json();
-            if (!res.ok) {
-                toast(data.error || 'Recreate failed', 'error');
-                return;
+            const ddata = await dres.json();
+            if (!dres.ok) { toast(ddata.error || 'Director failed', 'error'); return; }
+            const genId = ddata.generationId;
+            await loadGenerations();
+            toast(`Shot plan ready (${ddata.plan?.shots?.length || 0} shots). Rendering images…`);
+
+            // 2) Image agent — render every shot (image-first).
+            const ires = await fetch(tApi(`/api/trends/generations/${genId}/images`), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+            });
+            const idata = await ires.json();
+            await loadGenerations();
+            if (!ires.ok) { toast(idata.error || 'Image render failed', 'error'); return; }
+            toast(`Rendered ${idata.made || 0}/${idata.total || 0} images. Running QC…`);
+
+            // 3) QC gate — grade + improve-loop. Non-fatal if it hiccups.
+            try {
+                const qres = await fetch(tApi(`/api/trends/generations/${genId}/qc`), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                });
+                const qdata = await qres.json();
+                await loadGenerations();
+                if (qres.ok) toast(`QC done: ${qdata.passed || 0} passed, ${qdata.failed || 0} need work`, 'success');
+                else toast('QC will retry — images are ready to view', 'info');
+            } catch {
+                toast('Images ready — QC can be re-run from the Queue', 'info');
             }
-            const rendering = data.status === 'rendering';
-            toast(rendering ? 'Script written, video rendering — see the Queue tab' : 'Script written — see the Queue tab', 'success');
-            state.generations.unshift(data);
-            updateQueueBadge();
-            switchSubtab('queue');
-            // Kick off a poll if it is rendering.
-            if (rendering) pollGeneration(data.id);
         } catch (err) {
             toast('Recreate failed: ' + err.message, 'error');
         } finally {
             state.recreating.delete(candidateId);
             renderCandidates();
         }
+    }
+
+    // Small modal to pick the remake target: product / custom / auto.
+    function openRemakeDialog(candidateId) {
+        return new Promise((resolve) => {
+            const products = (typeof solState !== 'undefined' && Array.isArray(solState.items)) ? solState.items : [];
+            const sel = selectedSolutionId();
+            const opts = products.map((p) => `<option value="${esc(p.id)}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+            const overlay = document.createElement('div');
+            overlay.className = 'remake-overlay';
+            overlay.innerHTML = `
+              <div class="remake-modal" role="dialog" aria-modal="true">
+                <h3>Recreate this video</h3>
+                <p class="remake-sub">Mirror the source format and retarget the content. The method is image-first.</p>
+                <label class="remake-mode"><input type="radio" name="rmode" value="auto" checked> <span><b>Auto</b> — let the system pick the best angle/product</span></label>
+                <label class="remake-mode"><input type="radio" name="rmode" value="product" ${products.length ? '' : 'disabled'}> <span><b>Product</b> — remake for a specific product${products.length ? '' : ' (none added yet)'}</span></label>
+                <select class="remake-product" disabled>${opts || '<option>No products</option>'}</select>
+                <label class="remake-mode"><input type="radio" name="rmode" value="custom"> <span><b>Custom</b> — your own angle for this one video</span></label>
+                <textarea class="remake-custom" rows="3" placeholder="e.g. Show how a small bakery avoids stockouts with EZ solutions" disabled></textarea>
+                <div class="remake-actions">
+                  <button class="btn-ghost" data-remake-cancel>Cancel</button>
+                  <button class="trend-btn-recreate" data-remake-go>Generate</button>
+                </div>
+              </div>`;
+            document.body.appendChild(overlay);
+            const productSel = overlay.querySelector('.remake-product');
+            const customTa = overlay.querySelector('.remake-custom');
+            overlay.querySelectorAll('input[name="rmode"]').forEach((r) => r.addEventListener('change', () => {
+                const mode = overlay.querySelector('input[name="rmode"]:checked').value;
+                productSel.disabled = mode !== 'product';
+                customTa.disabled = mode !== 'custom';
+            }));
+            const close = (val) => { overlay.remove(); resolve(val); };
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+            overlay.querySelector('[data-remake-cancel]').addEventListener('click', () => close(null));
+            overlay.querySelector('[data-remake-go]').addEventListener('click', () => {
+                const mode = overlay.querySelector('input[name="rmode"]:checked').value;
+                if (mode === 'product') {
+                    const pid = productSel.value;
+                    if (!pid) { toast('Pick a product', 'error'); return; }
+                    setSelectedSolution(pid);
+                    close({ target_mode: 'product', product_id: pid });
+                } else if (mode === 'custom') {
+                    const txt = customTa.value.trim();
+                    if (!txt) { toast('Type a custom angle', 'error'); return; }
+                    close({ target_mode: 'custom', custom_prompt: txt });
+                } else {
+                    close({ target_mode: 'auto' });
+                }
+            });
+        });
     }
 
     async function runIngest() {
@@ -6248,6 +6326,11 @@ setTimeout(function initOnePager() {
     // ─── Step 6/7: generation review queue ──────────────────────
     function genStatusMeta(status) {
         switch (status) {
+            case 'directed': return { cls: 'gen-script', label: 'Shot plan ready' };
+            case 'imaging': return { cls: 'gen-rendering', label: 'Rendering images' };
+            case 'qc': return { cls: 'gen-rendering', label: 'QC grading' };
+            case 'animating': return { cls: 'gen-rendering', label: 'Images approved' };
+            case 'assembling': return { cls: 'gen-rendering', label: 'Assembling' };
             case 'rendering': return { cls: 'gen-rendering', label: 'Rendering' };
             case 'review': return { cls: 'gen-review', label: 'Ready for review' };
             case 'approved': return { cls: 'gen-approved', label: 'Approved' };
@@ -6321,17 +6404,42 @@ setTimeout(function initOnePager() {
         const sm = genStatusMeta(g.status);
         let script = {};
         try { script = typeof g.script_json === 'string' ? JSON.parse(g.script_json) : (g.script_json || {}); } catch { script = {}; }
-        const title = script.title || g.caption || 'Untitled draft';
+        const title = script.title || g.resolved_target || g.caption || 'Remake';
         const hook = script.hook || '';
         const onScreen = Array.isArray(script.on_screen_text) ? script.on_screen_text : [];
         const hashtags = Array.isArray(script.hashtags) ? script.hashtags : [];
 
-        const media = g.asset_url
-            ? `<video class="trend-gen-video" src="${esc(g.asset_url)}" controls preload="metadata"></video>`
-            : `<div class="trend-gen-media-placeholder">${g.status === 'rendering' ? '<span class="spinner-orange"></span> Rendering video…' : (g.status === 'failed' ? '⚠ Render failed' : '📝 Script only')}</div>`;
+        // Image-first chain shots (Director → Image → QC).
+        let shots = [];
+        try { shots = typeof g.shots === 'string' ? JSON.parse(g.shots) : (g.shots || []); } catch { shots = []; }
+        const isChain = ['directed', 'imaging', 'qc', 'animating', 'assembling'].includes(g.status) || shots.length;
+
+        let media;
+        if (g.asset_url) {
+            media = `<video class="trend-gen-video" src="${esc(g.asset_url)}" controls preload="metadata"></video>`;
+        } else if (isChain && shots.length) {
+            media = `<div class="trend-shot-grid">${shots.map((s) => {
+                const ok = s.qc?.pass;
+                const badge = s.image_url
+                    ? (s.qc ? (ok ? '<span class="shot-badge ok">✓ QC</span>' : '<span class="shot-badge bad">✕ QC</span>') : '')
+                    : '<span class="shot-badge wait">…</span>';
+                const inner = s.image_url
+                    ? `<img src="${esc(s.image_url)}" alt="" loading="lazy">`
+                    : `<div class="shot-empty">${s.image_error ? '⚠' : '⏳'}</div>`;
+                return `<div class="trend-shot" title="${esc(s.role || '')}${s.qc?.notes ? ' — ' + esc(s.qc.notes) : (s.image_error ? ' — ' + esc(s.image_error) : '')}">${inner}<span class="shot-role">${esc(s.role || '')}</span>${badge}</div>`;
+            }).join('')}</div>`;
+        } else {
+            media = `<div class="trend-gen-media-placeholder">${g.status === 'rendering' ? '<span class="spinner-orange"></span> Rendering video…' : (g.status === 'failed' ? '⚠ Render failed' : '📝 Script only')}</div>`;
+        }
 
         const actions = [];
         if (g.status === 'rendering') actions.push(`<button class="btn-ghost" data-gen-refresh="${esc(g.id)}">Check status</button>`);
+        if (g.status === 'directed' || (isChain && shots.some((s) => !s.image_url))) {
+            actions.push(`<button class="btn-ghost" data-gen-images="${esc(g.id)}">Render images</button>`);
+        }
+        if (g.status === 'qc' || (isChain && shots.some((s) => s.image_url && !s.qc?.pass))) {
+            actions.push(`<button class="btn-ghost" data-gen-qc="${esc(g.id)}">Run QC</button>`);
+        }
         if (g.status === 'review') {
             actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-approve="${esc(g.id)}">✓ Approve</button>`);
             actions.push(`<button class="btn-ghost danger" data-gen-kill="${esc(g.id)}">Kill</button>`);
@@ -6371,6 +6479,27 @@ setTimeout(function initOnePager() {
             b.addEventListener('click', () => setGenStatus(b.dataset.genKill, 'killed')));
         list.querySelectorAll('[data-gen-posted]').forEach((b) =>
             b.addEventListener('click', () => setGenStatus(b.dataset.genPosted, 'posted')));
+        list.querySelectorAll('[data-gen-images]').forEach((b) =>
+            b.addEventListener('click', () => runChainStage(b.dataset.genImages, 'images', b)));
+        list.querySelectorAll('[data-gen-qc]').forEach((b) =>
+            b.addEventListener('click', () => runChainStage(b.dataset.genQc, 'qc', b)));
+    }
+
+    // Resume a chain stage (render images / run QC) from the Queue.
+    async function runChainStage(genId, stage, btn) {
+        if (btn) { btn.disabled = true; btn.textContent = stage === 'images' ? 'Rendering…' : 'Grading…'; }
+        try {
+            const res = await fetch(tApi(`/api/trends/generations/${genId}/${stage}`), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+            });
+            const data = await res.json();
+            await loadGenerations();
+            if (!res.ok) { toast(data.error || `${stage} failed`, 'error'); return; }
+            if (stage === 'images') toast(`Rendered ${data.made || 0}/${data.total || 0} images`, 'success');
+            else toast(`QC: ${data.passed || 0} passed, ${data.failed || 0} need work`, 'success');
+        } catch (err) {
+            toast(`${stage} failed: ` + err.message, 'error');
+        }
     }
 
     async function setGenStatus(id, status) {
