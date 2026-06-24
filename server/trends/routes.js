@@ -47,6 +47,9 @@ import {
     HF_IMAGE_MODELS,
     IMAGE_PROVIDER,
     FAL_IMAGE_MODELS,
+    HF_VIDEO_MODELS,
+    VIDEO_PROVIDER,
+    FAL_VIDEO_MODEL,
     MUSIC_URL,
 } from './config.js';
 
@@ -154,7 +157,11 @@ router.get('/health', async (req, res) => {
         },
         qc: { configured: isQcConfigured },
         motion: { configured: isMotionConfigured },
-        videoAgent: { configured: isVideoAgentConfigured },
+        videoAgent: {
+            configured: isVideoAgentConfigured,
+            provider: VIDEO_PROVIDER,
+            model: VIDEO_PROVIDER === 'fal' ? FAL_VIDEO_MODEL : HF_VIDEO_MODELS.default,
+        },
         copy: { configured: isCopyConfigured },
         assembly: {
             configured: isAssemblyConfigured,

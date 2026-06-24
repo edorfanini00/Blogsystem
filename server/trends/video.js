@@ -13,8 +13,14 @@ import { query } from './db.js';
 import {
     isHiggsfieldConfigured, subscribe, poll, pickVideoUrl,
 } from './higgsfield.js';
+import * as fal from './fal.js';
 import { runMotion } from './motion.js';
-import { HF_VIDEO_MODELS, HF_VIDEO_DOP_MODEL, VIDEO_MAX_REGENS, MAX_VIDEO_RENDERS } from './config.js';
+import {
+    HF_VIDEO_MODELS, HF_VIDEO_DOP_MODEL, VIDEO_MAX_REGENS, MAX_VIDEO_RENDERS,
+    VIDEO_PROVIDER, FAL_VIDEO_MODEL, FAL_VIDEO_DURATION,
+} from './config.js';
+
+const USE_FAL_VIDEO = VIDEO_PROVIDER === 'fal';
 
 // Total animation submissions consumed (clips + in-flight + regens) for the
 // cost ceiling.
@@ -22,9 +28,10 @@ function videoRendersSpent(shots) {
     return (shots || []).reduce((n, s) => n + ((s.video_url || s.video_status_url || s.video_error) ? 1 : 0) + (s.video_regens || 0), 0);
 }
 
-export const isVideoAgentConfigured = isHiggsfieldConfigured;
+export const isVideoAgentConfigured = USE_FAL_VIDEO ? fal.isFalConfigured : isHiggsfieldConfigured;
 
 const DOP = HF_VIDEO_MODELS.default;
+const DEFAULT_MOTION = 'Slow, smooth camera push-in that keeps the subject centered.';
 
 // Build the DoP request body. The live endpoint requires the args under
 // `params` (verified against the API; an empty body returns 422 body.params).
@@ -38,10 +45,33 @@ function dopArgs(imageUrl, motionPrompt) {
     };
 }
 
+// Build the fal image-to-video input. Kling takes { prompt, image_url,
+// duration }; Seedance additionally accepts resolution/aspect_ratio.
+function falVideoInput(imageUrl, motionPrompt) {
+    const input = { prompt: motionPrompt, image_url: imageUrl, duration: FAL_VIDEO_DURATION };
+    if (/seedance/i.test(FAL_VIDEO_MODEL)) {
+        input.resolution = '1080p';
+        input.aspect_ratio = 'auto';
+    }
+    return input;
+}
+
 // Submit one still for animation. Returns
-//   { video_url } | { pending, request_id, status_url }.
+//   { video_url } | { pending, request_id, status_url, response_url }.
 async function animateShot(shot, { deadlineMs = 110000 } = {}) {
-    const motion = shot.motion_prompt || shot.motion_intent || 'Slow, smooth camera push-in that keeps the subject centered.';
+    const motion = shot.motion_prompt || shot.motion_intent || DEFAULT_MOTION;
+    if (USE_FAL_VIDEO) {
+        const out = await fal.subscribe(FAL_VIDEO_MODEL, falVideoInput(shot.image_url, motion), { deadlineMs, pollMs: 4000 });
+        if (out.pending) {
+            return {
+                pending: true, request_id: out.request_id,
+                status_url: out.status_url, response_url: out.response_url,
+            };
+        }
+        const url = fal.pickVideoUrl(out.result);
+        if (!url) throw new Error(`${FAL_VIDEO_MODEL} completed but no video URL`);
+        return { video_url: url, request_id: out.request_id };
+    }
     const out = await subscribe(DOP, dopArgs(shot.image_url, motion), { deadlineMs, pollMs: 4000 });
     if (out.pending) {
         return { pending: true, request_id: out.request_id, status_url: out.status_url };
@@ -68,20 +98,24 @@ async function save(generationId, shots, status) {
 // video_url (or terminal failure), false if it is still pending.
 async function resumePending(shot) {
     try {
-        const r = await poll(shot.video_status_url, { deadlineMs: 100000, pollMs: 4000 });
+        const r = USE_FAL_VIDEO
+            ? await fal.poll(shot.video_status_url, shot.video_response_url, { deadlineMs: 100000, pollMs: 4000 })
+            : await poll(shot.video_status_url, { deadlineMs: 100000, pollMs: 4000 });
         if (r.pending) return false;
-        const url = pickVideoUrl(r.result);
+        const url = USE_FAL_VIDEO ? fal.pickVideoUrl(r.result) : pickVideoUrl(r.result);
         if (url) {
             shot.video_url = url;
             shot.video_status_url = null;
+            shot.video_response_url = null;
             shot.video_request_id = null;
             return true;
         }
-        shot.video_error = 'DoP completed but no video URL';
+        shot.video_error = 'completed but no video URL';
         return true;
     } catch (err) {
         shot.video_error = err.message;
         shot.video_status_url = null;
+        shot.video_response_url = null;
         return true;
     }
 }
@@ -91,7 +125,11 @@ async function resumePending(shot) {
 // limit; re-call to continue. Idempotent: only fills gaps. Advances status to
 // 'assembling' once all shots have a clip, otherwise stays 'animating'.
 export async function runVideo(generationId, { max = 2 } = {}) {
-    if (!isVideoAgentConfigured) throw new Error('Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.');
+    if (!isVideoAgentConfigured) {
+        throw new Error(USE_FAL_VIDEO
+            ? 'fal not configured. Set FAL_KEY.'
+            : 'Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.');
+    }
     const gen = await loadGen(generationId);
     if (!gen) throw new Error('Generation not found');
     const shots = Array.isArray(gen.shots) ? gen.shots : [];
@@ -144,6 +182,7 @@ export async function runVideo(generationId, { max = 2 } = {}) {
                 if (out.pending) {
                     shot.video_request_id = out.request_id;
                     shot.video_status_url = out.status_url;
+                    shot.video_response_url = out.response_url || null;
                     shot.video_error = null;
                     pending++;
                     ok = true; // submitted; resume next call

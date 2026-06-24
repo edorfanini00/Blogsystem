@@ -243,6 +243,21 @@ export const HF_VIDEO_MODELS = {
 };
 // DoP quality tier: dop-turbo (fast, default) | dop-lite | dop-standard (best).
 export const HF_VIDEO_DOP_MODEL = process.env.HF_VIDEO_DOP_MODEL || 'dop-turbo';
+
+// ─── Image-to-video provider (fal.ai vs Higgsfield) ─────────────
+// fal hosts the video model the original spec named (Kling) plus strong
+// alternatives (Seedance, Veo 3) — and has no 4-concurrent submission cap.
+// Default to fal when FAL_KEY is present; force with VIDEO_PROVIDER.
+export const VIDEO_PROVIDER = (process.env.VIDEO_PROVIDER
+    || (process.env.FAL_KEY ? 'fal' : 'higgsfield')
+).toLowerCase();
+// fal image-to-video model. Default = Kling 2.5 Turbo Pro (spec's Kling,
+// best cinematic motion). Swap to Seedance for cheaper/faster:
+//   FAL_VIDEO_MODEL=fal-ai/bytedance/seedance/v1/pro/image-to-video
+export const FAL_VIDEO_MODEL = process.env.FAL_VIDEO_MODEL
+    || 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video';
+// Per-clip duration (seconds, as a string per fal's enum). Kling: "5" | "10".
+export const FAL_VIDEO_DURATION = process.env.FAL_VIDEO_DURATION || '5';
 // Per-shot image generation retry cap (spec §7: cap regenerations at 3).
 export const REMAKE_MAX_REGENS = Number(process.env.REMAKE_MAX_REGENS) || 3;
 // Per-shot video (animation) retry cap (spec §8: cap regenerations at 3).

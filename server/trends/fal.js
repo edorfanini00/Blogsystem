@@ -104,6 +104,19 @@ export function pickImageUrl(result) {
     );
 }
 
+// Pull a video URL out of a completed result. fal image-to-video models
+// (Kling, Seedance) return { video: { url } }.
+export function pickVideoUrl(result) {
+    if (!result) return null;
+    return (
+        result.video?.url ||
+        result.videos?.[0]?.url ||
+        (typeof result.video === 'string' ? result.video : null) ||
+        (typeof result.videos?.[0] === 'string' ? result.videos[0] : null) ||
+        null
+    );
+}
+
 // Host raw bytes on Vercel Blob and return a public URL fal can fetch.
 export async function uploadPublic(bytes, contentType, name) {
     if (!BLOB_TOKEN) throw new Error('BLOB_READ_WRITE_TOKEN not configured (needed to host the source frame for fal).');
