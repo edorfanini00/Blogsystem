@@ -72,7 +72,10 @@ function parseJsonLoose(text) {
     return null;
 }
 
-// Grade one image. Returns the parsed grade object.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Grade one image. Returns the parsed grade object. Retries transient Gemini
+// overload (503/429) with backoff before falling through to the next model.
 export async function gradeImage(imageUrl, shot, productName) {
     if (!isQcConfigured) throw new Error('GEMINI_API_KEY not configured');
     const inline = await downloadImage(imageUrl);
@@ -83,23 +86,31 @@ export async function gradeImage(imageUrl, shot, productName) {
     let lastErr = null;
     for (const model of MODELS) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-        try {
-            const res = await fetch(url, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body), signal: controller.signal,
-            });
-            if (!res.ok) { lastErr = new Error(`Gemini ${model} HTTP ${res.status}`); continue; }
-            const data = await res.json();
-            const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
-            const parsed = parseJsonLoose(text);
-            if (parsed) return parsed;
-            lastErr = new Error(`Gemini ${model} unparseable QC output`);
-        } catch (err) {
-            lastErr = err;
-        } finally {
-            clearTimeout(timer);
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+            try {
+                const res = await fetch(url, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body), signal: controller.signal,
+                });
+                if (!res.ok) {
+                    lastErr = new Error(`Gemini ${model} HTTP ${res.status}`);
+                    if ((res.status === 503 || res.status === 429) && attempt < 2) { await sleep(3000 * (attempt + 1)); continue; }
+                    break; // non-transient → next model
+                }
+                const data = await res.json();
+                const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
+                const parsed = parseJsonLoose(text);
+                if (parsed) return parsed;
+                lastErr = new Error(`Gemini ${model} unparseable QC output`);
+                break;
+            } catch (err) {
+                lastErr = err;
+                if (attempt < 2) { await sleep(2000 * (attempt + 1)); continue; }
+            } finally {
+                clearTimeout(timer);
+            }
         }
     }
     throw lastErr || new Error('QC grading failed');
@@ -128,13 +139,24 @@ export async function runQc(generationId) {
 
     await query(`update generations set status = 'qc' where id = $1`, [generationId]);
 
-    let passed = 0, failed = 0, regens = 0;
+    let passed = 0, failed = 0, regens = 0, errored = 0;
     for (const shot of shots) {
         if (!shot.image_url) { failed++; continue; }
         if (shot.qc?.pass) { passed++; continue; }
 
-        let grade = await gradeImage(shot.image_url, shot, productName);
+        let grade;
+        try {
+            grade = await gradeImage(shot.image_url, shot, productName);
+        } catch (err) {
+            // Don't let one shot's transient grading failure abort the batch;
+            // record it and move on so the rest still get graded.
+            shot.qc_error = err.message;
+            errored++;
+            await query(`update generations set shots = $2 where id = $1`, [generationId, JSON.stringify(shots)]);
+            continue;
+        }
         shot.qc = grade;
+        shot.qc_error = null;
 
         // Improve-this-prompt loop: regenerate with the grader's notes appended.
         while (!grade.pass && (shot.regens || 0) < REMAKE_MAX_REGENS) {
@@ -163,5 +185,5 @@ export async function runQc(generationId) {
     const allPass = shots.every((s) => s.qc?.pass);
     const status = allPass ? 'animating' : 'qc';
     await query(`update generations set shots = $2, status = $3 where id = $1`, [generationId, JSON.stringify(shots), status]);
-    return { generationId, total: shots.length, passed, failed, regens, status };
+    return { generationId, total: shots.length, passed, failed, errored, regens, status };
 }
