@@ -110,20 +110,6 @@ export async function upload(bytes, contentType = 'image/jpeg') {
     return data.public_url;
 }
 
-// TEMP discovery helper: raw authed request to any platform path.
-export async function hfRaw(method, path, body) {
-    const url = path.startsWith('http') ? path : `${BASE}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, {
-        method,
-        headers: authHeaders(),
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = text.slice(0, 2000); }
-    return { status: res.status, ok: res.ok, data };
-}
-
 // Pull an image URL out of a completed result (shape varies).
 export function pickImageUrl(result) {
     if (!result) return null;

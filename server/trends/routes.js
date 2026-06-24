@@ -336,21 +336,6 @@ router.post('/candidates/:id/direct', async (req, res) => {
     }
 });
 
-// ─── TEMP: Higgsfield slug discovery (remove after locking slugs) ─
-router.all('/hf-raw', async (req, res) => {
-    if (!isImageConfigured) return res.status(503).json({ error: 'Higgsfield not configured' });
-    try {
-        const { hfRaw } = await import('./higgsfield.js');
-        const path = req.query.path || req.body?.path;
-        const method = (req.query.method || req.body?.method || 'GET').toUpperCase();
-        const body = req.body?.body || null;
-        const out = await hfRaw(method, path, body);
-        res.json(out);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // ─── Image agent (spec §6): render the shot plan into stills ────
 // POST /api/trends/generations/:id/images  → render every shot (idempotent)
 router.post('/generations/:id/images', async (req, res) => {
