@@ -6960,28 +6960,42 @@ body.light-theme .campaign-stat {
 /* ─── Recreate (remake) dialog ─────────────────────────────────── */
 .remake-overlay {
   position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }
+/* Explicit high-contrast dark palette so text never renders dark-on-dark
+   regardless of the active theme variables. */
 .remake-modal {
-  width: 100%; max-width: 460px; background: var(--surface, #161616);
-  border: 1px solid var(--border, #2a2a2a); border-radius: 14px;
-  padding: 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  width: 100%; max-width: 460px;
+  background: #1b1e25; color: #eef1f6;
+  border: 1px solid #353b48; border-radius: 14px;
+  padding: 22px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
-.remake-modal h3 { margin: 0 0 4px; font-size: 1.15rem; }
-.remake-sub { margin: 0 0 16px; color: var(--text-muted, #888); font-size: 0.86rem; }
+.remake-modal h3 { margin: 0 0 6px; font-size: 1.2rem; font-weight: 700; color: #ffffff; }
+.remake-sub { margin: 0 0 18px; color: #b3bccb; font-size: 0.88rem; line-height: 1.4; }
 .remake-mode {
-  display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px;
-  border: 1px solid var(--border, #2a2a2a); border-radius: 9px; margin-bottom: 8px;
-  cursor: pointer; font-size: 0.9rem;
+  display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px;
+  border: 1px solid #353b48; border-radius: 10px; margin-bottom: 9px;
+  cursor: pointer; font-size: 0.92rem; color: #d7dde7;
+  background: #21252e; transition: border-color 0.15s, background 0.15s;
 }
-.remake-mode input { margin-top: 3px; }
+.remake-mode:hover { border-color: #4a5365; background: #262b35; }
+.remake-mode b { color: #ffffff; font-weight: 700; }
+.remake-mode input { margin-top: 3px; accent-color: #f97316; flex-shrink: 0; }
+/* Highlight the selected option for a clear, readable active state. */
+.remake-mode:has(input:checked) {
+  border-color: #f97316; background: rgba(249, 115, 22, 0.14);
+}
 .remake-product, .remake-custom {
-  width: 100%; margin: 0 0 10px; padding: 9px 11px; border-radius: 8px;
-  border: 1px solid var(--border, #2a2a2a); background: var(--bg, #0e0e0e);
-  color: var(--text, #eee); font-size: 0.88rem; font-family: inherit;
+  width: 100%; margin: 0 0 10px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid #3a4150; background: #12151b;
+  color: #f0f2f7; font-size: 0.9rem; font-family: inherit;
 }
-.remake-product:disabled, .remake-custom:disabled { opacity: 0.45; }
+.remake-product:focus, .remake-custom:focus {
+  outline: none; border-color: #f97316;
+}
+.remake-custom::placeholder { color: #7d8696; }
+.remake-product:disabled, .remake-custom:disabled { opacity: 0.4; cursor: not-allowed; }
 .remake-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 
 /* ─── Shot stills grid in the queue ───────────────────────────── */
