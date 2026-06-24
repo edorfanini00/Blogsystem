@@ -11,9 +11,13 @@ import { query } from './db.js';
 import {
     isHiggsfieldConfigured, subscribe, upload, pickImageUrl,
 } from './higgsfield.js';
+import * as fal from './fal.js';
 import {
     HF_IMAGE_MODELS, HF_IMAGE_ASPECT, HF_IMAGE_REF_PARAM, MAX_IMAGE_RENDERS,
+    IMAGE_PROVIDER, FAL_IMAGE_MODELS,
 } from './config.js';
+
+const USE_FAL = IMAGE_PROVIDER === 'fal';
 
 // Total image generations a generation has consumed (stills + QC regens), used
 // to enforce the cost ceiling.
@@ -21,10 +25,29 @@ export function imageRendersSpent(shots) {
     return (shots || []).reduce((n, s) => n + ((s.image_url || s.image_error) ? 1 : 0) + (s.regens || 0), 0);
 }
 
-export const isImageConfigured = isHiggsfieldConfigured;
+export const isImageConfigured = USE_FAL ? fal.isFalConfigured : isHiggsfieldConfigured;
+// Source-frame composition is available on fal (image-to-image /edit slugs) as
+// long as we can host the frame on Vercel Blob. On Higgsfield it depends on a
+// configured reference param (HF_IMAGE_REF_PARAM).
+export const isSourceFrameSupported = USE_FAL ? fal.isFalBlobConfigured : !!HF_IMAGE_REF_PARAM;
 
 function slugFor(modelChoice) {
     return HF_IMAGE_MODELS[modelChoice] || HF_IMAGE_MODELS.nano_banana_pro;
+}
+
+function falLaneFor(modelChoice) {
+    return FAL_IMAGE_MODELS[modelChoice] || FAL_IMAGE_MODELS.nano_banana_pro;
+}
+
+// Build the fal input for a shot. nano-banana family uses aspect_ratio; seedream
+// uses an explicit image_size. /edit lanes take image_urls (the source frame).
+function falInput(modelChoice, { prompt, sourceFrameUrl, edit }) {
+    const isSeedream = modelChoice === 'seedream';
+    const input = isSeedream
+        ? { prompt, image_size: { width: 1080, height: 1920 }, num_images: 1 }
+        : { prompt, aspect_ratio: '9:16', resolution: '2K', num_images: 1 };
+    if (edit && sourceFrameUrl) input.image_urls = [sourceFrameUrl];
+    return input;
 }
 
 // Referer the source CDN expects, so server-side fetch of the cover frame is
@@ -36,8 +59,10 @@ function frameReferer(host) {
     return undefined;
 }
 
-// Fetch the source frame bytes and upload to Higgsfield; return a public URL.
-// Returns null when there is no usable frame.
+// Fetch the source frame bytes (with the CDN-appropriate Referer so the fetch
+// is not 403'd) and host them on a public URL the image provider can read:
+// Vercel Blob for fal, Higgsfield file storage for Higgsfield. Returns null
+// when there is no usable frame.
 async function uploadSourceFrame(thumbUrl) {
     if (!thumbUrl) return null;
     let host = '';
@@ -56,6 +81,10 @@ async function uploadSourceFrame(thumbUrl) {
         const ct = r.headers.get('content-type') || 'image/jpeg';
         if (!ct.startsWith('image/')) return null;
         const buf = Buffer.from(await r.arrayBuffer());
+        if (USE_FAL) {
+            const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
+            return await fal.uploadPublic(buf, ct, `source-frames/${Date.now()}.${ext}`);
+        }
         return await upload(buf, ct);
     } catch {
         return null;
@@ -67,15 +96,32 @@ async function uploadSourceFrame(thumbUrl) {
 // Generate one shot image. promptOverride lets the QC loop retry with a
 // refined prompt. Returns { image_url } | { pending, request_id, status_url }.
 export async function generateShotImage(shot, { sourceFrameUrl = null, promptOverride = null } = {}) {
+    const prompt = promptOverride || shot.image_prompt;
+    const wantsFrame = !!(shot.use_source_frame && sourceFrameUrl);
+
+    if (USE_FAL) {
+        const lane = falLaneFor(shot.model_choice);
+        const model = wantsFrame ? lane.edit : lane.t2i;
+        const input = falInput(shot.model_choice, { prompt, sourceFrameUrl, edit: wantsFrame });
+        const out = await fal.subscribe(model, input, { deadlineMs: 70000 });
+        if (out.pending) {
+            return {
+                pending: true, request_id: out.request_id,
+                status_url: out.status_url, response_url: out.response_url, model,
+            };
+        }
+        const url = fal.pickImageUrl(out.result);
+        if (!url) throw new Error(`${model} completed but no image URL`);
+        return { image_url: url, request_id: out.request_id, model };
+    }
+
+    // Higgsfield fallback.
     const application = slugFor(shot.model_choice);
     const args = {
-        prompt: promptOverride || shot.image_prompt,
+        prompt,
         aspect_ratio: HF_IMAGE_ASPECT,
     };
-    // Structural reference when the source composition should be copied. Only
-    // attached when a reference param name is configured for the model (the
-    // accepted field name varies per model and is set via HF_IMAGE_REF_PARAM).
-    if (shot.use_source_frame && sourceFrameUrl && HF_IMAGE_REF_PARAM) {
+    if (wantsFrame && HF_IMAGE_REF_PARAM) {
         args[HF_IMAGE_REF_PARAM] = sourceFrameUrl;
     }
     const out = await subscribe(application, args, { deadlineMs: 70000 });
@@ -108,7 +154,11 @@ async function saveShots(generationId, shots, status) {
 // yet. Idempotent: re-running only fills gaps. Leaves status at 'qc' when all
 // shots have images, 'imaging' if some are still pending (resume later).
 export async function runImages(generationId, { max = Infinity } = {}) {
-    if (!isImageConfigured) throw new Error('Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.');
+    if (!isImageConfigured) {
+        throw new Error(USE_FAL
+            ? 'fal not configured. Set FAL_KEY.'
+            : 'Higgsfield not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET.');
+    }
     const gen = await loadDirected(generationId);
     if (!gen) throw new Error('Generation not found');
     const shots = Array.isArray(gen.shots) ? gen.shots : (gen.director_json?.shots || []);
@@ -116,10 +166,10 @@ export async function runImages(generationId, { max = Infinity } = {}) {
 
     await query(`update generations set status = 'imaging' where id = $1`, [generationId]);
 
-    // Upload the source frame once if any shot needs it (only when the model's
-    // reference param is configured — otherwise the upload would go unused).
+    // Upload the source frame once if any shot needs it and the provider can
+    // actually use it (fal /edit + Blob, or Higgsfield with a reference param).
     let sourceFrameUrl = null;
-    if (HF_IMAGE_REF_PARAM && shots.some((s) => s.use_source_frame && !s.image_url)) {
+    if (isSourceFrameSupported && shots.some((s) => s.use_source_frame && !s.image_url)) {
         sourceFrameUrl = await uploadSourceFrame(gen.thumbnail);
     }
 
@@ -134,6 +184,7 @@ export async function runImages(generationId, { max = Infinity } = {}) {
             if (out.pending) {
                 shot.image_request_id = out.request_id;
                 shot.image_status_url = out.status_url;
+                shot.image_response_url = out.response_url || null;
                 shot.image_model = out.model;
                 pending++;
             } else {

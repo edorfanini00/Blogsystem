@@ -202,6 +202,38 @@ export const HF_IMAGE_ASPECT = process.env.HF_IMAGE_ASPECT || '9:16';
 // Param name the image model expects for a reference frame (use_source_frame).
 // Empty disables passing a reference (safe default until confirmed per model).
 export const HF_IMAGE_REF_PARAM = process.env.HF_IMAGE_REF_PARAM || '';
+
+// ─── Image provider switch (fal.ai vs Higgsfield) ───────────────
+// fal.ai hosts the models the Director actually routes to (Nano Banana Pro,
+// Seedream) AND exposes /edit variants that accept an image reference, which
+// is what enables true source-frame composition copying. Default to fal when
+// FAL_KEY is present; fall back to Higgsfield otherwise. Force with
+// IMAGE_PROVIDER=fal|higgsfield. (Video still runs on Higgsfield DoP.)
+export const IMAGE_PROVIDER = (process.env.IMAGE_PROVIDER
+    || (process.env.FAL_KEY ? 'fal' : 'higgsfield')
+).toLowerCase();
+
+// fal model routing per Director model_choice. Each lane has a text-to-image
+// slug (t2i) and an image-to-image slug (edit, used when use_source_frame is
+// set so the viral composition is carried over). Env-overridable so a renamed
+// slug is a config change, not a code change. grok has no fal home, so it maps
+// to Nano Banana Pro.
+const FAL_NANO_T2I = process.env.FAL_MODEL_NANO || 'fal-ai/nano-banana-pro';
+const FAL_NANO_EDIT = process.env.FAL_MODEL_NANO_EDIT || 'fal-ai/nano-banana-pro/edit';
+export const FAL_IMAGE_MODELS = {
+    nano_banana_pro: {
+        t2i: FAL_NANO_T2I,
+        edit: FAL_NANO_EDIT,
+    },
+    seedream: {
+        t2i: process.env.FAL_MODEL_SEEDREAM || 'fal-ai/bytedance/seedream/v4/text-to-image',
+        edit: process.env.FAL_MODEL_SEEDREAM_EDIT || 'fal-ai/bytedance/seedream/v4/edit',
+    },
+    grok: {
+        t2i: process.env.FAL_MODEL_GROK || FAL_NANO_T2I,
+        edit: process.env.FAL_MODEL_GROK_EDIT || FAL_NANO_EDIT,
+    },
+};
 // Image-to-video endpoint (confirmed: v1/image2video/dop). Kling slugs were not
 // resolvable on this account; DoP is the stable image-to-video path. The raw
 // endpoint wraps args in { params: {...} } (verified against the live API).

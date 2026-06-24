@@ -26,7 +26,7 @@ import {
 import { notify, isNotifyConfigured, notifyChannels } from './notify.js';
 import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
 import { runDirector, directAndSave, directVariants } from './director.js';
-import { runImages, isImageConfigured } from './image.js';
+import { runImages, isImageConfigured, isSourceFrameSupported } from './image.js';
 import { runQc, isQcConfigured } from './qc.js';
 import { runMotion, isMotionConfigured } from './motion.js';
 import { runVideo, isVideoAgentConfigured } from './video.js';
@@ -45,6 +45,8 @@ import {
     SEARCH_TERMS,
     TREND_LANG,
     HF_IMAGE_MODELS,
+    IMAGE_PROVIDER,
+    FAL_IMAGE_MODELS,
     MUSIC_URL,
 } from './config.js';
 
@@ -137,9 +139,13 @@ router.get('/health', async (req, res) => {
         director: { configured: isLlmConfigured },
         image: {
             configured: isImageConfigured,
-            models: HF_IMAGE_MODELS,
+            provider: IMAGE_PROVIDER,
+            sourceFrame: isSourceFrameSupported,
+            models: IMAGE_PROVIDER === 'fal' ? FAL_IMAGE_MODELS : HF_IMAGE_MODELS,
             // Non-secret diagnostic: which credential env vars are present.
             env: {
+                FAL_KEY: !!process.env.FAL_KEY,
+                BLOB_READ_WRITE_TOKEN: !!process.env.BLOB_READ_WRITE_TOKEN,
                 HIGGSFIELD_API_KEY: !!process.env.HIGGSFIELD_API_KEY,
                 HIGGSFIELD_API_SECRET: !!process.env.HIGGSFIELD_API_SECRET,
                 HIGGSFIELD_KEY: !!process.env.HIGGSFIELD_KEY,
