@@ -6015,7 +6015,7 @@ setTimeout(function initOnePager() {
                 });
                 const qdata = await qres.json();
                 await loadGenerations();
-                if (qres.ok) toast(`QC done: ${qdata.passed || 0} passed, ${qdata.failed || 0} need work. Writing motion…`, 'success');
+                if (qres.ok) { const m = qcMessage(qdata, ' Writing motion…'); toast(m.text, m.kind); }
                 else toast('QC will retry — images are ready to view', 'info');
             } catch {
                 toast('Images ready — QC can be re-run from the Queue', 'info');
@@ -6578,6 +6578,24 @@ setTimeout(function initOnePager() {
     }
 
     // Resume a chain stage from the Queue: images / qc / video / copy / assemble.
+    // Turn a QC response into an honest toast. The grader (Gemini) can error on
+    // every shot (rate limit / quota / transient overload); those land in
+    // `errored`, not passed/failed — so a naive "0 passed, 0 need work" was
+    // misleading. Surface the real situation instead.
+    function qcMessage(data, suffix = '') {
+        const passed = data.passed || 0;
+        const failed = data.failed || 0;
+        const errored = data.errored || 0;
+        if (passed === 0 && failed === 0 && errored > 0) {
+            return { text: `QC grader was busy — couldn't grade ${errored} shot${errored > 1 ? 's' : ''} (rate limit). Your images are ready; QC will retry automatically.`, kind: 'info' };
+        }
+        if (passed === 0 && failed === 0) {
+            return { text: 'QC found no images to grade yet — render images first.', kind: 'info' };
+        }
+        const extra = errored > 0 ? `, ${errored} couldn't be graded (will retry)` : '';
+        return { text: `QC: ${passed} passed, ${failed} need work${extra}.${suffix}`, kind: 'success' };
+    }
+
     async function runChainStage(genId, stage, btn) {
         const busyLabel = { images: 'Rendering…', qc: 'Grading…', video: 'Animating…', copy: 'Writing…', assemble: 'Assembling…' }[stage] || 'Working…';
         if (btn) { btn.disabled = true; btn.dataset.orig = btn.textContent; btn.textContent = busyLabel; }
@@ -6596,7 +6614,7 @@ setTimeout(function initOnePager() {
             await loadGenerations();
             if (!res.ok) { toast(data.error || `${stage} failed`, 'error'); return; }
             if (stage === 'images') toast(`Rendered ${data.made || 0}/${data.total || 0} images`, 'success');
-            else if (stage === 'qc') toast(`QC: ${data.passed || 0} passed, ${data.failed || 0} need work`, 'success');
+            else if (stage === 'qc') { const m = qcMessage(data); toast(m.text, m.kind); }
             else if (stage === 'copy') toast('Voiceover and captions written', 'success');
             else if (stage === 'assemble') toast(data.asset_url ? 'Final video ready for review' : (data.error || 'Assembly will retry'), data.asset_url ? 'success' : 'info');
         } catch (err) {
