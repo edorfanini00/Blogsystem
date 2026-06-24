@@ -87,6 +87,17 @@ function defaultBrandText() {
 // choosing the best-fit product (the Director makes the final pick).
 async function resolveTarget({ targetMode, productId, customPrompt }, candidate, score) {
     const mode = targetMode || 'auto';
+    if (mode === 'exact') {
+        return {
+            mode,
+            block: [
+                'TARGET: exact recreation — there is NO product and NO brand.',
+                'Reproduce the source video faithfully: same structure, hook, beats, pacing, framing, camera language, subject matter, and on-screen text. Do not introduce, sell, or mention any product, company, or new message. Recreate the original content itself, with original generated people (no real public figures or copyrighted characters).',
+            ].join('\n'),
+            resolvedHint: 'exact recreation',
+            productId: null,
+        };
+    }
     if (mode === 'product') {
         if (!productId) throw new Error('target_mode=product requires product_id');
         const p = await getProductEntry(productId);
@@ -124,27 +135,65 @@ async function resolveTarget({ targetMode, productId, customPrompt }, candidate,
     };
 }
 
-const SYSTEM = `You are the director for a short-form video remake. You receive the analysis of a viral video (hook, format, beats, pacing, why it works) and a target that says what this remake should be about. The target is one of: a product entry from the knowledge base, a custom prompt written by the user, or auto (use the provided bridge line or choose the best-fit product yourself).
+// Editorial rules per mode. Exact recreation must NOT inherit the CeleriTech
+// brand rules (e.g. "the product is always called EZ solutions") — it has no
+// product. It keeps only universal, content-agnostic quality rules.
+function editorialFor(mode) {
+    if (mode === 'exact') {
+        return [
+            'use only original generated people; never real public figures or copyrighted characters',
+            'keep any on-screen text faithful to the source (same words where legible), short and legible',
+            'do not add logos, watermarks, or branding that is not in the source',
+        ];
+    }
+    return EDITORIAL_RULES;
+}
 
-Your job: reproduce the source video's structure, hook, style, and visuals exactly, and change only the content so it sells the target. Same beats, same pacing, same shot progression, same camera language. Swap what the video is about, not how it is built. Faithful replication over invention.
+// The Director system prompt, specialized by target mode. In exact mode the
+// goal is a faithful recreation (no product, keep the original content and
+// on-screen text); otherwise it retargets the source to sell the target.
+function buildSystem(mode) {
+    const exact = mode === 'exact';
+    const intro = exact
+        ? `You are the director for a short-form video remake whose goal is a FAITHFUL RECREATION of a viral source video. You receive the analysis of the source (hook, format, beats, pacing, why it works). Reproduce it as closely as possible — same structure, hook, style, visuals, beats, pacing, framing, camera language, AND the same subject matter and on-screen text. There is NO product and NO brand: do not introduce, sell, or mention any product, company, or new message. Recreate the original content itself.`
+        : `You are the director for a short-form video remake. You receive the analysis of a viral video (hook, format, beats, pacing, why it works) and a target that says what this remake should be about. The target is one of: a product entry from the knowledge base, a custom prompt written by the user, or auto (use the provided bridge line or choose the best-fit product yourself).
+
+Your job: reproduce the source video's structure, hook, style, and visuals exactly, and change only the content so it sells the target. Same beats, same pacing, same shot progression, same camera language. Swap what the video is about, not how it is built. Faithful replication over invention.`;
+    const sceneLine = exact
+        ? '- Scene: where it happens, matching the source setting as closely as possible.'
+        : "- Scene: where it happens, matching the source's setting type but dressed for the target (use the target visual cues when relevant).";
+    const subjectLine = exact
+        ? '- Subject: who or what is in frame, matching the source as closely as possible. Use ORIGINAL generated people only (likenesses inspired by, not copies of, any real person). Never real public figures or copyrighted characters.'
+        : "- Subject: who or what is in frame, matching the source's framing. Use ORIGINAL generated people only. Never real public figures or copyrighted characters.";
+    const refRule = exact
+        ? '- Where the source composition should be copied closely, set use_source_frame true so the image agent passes the source frame as a structural reference and recreates it faithfully.'
+        : '- Where the source composition should be copied closely, set use_source_frame true so the image agent passes the source frame as a structural reference and only swaps subject and context.';
+    const textRule = exact
+        ? '- Keep on-screen text the same as the source where legible (reproduce the original words).'
+        : '- If the source uses on-screen text, write the target equivalent. Keep it short.';
+    const editorialNote = exact
+        ? `- Apply these editorial rules to ALL on-screen text: ${editorialFor(mode).join('; ')}.`
+        : `- Apply these editorial rules to ALL on-screen text and any copy, plus any product editorial overrides (banned terms, required framing): ${editorialFor(mode).join('; ')}.`;
+
+    return `${intro}
 
 For each shot, write an image prompt using the 4 Layers Method, in full sentences, like a director briefing a photographer:
-- Scene: where it happens, matching the source's setting type but dressed for the target (use the target visual cues when relevant).
-- Subject: who or what is in frame, matching the source's framing. Use ORIGINAL generated people only. Never real public figures or copyrighted characters.
+${sceneLine}
+${subjectLine}
 - Atmosphere: lighting, mood, environmental effects, particles, matching the source.
 - Camera: shot type, angle, lens, aperture, depth of field, style. Match the source's camera language.
 
 Rules:
-- Where the source composition should be copied closely, set use_source_frame true so the image agent passes the source frame as a structural reference and only swaps subject and context.
+${refRule}
 - The first shot (role "hero") must match the energy of the source hook and stop the scroll: clear subject, strong contrast, emotion or tension.
-- If the source uses on-screen text, write the target equivalent. Keep it short.
+${textRule}
 - model_choice per shot: "nano_banana_pro" (default; precision, on-screen text, packaging, dashboards, branded headlines), "seedream" (multi-shot stories where the same generated subject must look identical across shots), "grok" (fast photographic meme/trendjack scroll-stoppers).
-- Apply these editorial rules to ALL on-screen text and any copy, plus any product editorial overrides (banned terms, required framing): ${EDITORIAL_RULES.join('; ')}.
+${editorialNote}
 
 Return JSON only:
 {
   "format": "single | story",
-  "resolved_target": "product name | custom | auto-selected product",
+  "resolved_target": "${exact ? 'exact recreation' : 'product name | custom | auto-selected product'}",
   "shots": [
     {
       "role": "hero | setup | action | resolution",
@@ -156,6 +205,7 @@ Return JSON only:
     }
   ]
 }`;
+}
 
 function normalizeShots(raw) {
     if (!Array.isArray(raw)) return [];
@@ -207,7 +257,7 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
         target.block,
     ].filter(Boolean).join('\n');
 
-    const plan = await claudeJSON(SYSTEM, user, { maxTokens: 2600 });
+    const plan = await claudeJSON(buildSystem(target.mode), user, { maxTokens: 2600 });
     if (!plan) throw new Error('Director returned no parsable JSON');
 
     const shots = normalizeShots(plan.shots);

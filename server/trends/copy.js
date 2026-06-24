@@ -76,13 +76,46 @@ function targetBlock(product, resolvedTarget, customPrompt) {
 
 async function loadGen(generationId) {
     const { rows } = await query(
-        `select g.*, c.platform, c.caption as source_caption
+        `select g.*, c.platform, c.caption as source_caption, c.analysis as source_analysis
          from generations g join candidates c on c.id = g.candidate_id
          where g.id = $1`,
         [generationId]
     );
     return rows[0] || null;
 }
+
+// Build a faithful-recreation brief from the source analysis: the original
+// hook, on-screen text, and spoken transcript so the VO reproduces the source.
+function sourceScriptBlock(analysisRaw, caption) {
+    let a = analysisRaw;
+    if (typeof a === 'string') { try { a = JSON.parse(a); } catch { a = null; } }
+    const lines = [];
+    if (a?.hook) lines.push(`Source hook: ${a.hook}`);
+    const ost = Array.isArray(a?.onScreenText) ? a.onScreenText.join(' | ') : (a?.on_screen_text || '');
+    if (ost) lines.push(`Source on-screen text: ${String(ost).slice(0, 400)}`);
+    const tr = a?.transcript || a?.transcript_paraphrase || '';
+    if (tr) lines.push(`Source spoken script/transcript: ${String(tr).slice(0, 1400)}`);
+    if (caption) lines.push(`Source caption: ${String(caption).slice(0, 200)}`);
+    return lines.length
+        ? lines.join('\n')
+        : '(No source script captured. If the source had no spoken narration, return an empty voiceover.)';
+}
+
+const SYSTEM_EXACT = `You write the voiceover and posting copy for a FAITHFUL RECREATION of a viral short-form vertical video. You are given the source video's analysis (hook, on-screen text, spoken transcript), its caption, and the recreated shot plan. Your job is to reproduce the source, NOT to sell anything.
+
+Write:
+- voiceover: reproduce the source's spoken script as closely as possible — same words, same order, same tone — adjusted only enough to read cleanly over the recreated shots. If the source had NO spoken narration (e.g. text-on-screen or music only), return an empty string "".
+- captions: one posting caption per requested platform, mirroring the source caption's style and intent. Do not turn it into a sales pitch and do not mention any product or company.
+- hashtags: 4-8 relevant to the source's actual topic.
+
+Do NOT introduce, sell, or mention any product, company, or new message. No brand voice. Keep it faithful to the original.
+
+Return JSON only:
+{
+  "voiceover": "<faithful narration, or empty string if the source had none>",
+  "captions": { "tiktok": "...", "instagram": "...", "youtube": "..." },
+  "hashtags": ["...", "..."]
+}`;
 
 // Generate VO + per-platform captions + hashtags and persist them. Stores
 // copy_json and sets the primary caption (platform that matches the source, or
@@ -94,22 +127,40 @@ export async function runCopy(generationId) {
     const shots = Array.isArray(gen.shots) ? gen.shots : [];
     if (!shots.length) throw new Error('No shots — run the Director first');
 
-    const product = gen.solution_id ? await getProductEntry(gen.solution_id).catch(() => null) : null;
     const platforms = PUBLISH_PLATFORMS.length ? PUBLISH_PLATFORMS : ['tiktok', 'instagram', 'youtube'];
+    const exact = gen.target_mode === 'exact';
 
-    const user = [
-        `Requested platforms: ${platforms.join(', ')}`,
-        `Source platform: ${gen.platform}`,
-        gen.source_caption ? `Source caption (format reference): ${String(gen.source_caption).slice(0, 200)}` : '',
-        '',
-        'TARGET',
-        targetBlock(product, gen.resolved_target, gen.custom_prompt),
-        '',
-        'SHOT PLAN (the VO should track these in order):',
-        shotsBlock(shots),
-    ].filter(Boolean).join('\n');
+    let system, user;
+    if (exact) {
+        // Faithful recreation: reproduce the source's own script/captions, no product.
+        system = SYSTEM_EXACT;
+        user = [
+            `Requested platforms: ${platforms.join(', ')}`,
+            `Source platform: ${gen.platform}`,
+            '',
+            'SOURCE (reproduce this faithfully):',
+            sourceScriptBlock(gen.source_analysis, gen.source_caption),
+            '',
+            'RECREATED SHOT PLAN (the VO should track these in order):',
+            shotsBlock(shots),
+        ].filter(Boolean).join('\n');
+    } else {
+        const product = gen.solution_id ? await getProductEntry(gen.solution_id).catch(() => null) : null;
+        system = SYSTEM;
+        user = [
+            `Requested platforms: ${platforms.join(', ')}`,
+            `Source platform: ${gen.platform}`,
+            gen.source_caption ? `Source caption (format reference): ${String(gen.source_caption).slice(0, 200)}` : '',
+            '',
+            'TARGET',
+            targetBlock(product, gen.resolved_target, gen.custom_prompt),
+            '',
+            'SHOT PLAN (the VO should track these in order):',
+            shotsBlock(shots),
+        ].filter(Boolean).join('\n');
+    }
 
-    const out = await claudeJSON(SYSTEM, user, { maxTokens: 1500 });
+    const out = await claudeJSON(system, user, { maxTokens: 1500 });
     if (!out) throw new Error('Copy agent returned no parsable JSON');
 
     const captions = out.captions && typeof out.captions === 'object' ? out.captions : {};

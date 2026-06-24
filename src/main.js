@@ -6102,12 +6102,13 @@ setTimeout(function initOnePager() {
             overlay.innerHTML = `
               <div class="remake-modal" role="dialog" aria-modal="true">
                 <h3>Recreate this video</h3>
-                <p class="remake-sub">Mirror the source format and retarget the content. The method is image-first.</p>
-                <label class="remake-mode"><input type="radio" name="rmode" value="auto" checked> <span><b>Auto</b> — let the system pick the best angle/product</span></label>
-                <label class="remake-mode"><input type="radio" name="rmode" value="product" ${products.length ? '' : 'disabled'}> <span><b>Product</b> — remake for a specific product${products.length ? '' : ' (none added yet)'}</span></label>
+                <p class="remake-sub">Image-first remake — same structure, hook, angle and format. Recreate it exactly, fit it to a product, or follow your own prompt.</p>
+                <label class="remake-mode"><input type="radio" name="rmode" value="exact" checked> <span><b>Exact recreation</b> — remake the original as-is (no product)</span></label>
+                <label class="remake-mode"><input type="radio" name="rmode" value="product" ${products.length ? '' : 'disabled'}> <span><b>Product</b> — fit it to a product, same structure/angle/format${products.length ? '' : ' (none added yet)'}</span></label>
                 <select class="remake-product" disabled>${opts || '<option>No products</option>'}</select>
-                <label class="remake-mode"><input type="radio" name="rmode" value="custom"> <span><b>Custom</b> — your own angle for this one video</span></label>
-                <textarea class="remake-custom" rows="3" placeholder="e.g. Show how a small bakery avoids stockouts with EZ solutions" disabled></textarea>
+                <label class="remake-mode"><input type="radio" name="rmode" value="custom"> <span><b>Custom</b> — follow your own prompt/angle</span></label>
+                <textarea class="remake-custom" rows="3" placeholder="e.g. Show how a small bakery avoids stockouts" disabled></textarea>
+                <label class="remake-mode"><input type="radio" name="rmode" value="auto"> <span><b>Auto</b> — let the system pick the best product to feature</span></label>
                 <div class="remake-actions">
                   <button class="btn-ghost" data-remake-cancel>Cancel</button>
                   <button class="trend-btn-recreate" data-remake-go>Generate</button>
@@ -6135,8 +6136,10 @@ setTimeout(function initOnePager() {
                     const txt = customTa.value.trim();
                     if (!txt) { toast('Type a custom angle', 'error'); return; }
                     close({ target_mode: 'custom', custom_prompt: txt });
-                } else {
+                } else if (mode === 'auto') {
                     close({ target_mode: 'auto' });
+                } else {
+                    close({ target_mode: 'exact' });
                 }
             });
         });
