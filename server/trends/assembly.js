@@ -18,7 +18,6 @@ import os from 'node:os';
 import path from 'node:path';
 import ffmpegPath from 'ffmpeg-static';
 import { query } from './db.js';
-import { isHiggsfieldConfigured, upload } from './higgsfield.js';
 import { VIDEO_TARGET_MAX, MUSIC_URL, MUSIC_GAIN } from './config.js';
 import {
     synthVoiceoverTimed, cuesFromAlignment, buildAss,
@@ -26,8 +25,23 @@ import {
 } from './captions.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
-export const isAssemblyConfigured = isHiggsfieldConfigured && !!ffmpegPath;
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+// The final asset (and VO) are hosted on Vercel Blob — Higgsfield file storage
+// only accepts image content types, not video/mp4.
+export const isAssemblyConfigured = !!BLOB_TOKEN && !!ffmpegPath;
 export const isVoiceoverConfigured = !!ELEVENLABS_KEY;
+
+// Upload bytes to Vercel Blob and return the public URL.
+async function uploadAsset(bytes, pathname, contentType) {
+    const { put } = await import('@vercel/blob');
+    const res = await put(pathname, bytes, {
+        access: 'public',
+        contentType,
+        token: BLOB_TOKEN,
+        addRandomSuffix: true,
+    });
+    return res.url;
+}
 
 function ffmpeg(args, { timeoutMs = 180000 } = {}) {
     return new Promise((resolve, reject) => {
@@ -137,7 +151,7 @@ async function loadGen(generationId) {
 // Assemble the final cut. Requires every shot to have a video_url. Returns
 // { asset_url, vo_url, status:'review', durationCappedAt }.
 export async function runAssembly(generationId) {
-    if (!isHiggsfieldConfigured) throw new Error('Higgsfield not configured (needed to host the final asset).');
+    if (!BLOB_TOKEN) throw new Error('BLOB_READ_WRITE_TOKEN not configured (needed to host the final video).');
     if (!ffmpegPath) throw new Error('ffmpeg not available on this runtime.');
     const gen = await loadGen(generationId);
     if (!gen) throw new Error('Generation not found');
@@ -203,13 +217,13 @@ export async function runAssembly(generationId) {
         await ffmpeg(finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen: VIDEO_TARGET_MAX }), { timeoutMs: 200000 });
 
         if (voPath) {
-            try { voUrl = await upload(await fs.readFile(voPath), 'audio/mpeg'); }
+            try { voUrl = await uploadAsset(await fs.readFile(voPath), `remakes/${generationId}-vo.mp3`, 'audio/mpeg'); }
             catch { /* non-fatal */ }
         }
 
         // 4. Host the final cut and record it.
         const finalBytes = await fs.readFile(finalPath);
-        const assetUrl = await upload(finalBytes, 'video/mp4');
+        const assetUrl = await uploadAsset(finalBytes, `remakes/${generationId}.mp4`, 'video/mp4');
 
         const upd = await query(
             `update generations set status = 'review', asset_url = $2, vo_url = $3 where id = $1 returning *`,
