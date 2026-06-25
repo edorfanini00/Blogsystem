@@ -17,22 +17,44 @@ function safeParse(s) {
 
 function clip(s, n) { return String(s || '').replace(/\s+/g, ' ').trim().slice(0, n); }
 
-// Pull real winning examples from our own analyzed corpus, ranked by latest
-// play_count, biased toward the same platform/format. Returns structured
-// examples + a ready-to-inject text block.
+function exampleFromRow(row) {
+    const a = safeParse(row.analysis) || {};
+    const onScreen = Array.isArray(a.onScreenText) ? a.onScreenText : [];
+    return {
+        platform: row.platform,
+        views: Number(row.play_count) || 0,
+        composite: row.composite_score != null ? Number(row.composite_score) : null,
+        hook: clip(a.hook, 200),
+        onScreenText: onScreen.map((t) => clip(t, 120)).filter(Boolean).slice(0, 6),
+        caption: clip(row.caption, 200),
+        format: clip(a.format, 60),
+        whyItWorks: Array.isArray(a.whyItWorks) ? clip(a.whyItWorks.join('; '), 240) : clip(a.whyItWorks, 240),
+    };
+}
+
+// Pull real winning examples from our own corpus, ranked by our composite SCORE
+// (the merged ranking — best-scoring videos win), biased toward the same
+// platform/format, with play_count as the tiebreaker/fallback. Returns
+// structured examples + a ready-to-inject text block.
 export async function researchExamples({ platform, format, limit = 6 } = {}) {
     let rows = [];
     try {
         const r = await query(
             `select c.platform, c.caption, c.analysis,
+                    coalesce(sc.composite_score, 0) as composite_score,
                     coalesce(s.play_count, 0) as play_count
                from candidates c
                left join lateral (
                     select play_count from snapshots
                     where candidate_id = c.id order by captured_at desc limit 1
                ) s on true
+               left join lateral (
+                    select composite_score from scores
+                    where candidate_id = c.id order by scored_at desc limit 1
+               ) sc on true
               where c.analysis is not null
-              order by coalesce(s.play_count, 0) desc
+              order by coalesce(sc.composite_score, 0) desc,
+                       coalesce(s.play_count, 0) desc
               limit 60`,
             []
         );
@@ -43,32 +65,23 @@ export async function researchExamples({ platform, format, limit = 6 } = {}) {
     if (!rows.length) return { examples: [], block: '' };
 
     const scored = rows.map((row) => {
-        const a = safeParse(row.analysis) || {};
-        let score = Number(row.play_count) || 0;
-        if (platform && row.platform === platform) score *= 1.4;
-        if (format && a.format && String(a.format).toLowerCase().includes(String(format).toLowerCase())) score *= 1.5;
-        const onScreen = Array.isArray(a.onScreenText) ? a.onScreenText : [];
-        return {
-            score,
-            platform: row.platform,
-            views: Number(row.play_count) || 0,
-            hook: clip(a.hook, 200),
-            onScreenText: onScreen.map((t) => clip(t, 120)).filter(Boolean).slice(0, 6),
-            caption: clip(row.caption, 200),
-            format: clip(a.format, 60),
-            whyItWorks: Array.isArray(a.whyItWorks) ? clip(a.whyItWorks.join('; '), 240) : clip(a.whyItWorks, 240),
-        };
+        const e = exampleFromRow(row);
+        // Rank primarily on our composite score; bias toward same platform/format.
+        let rank = (e.composite || 0) * 1000 + (e.views || 0) / 1e6;
+        if (platform && row.platform === platform) rank *= 1.4;
+        if (format && e.format && e.format.toLowerCase().includes(String(format).toLowerCase())) rank *= 1.5;
+        return { ...e, rank };
     })
-        // Need at least a hook or on-screen text to be useful as a copy example.
         .filter((e) => e.hook || e.onScreenText.length)
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => b.rank - a.rank)
         .slice(0, limit);
 
     if (!scored.length) return { examples: [], block: '' };
 
-    const lines = ['REAL WINNING EXAMPLES from our own scraped data — lift and adapt this wording/structure; do NOT invent generic copy:'];
+    const lines = ['TOP-SCORING WINNERS from our own scraped data (ranked by our composite score) — lift and adapt this wording/structure; do NOT invent generic copy:'];
     scored.forEach((e, i) => {
-        const parts = [`#${i + 1} (${e.platform}${e.views ? `, ${e.views.toLocaleString()} views` : ''}${e.format ? `, ${e.format}` : ''})`];
+        const sc = e.composite != null ? `, score ${e.composite.toFixed(1)}` : '';
+        const parts = [`#${i + 1} (${e.platform}${e.views ? `, ${e.views.toLocaleString()} views` : ''}${sc}${e.format ? `, ${e.format}` : ''})`];
         if (e.hook) parts.push(`hook: "${e.hook}"`);
         if (e.onScreenText.length) parts.push(`on-screen text: ${e.onScreenText.map((t) => `"${t}"`).join(' / ')}`);
         if (e.caption) parts.push(`caption: "${e.caption}"`);
@@ -76,6 +89,37 @@ export async function researchExamples({ platform, format, limit = 6 } = {}) {
         lines.push(parts.join(' | '));
     });
     return { examples: scored, block: lines.join('\n') };
+}
+
+// The specific source we're recreating — its OWN hook/on-screen text/structure
+// is the primary reference the new hook should be built from.
+export async function sourceGrounding(candidateId) {
+    if (!candidateId) return '';
+    let row = null;
+    try {
+        const r = await query(
+            `select c.platform, c.caption, c.analysis,
+                    coalesce(s.play_count, 0) as play_count,
+                    coalesce(sc.composite_score, 0) as composite_score
+               from candidates c
+               left join lateral (select play_count from snapshots where candidate_id=c.id order by captured_at desc limit 1) s on true
+               left join lateral (select composite_score from scores where candidate_id=c.id order by scored_at desc limit 1) sc on true
+              where c.id = $1`,
+            [candidateId]
+        );
+        row = r.rows[0] || null;
+    } catch {
+        return '';
+    }
+    if (!row) return '';
+    const e = exampleFromRow(row);
+    if (!e.hook && !e.onScreenText.length) return '';
+    const lines = ['THIS SOURCE VIDEO (build the new hook DIRECTLY off this — same hook mechanism, structure, and pacing; only swap the subject for the target):'];
+    if (e.hook) lines.push(`- source hook: "${e.hook}"`);
+    if (e.onScreenText.length) lines.push(`- source on-screen text: ${e.onScreenText.map((t) => `"${t}"`).join(' / ')}`);
+    if (e.caption) lines.push(`- source caption: "${e.caption}"`);
+    if (e.whyItWorks) lines.push(`- why it works: ${e.whyItWorks}`);
+    return lines.join('\n');
 }
 
 // What actually performed for US (closed feedback loop). Top posted generations
@@ -112,11 +156,13 @@ export async function ourTopPerformers({ outputType = null, limit = 5 } = {}) {
 }
 
 // Combined grounding block for the Director/Copy. Best-effort: returns '' when
-// we have no data yet (cold start), so prompts degrade cleanly.
-export async function buildResearchGrounding({ platform, format, outputType = null } = {}) {
-    const [winners, ours] = await Promise.all([
+// we have no data yet (cold start), so prompts degrade cleanly. When a
+// sourceCandidateId is given, that video's own hook leads the block.
+export async function buildResearchGrounding({ platform, format, outputType = null, sourceCandidateId = null } = {}) {
+    const [src, winners, ours] = await Promise.all([
+        sourceGrounding(sourceCandidateId).catch(() => ''),
         researchExamples({ platform, format }).catch(() => ({ block: '' })),
         ourTopPerformers({ outputType }).catch(() => ({ block: '' })),
     ]);
-    return [ours.block, winners.block].filter(Boolean).join('\n\n');
+    return [src, ours.block, winners.block].filter(Boolean).join('\n\n');
 }

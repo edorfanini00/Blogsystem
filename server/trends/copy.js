@@ -154,7 +154,7 @@ export async function runCopy(generationId) {
 
     // Research-as-editor: ground captions/hooks in real winning copy + memory.
     const [grounding, memoryBlock] = await Promise.all([
-        buildResearchGrounding({ platform: gen.platform, outputType: gen.output_type }).catch(() => ''),
+        buildResearchGrounding({ platform: gen.platform, outputType: gen.output_type, sourceCandidateId: gen.candidate_id }).catch(() => ''),
         buildMemoryBlock({ outputType: gen.output_type }).catch(() => ''),
     ]);
     const slideNote = isSlideshow

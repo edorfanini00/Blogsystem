@@ -226,6 +226,29 @@ create table if not exists generation_performance (
 create index if not exists idx_genperf_generation on generation_performance (generation_id, captured_at desc);
 create index if not exists idx_genperf_captured on generation_performance (captured_at desc);
 
+-- ─── app_settings (generic key/value for runtime toggles) ───────
+-- Lets the UI flip features (e.g. Autopilot on/off + settings) without a redeploy.
+create table if not exists app_settings (
+    key        text primary key,
+    value      jsonb,
+    updated_at timestamptz not null default now()
+);
+
+-- ─── autopilot_runs (autonomous daily generation log) ───────────
+-- Each Autopilot run records what it picked, WHY, and the generations it kicked
+-- off, so the new videos are fully auditable in the UI.
+create table if not exists autopilot_runs (
+    id          uuid primary key default gen_random_uuid(),
+    status      text not null default 'running',  -- running | done | error
+    trigger     text,                              -- cron | manual
+    picked      jsonb,                             -- [{candidate_id,title,reason,score,generation_id,output_type}]
+    notes       text,
+    error       text,
+    started_at  timestamptz not null default now(),
+    finished_at timestamptz
+);
+create index if not exists idx_autopilot_runs_started on autopilot_runs (started_at desc);
+
 -- ─── trend_reports (weekly intelligence) ────────────────────────
 -- One row per weekly analysis run. The factual parts (signals, trending,
 -- rising/forecast) are computed deterministically from the data above; the

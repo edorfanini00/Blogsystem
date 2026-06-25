@@ -403,7 +403,7 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
 
     // Ground in real winning copy + prior-run memory ("lift, don't invent").
     const [grounding, memoryBlock] = await Promise.all([
-        buildResearchGrounding({ platform: candidate.platform, format: deep?.format, outputType }).catch(() => ''),
+        buildResearchGrounding({ platform: candidate.platform, format: deep?.format, outputType, sourceCandidateId: candidateId }).catch(() => ''),
         buildMemoryBlock({ outputType }).catch(() => ''),
     ]);
 

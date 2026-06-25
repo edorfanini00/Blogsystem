@@ -286,6 +286,18 @@ export const VIDEO_CLIP_MAX = Number(process.env.VIDEO_CLIP_MAX) || 10;
 // Seconds each slide is shown in the rendered slideshow reel (the raw slide
 // images are also produced for posting as a native photo carousel).
 export const SLIDE_SECONDS = Number(process.env.SLIDE_SECONDS) || 2.8;
+
+// ─── Autopilot (autonomous daily generation) ────────────────────
+// Defaults for the daily agent; live values are stored in app_settings and
+// editable from the Autopilot tab without a redeploy.
+export const AUTOPILOT_DEFAULTS = {
+    enabled: String(process.env.AUTOPILOT_ENABLED || 'off').toLowerCase() === 'on',
+    dailyCount: Number(process.env.AUTOPILOT_DAILY_COUNT) || 3,   // new remakes per day
+    outputType: process.env.AUTOPILOT_OUTPUT || 'mix',           // video | slideshow | mix
+    targetMode: process.env.AUTOPILOT_MODE || 'auto',            // auto | exact
+    minScore: Number(process.env.AUTOPILOT_MIN_SCORE) || 0,      // skip candidates below this composite score
+    cooldownDays: Number(process.env.AUTOPILOT_COOLDOWN_DAYS) || 14, // don't re-remake a candidate within N days
+};
 // ElevenLabs voiceover. Voice id + model are env-overridable; VO is optional —
 // assembly produces a (silent) cut when ElevenLabs is not configured.
 export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';

@@ -17,6 +17,10 @@
         {
             "path": "/api/trends/chain/cron",
             "schedule": "*/5 * * * *"
+        },
+        {
+            "path": "/api/trends/autopilot/cron",
+            "schedule": "0 2 * * *"
         }
     ],
     "rewrites": [

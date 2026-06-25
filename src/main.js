@@ -6225,6 +6225,7 @@ setTimeout(function initOnePager() {
         });
         const panels = {
             dashboard: 'trendPanelDashboard',
+            autopilot: 'trendPanelAutopilot',
             insights: 'trendPanelInsights',
             queue: 'trendPanelQueue',
             solutions: 'trendPanelSolutions',
@@ -6239,6 +6240,121 @@ setTimeout(function initOnePager() {
         if (name === 'queue') loadGenerations();
         if (name === 'topics') loadTopics();
         if (name === 'insights') loadReport();
+        if (name === 'autopilot') loadAutopilot();
+    }
+
+    // ─── Autopilot (autonomous daily generation) ────────────────
+    function setApEnabledUI(on) {
+        const t = document.getElementById('apEnabledToggle');
+        const lbl = document.getElementById('apEnabledLabel');
+        if (t) t.checked = !!on;
+        if (lbl) lbl.textContent = on ? 'On' : 'Off';
+    }
+
+    async function loadAutopilot() {
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) return;
+        try {
+            const res = await fetch(tApi('/api/trends/autopilot'));
+            if (!res.ok) throw new Error('load failed');
+            const data = await res.json();
+            const s = data.settings || {};
+            setApEnabledUI(s.enabled);
+            const set = (id, v) => { const el = document.getElementById(id); if (el != null && v != null) el.value = v; };
+            set('apDailyCount', s.dailyCount);
+            set('apOutputType', s.outputType);
+            set('apTargetMode', s.targetMode);
+            set('apMinScore', s.minScore);
+            set('apCooldown', s.cooldownDays);
+            renderAutopilotRuns(data.runs || []);
+        } catch {
+            toast('Could not load Autopilot', 'error');
+        }
+    }
+
+    function apSettingsFromUI() {
+        const val = (id) => document.getElementById(id)?.value;
+        return {
+            enabled: !!document.getElementById('apEnabledToggle')?.checked,
+            dailyCount: parseInt(val('apDailyCount'), 10) || 3,
+            outputType: val('apOutputType') || 'mix',
+            targetMode: val('apTargetMode') || 'auto',
+            minScore: parseFloat(val('apMinScore')) || 0,
+            cooldownDays: parseInt(val('apCooldown'), 10) || 0,
+        };
+    }
+
+    async function saveAutopilotSettings() {
+        try {
+            const res = await fetch(tApi('/api/trends/autopilot/settings'), {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(apSettingsFromUI()),
+            });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Save failed', 'error'); return; }
+            setApEnabledUI(data.settings?.enabled);
+            toast(data.settings?.enabled ? 'Autopilot is ON — it will run daily' : 'Settings saved (Autopilot is off)', 'success');
+        } catch (err) {
+            toast('Save failed: ' + err.message, 'error');
+        }
+    }
+
+    async function runAutopilotNow() {
+        const btn = document.getElementById('apRunBtn');
+        const orig = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+        try {
+            // Persist current settings first so a manual run honors the latest UI.
+            await fetch(tApi('/api/trends/autopilot/settings'), {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(apSettingsFromUI()),
+            }).catch(() => {});
+            const res = await fetch(tApi('/api/trends/autopilot/run'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Run failed', 'error'); return; }
+            toast(data.made ? `Autopilot started ${data.made} remake${data.made > 1 ? 's' : ''} — see the Queue` : (data.notes || 'No eligible candidates right now'), data.made ? 'success' : 'info');
+            await loadAutopilot();
+        } catch (err) {
+            toast('Run failed: ' + err.message, 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = orig; }
+        }
+    }
+
+    function renderAutopilotRuns(runs) {
+        const feed = document.getElementById('apFeed');
+        if (!feed) return;
+        if (!runs.length) {
+            feed.innerHTML = '<div class="trend-empty-inline">No runs yet. Turn Autopilot on, or hit “Run now” to test it.</div>';
+            return;
+        }
+        feed.innerHTML = runs.map((r) => {
+            let picked = [];
+            try { picked = typeof r.picked === 'string' ? JSON.parse(r.picked) : (r.picked || []); } catch { picked = []; }
+            const when = r.started_at ? new Date(r.started_at).toLocaleString() : '';
+            const statusCls = r.status === 'done' ? 'ok' : r.status === 'error' ? 'bad' : 'wait';
+            const items = picked.map((p) => `
+              <div class="ap-pick">
+                <span class="ap-pick-badge">${p.output_type === 'slideshow' ? '🖼️' : '🎬'}</span>
+                <div class="ap-pick-body">
+                  <div class="ap-pick-title">${esc(p.title || 'Remake')}</div>
+                  <div class="ap-pick-reason">${p.error ? '⚠ ' + esc(p.error) : 'Picked because: ' + esc(p.reason || '')}</div>
+                </div>
+                ${p.generation_id ? `<button class="btn-ghost ap-pick-link" data-ap-gen="${esc(p.generation_id)}">View →</button>` : ''}
+              </div>`).join('');
+            return `
+              <div class="ap-run">
+                <div class="ap-run-head">
+                  <span class="ap-run-status ${statusCls}">${esc(r.status)}</span>
+                  <span class="ap-run-when">${esc(when)}</span>
+                  <span class="ap-run-trigger">${esc(r.trigger || '')}</span>
+                </div>
+                ${r.notes ? `<div class="ap-run-notes">${esc(r.notes)}</div>` : ''}
+                ${r.error ? `<div class="trend-gen-error">${esc(r.error)}</div>` : ''}
+                ${items ? `<div class="ap-picks">${items}</div>` : ''}
+              </div>`;
+        }).join('');
+        feed.querySelectorAll('[data-ap-gen]').forEach((b) =>
+            b.addEventListener('click', () => { switchSubtab('queue'); }));
     }
 
     // ─── Weekly trend report (intelligence) ─────────────────────
@@ -7068,41 +7184,25 @@ setTimeout(function initOnePager() {
         subtabEls.forEach((t) =>
             t.addEventListener('click', () => switchSubtab(t.dataset.subtab)));
 
-        page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((c) =>
-            c.addEventListener('click', () => {
-                state.bucket = c.dataset.bucket;
-                page.querySelectorAll('#trendBucketFilter .trend-chip').forEach((x) => {
-                    const on = x === c;
-                    x.classList.toggle('active', on);
-                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
-                });
-                renderCandidates();
-            }));
+        const catSel = document.getElementById('trendCategorySelect');
+        if (catSel) catSel.addEventListener('change', () => { state.category = catSel.value; renderCandidates(); });
 
-        page.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((c) =>
-            c.addEventListener('click', () => {
-                state.category = c.dataset.category;
-                page.querySelectorAll('#trendCategoryFilter .trend-cat-chip').forEach((x) => {
-                    const on = x === c;
-                    x.classList.toggle('active', on);
-                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
-                });
-                renderCandidates();
-            }));
+        const platSel = document.getElementById('trendPlatformSelect');
+        if (platSel) platSel.addEventListener('change', () => { state.platform = platSel.value; renderCandidates(); });
 
-        page.querySelectorAll('#trendPlatformFilter .trend-cat-chip').forEach((c) =>
-            c.addEventListener('click', () => {
-                state.platform = c.dataset.platform;
-                page.querySelectorAll('#trendPlatformFilter .trend-cat-chip').forEach((x) => {
-                    const on = x === c;
-                    x.classList.toggle('active', on);
-                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
-                });
-                renderCandidates();
-            }));
+        const bucketSel = document.getElementById('trendBucketSelect');
+        if (bucketSel) bucketSel.addEventListener('change', () => { state.bucket = bucketSel.value; renderCandidates(); });
 
         const sortSel = document.getElementById('trendSort');
         if (sortSel) sortSel.addEventListener('change', () => { state.sort = sortSel.value; renderCandidates(); });
+
+        // Autopilot
+        const apToggle = document.getElementById('apEnabledToggle');
+        if (apToggle) apToggle.addEventListener('change', saveAutopilotSettings);
+        const apSave = document.getElementById('apSaveBtn');
+        if (apSave) apSave.addEventListener('click', saveAutopilotSettings);
+        const apRun = document.getElementById('apRunBtn');
+        if (apRun) apRun.addEventListener('click', runAutopilotNow);
 
         const refresh = document.getElementById('trendRefreshBtn');
         if (refresh) refresh.addEventListener('click', async () => { await loadHealth(); await loadCandidates(); });

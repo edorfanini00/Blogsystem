@@ -35,6 +35,7 @@ import { runAssembly, isAssemblyConfigured, isVoiceoverConfigured } from './asse
 import { runSlides, isSlidesConfigured } from './slides.js';
 import { recordPerformance, sweepPerformance } from './performance.js';
 import { addNote, recentNotes } from './memory.js';
+import { getSettings as getAutopilotSettings, saveSettings as saveAutopilotSettings, runAutopilot, recentRuns as autopilotRuns } from './autopilot.js';
 import { advanceGeneration, runChainSweep } from './chain.js';
 import { isCaptionsConfigured } from './captions.js';
 import {
@@ -652,6 +653,60 @@ async function performanceCronHandler(req, res) {
 }
 router.get('/performance/cron', performanceCronHandler);
 router.post('/performance/cron', performanceCronHandler);
+
+// ═══════════════════════════════════════════════════════════════
+// ─── Autopilot — autonomous daily generation ───────────────────
+// GET status (settings + recent runs), PUT settings, POST run-now, cron.
+router.get('/autopilot', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const [settings, runs] = await Promise.all([getAutopilotSettings(), autopilotRuns({ limit: 20 })]);
+        res.json({ settings, runs });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/autopilot/settings', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json({ settings: await saveAutopilotSettings(req.body || {}) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Manual trigger (ignores the enabled flag so you can test it on demand).
+router.post('/autopilot/run', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isLlmConfigured) return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured (needed for the Director).' });
+    try {
+        res.json(await runAutopilot({ trigger: 'manual', force: true }));
+    } catch (err) {
+        console.error('❌ Autopilot run error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET/POST daily cron. Honors the enabled flag; advances nothing if disabled.
+async function autopilotCronHandler(req, res) {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+        const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        if (token !== cronSecret && req.query.secret !== cronSecret) return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!requireDb(res)) return;
+    try {
+        const out = await runAutopilot({ trigger: 'cron' });
+        if (out?.made) await notify(`🤖 Autopilot started ${out.made} new remake${out.made > 1 ? 's' : ''} from your top-scoring videos.`).catch(() => {});
+        res.json(out);
+    } catch (err) {
+        console.error('❌ Autopilot cron error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+router.get('/autopilot/cron', autopilotCronHandler);
+router.post('/autopilot/cron', autopilotCronHandler);
 
 // Strategy notes (run memory) — list + add.
 router.get('/notes', async (req, res) => {

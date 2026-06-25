@@ -2063,7 +2063,7 @@
         <div class="dashboard-header">
           <div>
             <h1>Trend Analysis</h1>
-            <p class="subtitle">Scan social for accelerating content, score the bridge to EZ solutions, recreate branded video on one click.</p>
+            <p class="subtitle">Find what's going viral, then recreate it as your own video or slideshow — by hand or on Autopilot.</p>
           </div>
           <div class="trend-toolbar">
             <button type="button" class="btn-ghost" id="trendRefreshBtn" title="Refresh feed">
@@ -2101,12 +2101,12 @@
 
         <!-- Sub-tabs -->
         <div class="trend-subtabs" role="tablist" aria-label="Trend Analysis sections">
-          <button class="trend-subtab active" data-subtab="dashboard" role="tab" aria-selected="true">Dashboard</button>
-          <button class="trend-subtab" data-subtab="insights" role="tab" aria-selected="false">📊 Weekly Report</button>
-          <button class="trend-subtab" data-subtab="queue" role="tab" aria-selected="false">🎬 Queue <span class="trend-subtab-badge" id="trendQueueBadge" style="display:none;">0</span></button>
-          <button class="trend-subtab" data-subtab="solutions" role="tab" aria-selected="false">🧠 Solutions</button>
+          <button class="trend-subtab active" data-subtab="dashboard" role="tab" aria-selected="true">Discover</button>
+          <button class="trend-subtab" data-subtab="autopilot" role="tab" aria-selected="false">Autopilot</button>
+          <button class="trend-subtab" data-subtab="queue" role="tab" aria-selected="false">Queue <span class="trend-subtab-badge" id="trendQueueBadge" style="display:none;">0</span></button>
+          <button class="trend-subtab" data-subtab="insights" role="tab" aria-selected="false">Weekly Report</button>
+          <button class="trend-subtab" data-subtab="solutions" role="tab" aria-selected="false">Products</button>
           <button class="trend-subtab" data-subtab="topics" role="tab" aria-selected="false">Topics</button>
-          <button class="trend-subtab" data-subtab="roadmap" role="tab" aria-selected="false">Roadmap</button>
         </div>
 
         <!-- ─── Sub-tab: Dashboard ─── -->
@@ -2120,31 +2120,27 @@
             <div class="trend-stat-card"><span class="trend-stat-val" id="trendStatScored">—</span><span class="trend-stat-lbl">Scored</span></div>
           </div>
 
-          <!-- Category filter (industry vertical) -->
-          <div class="trend-category-filter" id="trendCategoryFilter" role="group" aria-label="Filter by industry">
-            <button class="trend-cat-chip active" data-category="all">All industries</button>
-            <button class="trend-cat-chip" data-category="companies">🏢 Companies going viral</button>
-            <button class="trend-cat-chip" data-category="food">🍔 Food industry</button>
-            <button class="trend-cat-chip" data-category="oil">🛢️ Oil &amp; gas</button>
-          </div>
-
-          <!-- Platform filter -->
-          <div class="trend-category-filter" id="trendPlatformFilter" role="group" aria-label="Filter by platform">
-            <button class="trend-cat-chip active" data-platform="all">All platforms</button>
-            <button class="trend-cat-chip" data-platform="tiktok">🎵 TikTok</button>
-            <button class="trend-cat-chip" data-platform="instagram">📸 Instagram Reels</button>
-            <button class="trend-cat-chip" data-platform="youtube">▶️ YouTube Shorts</button>
-          </div>
-
-          <!-- Controls -->
+          <!-- Controls: industry + platform + bucket + sort, all in one row -->
           <div class="trend-controls" id="trendControls">
-            <div class="trend-filter-group" id="trendBucketFilter">
-              <button class="trend-chip active" data-bucket="all">All</button>
-              <button class="trend-chip" data-bucket="trendjack">Trendjack</button>
-              <button class="trend-chip" data-bucket="clone_format">Clone format</button>
-              <button class="trend-chip" data-bucket="unscored">Unscored</button>
-              <button class="trend-chip" data-bucket="discard">Discard</button>
-            </div>
+            <select class="trend-select" id="trendCategorySelect" aria-label="Filter by industry">
+              <option value="all">All industries</option>
+              <option value="companies">Companies going viral</option>
+              <option value="food">Food industry</option>
+              <option value="oil">Oil &amp; gas</option>
+            </select>
+            <select class="trend-select" id="trendPlatformSelect" aria-label="Filter by platform">
+              <option value="all">All platforms</option>
+              <option value="tiktok">TikTok</option>
+              <option value="instagram">Instagram Reels</option>
+              <option value="youtube">YouTube Shorts</option>
+            </select>
+            <select class="trend-select" id="trendBucketSelect" aria-label="Filter by bucket">
+              <option value="all">All buckets</option>
+              <option value="trendjack">Trendjack</option>
+              <option value="clone_format">Clone format</option>
+              <option value="unscored">Unscored</option>
+              <option value="discard">Discard</option>
+            </select>
             <select class="trend-sort" id="trendSort" aria-label="Sort candidates">
               <option value="performance">Sort: Best (performance)</option>
               <option value="breakout">Sort: Biggest breakout (views vs followers)</option>
@@ -2190,6 +2186,60 @@
             <span>Below threshold</span>
           </div>
           <div class="trend-cards trend-cards-discard" id="trendCardsDiscard"></div>
+        </div>
+
+        <!-- ─── Sub-tab: Autopilot (autonomous daily generation) ─── -->
+        <div class="trend-subpanel" id="trendPanelAutopilot" style="display:none;">
+          <div class="ap-head">
+            <div>
+              <h3 class="ap-title">Autopilot</h3>
+              <p class="ap-sub">An autonomous agent. Every day it scans your highest-scoring videos and what's performed for you, then auto-creates new remakes — no clicks. Everything it makes lands in the Queue for your review.</p>
+            </div>
+            <label class="ap-switch">
+              <input type="checkbox" id="apEnabledToggle">
+              <span class="ap-switch-track"><span class="ap-switch-thumb"></span></span>
+              <span class="ap-switch-label" id="apEnabledLabel">Off</span>
+            </label>
+          </div>
+
+          <div class="ap-settings" id="apSettings">
+            <div class="ap-field">
+              <label for="apDailyCount">New remakes / day</label>
+              <input type="number" id="apDailyCount" min="1" max="10" value="3">
+            </div>
+            <div class="ap-field">
+              <label for="apOutputType">Format</label>
+              <select id="apOutputType">
+                <option value="mix">Mix (video + slideshow)</option>
+                <option value="video">Video only</option>
+                <option value="slideshow">Slideshow only</option>
+              </select>
+            </div>
+            <div class="ap-field">
+              <label for="apTargetMode">Mode</label>
+              <select id="apTargetMode">
+                <option value="auto">Auto (fit a product)</option>
+                <option value="exact">Exact recreation</option>
+              </select>
+            </div>
+            <div class="ap-field">
+              <label for="apMinScore">Min score</label>
+              <input type="number" id="apMinScore" min="0" max="10" step="0.5" value="0">
+            </div>
+            <div class="ap-field">
+              <label for="apCooldown">Cooldown (days)</label>
+              <input type="number" id="apCooldown" min="0" max="90" value="14">
+            </div>
+            <div class="ap-actions">
+              <button class="btn-ghost" id="apSaveBtn">Save settings</button>
+              <button class="trend-btn-recreate" id="apRunBtn">Run now</button>
+            </div>
+          </div>
+
+          <h4 class="ap-feed-title">Activity</h4>
+          <div id="apFeed" class="ap-feed">
+            <div class="trend-empty-inline">No runs yet. Turn Autopilot on, or hit “Run now” to test it.</div>
+          </div>
         </div>
 
         <!-- ─── Sub-tab: Weekly Report (trend intelligence) ─── -->
@@ -2251,10 +2301,7 @@
         <!-- ─── Sub-tab: Queue (generation review) ─── -->
         <div class="trend-subpanel" id="trendPanelQueue" style="display:none;">
           <div class="trend-solutions-intro">
-            <p>
-              Every <strong>Recreate</strong> lands here. Claude writes the script, fal.ai renders the
-              video, then it waits for your review. Approve to greenlight for posting, or kill it.
-            </p>
+            <p>Everything you (or Autopilot) create lands here. Review it, then approve or kill.</p>
             <div class="trend-queue-filter" id="trendQueueFilter" role="group" aria-label="Filter queue by status">
               <button class="trend-chip active" data-qstatus="all">All</button>
               <button class="trend-chip" data-qstatus="rendering">Rendering</button>
