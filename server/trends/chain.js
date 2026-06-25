@@ -18,8 +18,9 @@ import { runImages, isImageConfigured } from './image.js';
 import { runQc, isQcConfigured } from './qc.js';
 import { runVideo, isVideoAgentConfigured } from './video.js';
 import { runAssembly, isAssemblyConfigured } from './assembly.js';
+import { runSlides, isSlidesConfigured } from './slides.js';
 
-const ACTIVE_STATUSES = ['directed', 'imaging', 'qc', 'animating', 'assembling'];
+const ACTIVE_STATUSES = ['directed', 'imaging', 'qc', 'animating', 'composing', 'assembling'];
 
 // Advance one generation by a single bounded step. Returns a small summary.
 // Never throws: a stage error is recorded on the row and the status is left so
@@ -45,6 +46,11 @@ export async function advanceGeneration(id) {
             if (!isVideoAgentConfigured) return { id, status: g.status, skipped: 'video not configured' };
             const out = await runVideo(id, { max: 2 });
             return { id, step: 'video', ...out };
+        }
+        if (g.status === 'composing') {
+            if (!isSlidesConfigured) return { id, status: g.status, skipped: 'slides not configured' };
+            const out = await runSlides(id);
+            return { id, step: 'slides', status: out.status, asset_url: out.asset_url };
         }
         if (g.status === 'assembling') {
             if (!isAssemblyConfigured) return { id, status: g.status, skipped: 'assembly not configured' };

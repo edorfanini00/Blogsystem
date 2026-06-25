@@ -143,7 +143,8 @@ async function normalizeClip(src, dest, trimTo = null) {
 
 async function loadGen(generationId) {
     const { rows } = await query(
-        `select g.*, c.platform from generations g join candidates c on c.id = g.candidate_id where g.id = $1`,
+        `select g.*, c.platform, c.source_audio_url
+         from generations g join candidates c on c.id = g.candidate_id where g.id = $1`,
         [generationId]
     );
     return rows[0] || null;
@@ -221,7 +222,7 @@ export async function runAssembly(generationId) {
 
         // Optional music bed (per-generation override → env default).
         let musicPath = null;
-        const musicUrl = gen.copy_json?.music_url || MUSIC_URL;
+        const musicUrl = gen.copy_json?.music_url || gen.source_audio_url || MUSIC_URL;
         if (musicUrl) {
             try { musicPath = await download(musicUrl, path.join(work, 'music.mp3')); }
             catch { musicPath = null; }

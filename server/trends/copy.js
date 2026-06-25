@@ -12,6 +12,8 @@
 import { query } from './db.js';
 import { claudeJSON, isLlmConfigured } from './llm.js';
 import { getProductEntry } from './solutions.js';
+import { buildResearchGrounding } from './research.js';
+import { buildMemoryBlock } from './memory.js';
 import {
     EDITORIAL_RULES, MESSAGE_BANK, PUBLISH_PLATFORMS,
     VIDEO_TARGET_MIN, VIDEO_TARGET_MAX, MATCH_SOURCE_LENGTH,
@@ -148,6 +150,16 @@ export async function runCopy(generationId) {
 
     const platforms = PUBLISH_PLATFORMS.length ? PUBLISH_PLATFORMS : ['tiktok', 'instagram', 'youtube'];
     const exact = gen.target_mode === 'exact';
+    const isSlideshow = gen.output_type === 'slideshow';
+
+    // Research-as-editor: ground captions/hooks in real winning copy + memory.
+    const [grounding, memoryBlock] = await Promise.all([
+        buildResearchGrounding({ platform: gen.platform, outputType: gen.output_type }).catch(() => ''),
+        buildMemoryBlock({ outputType: gen.output_type }).catch(() => ''),
+    ]);
+    const slideNote = isSlideshow
+        ? 'This is a PHOTO SLIDESHOW (carousel). The on-screen slide text IS the content and is already written. Do NOT write a voiceover (return ""). Focus on a strong posting caption per platform and hashtags. The caption should complement the slides, not repeat them.'
+        : '';
 
     let system, user;
     if (exact) {
@@ -156,13 +168,16 @@ export async function runCopy(generationId) {
         user = [
             `Requested platforms: ${platforms.join(', ')}`,
             `Source platform: ${gen.platform}`,
+            slideNote,
             '',
             'SOURCE (reproduce this faithfully):',
             sourceScriptBlock(gen.source_analysis, gen.source_caption),
             '',
-            'RECREATED SHOT PLAN (the VO should track these in order):',
+            grounding,
+            grounding ? '' : null,
+            (isSlideshow ? 'RECREATED SLIDE PLAN (the on-screen text per slide):' : 'RECREATED SHOT PLAN (the VO should track these in order):'),
             shotsBlock(shots),
-        ].filter(Boolean).join('\n');
+        ].filter((x) => x != null && x !== '').join('\n');
     } else {
         const product = gen.solution_id ? await getProductEntry(gen.solution_id).catch(() => null) : null;
         const win = voWindow(gen, shots);
@@ -170,14 +185,19 @@ export async function runCopy(generationId) {
         user = [
             `Requested platforms: ${platforms.join(', ')}`,
             `Source platform: ${gen.platform}`,
+            slideNote,
             gen.source_caption ? `Source caption (format reference): ${String(gen.source_caption).slice(0, 200)}` : '',
             '',
             'TARGET',
             targetBlock(product, gen.resolved_target, gen.custom_prompt),
             '',
-            'SHOT PLAN (the VO should track these in order):',
+            memoryBlock,
+            memoryBlock ? '' : null,
+            grounding,
+            grounding ? '' : null,
+            (isSlideshow ? 'SLIDE PLAN (on-screen text per slide):' : 'SHOT PLAN (the VO should track these in order):'),
             shotsBlock(shots),
-        ].filter(Boolean).join('\n');
+        ].filter((x) => x != null && x !== '').join('\n');
     }
 
     const out = await claudeJSON(system, user, { maxTokens: 1500 });
@@ -185,7 +205,8 @@ export async function runCopy(generationId) {
 
     const captions = out.captions && typeof out.captions === 'object' ? out.captions : {};
     const hashtags = Array.isArray(out.hashtags) ? out.hashtags.map((h) => String(h).replace(/^#/, '').trim()).filter(Boolean) : [];
-    const voiceover = String(out.voiceover || '').trim();
+    // Carousels ride a trending sound, not a VO — never narrate a slideshow.
+    const voiceover = isSlideshow ? '' : String(out.voiceover || '').trim();
 
     // Primary caption: prefer the source platform, else the first requested.
     const primary = captions[gen.platform] || captions[platforms[0]] || Object.values(captions)[0] || '';

@@ -6998,6 +6998,23 @@ body.light-theme .campaign-stat {
 .remake-product:disabled, .remake-custom:disabled { opacity: 0.4; cursor: not-allowed; }
 .remake-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 
+/* Output-type toggle (Video / Slideshow) at the top of the remake modal. */
+.remake-output { display: flex; gap: 8px; margin: 0 0 16px; }
+.remake-out-btn {
+  flex: 1; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid #353b48; background: #21252e; color: #c6cedd;
+  font-size: 0.9rem; font-weight: 600; transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.remake-out-btn:hover { border-color: #4a5365; background: #262b35; }
+.remake-out-btn.active { border-color: #f97316; background: rgba(249, 115, 22, 0.16); color: #ffffff; }
+
+/* Output-type badge on a queue card. */
+.trend-gen-type {
+  font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  background: rgba(249, 115, 22, 0.14); color: #f9a366; border: 1px solid rgba(249, 115, 22, 0.3);
+  white-space: nowrap;
+}
+
 /* ─── Shot stills grid in the queue ───────────────────────────── */
 .trend-shot-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));

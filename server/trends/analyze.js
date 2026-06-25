@@ -20,6 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import ffmpegPath from 'ffmpeg-static';
 import { query } from './db.js';
+import * as fal from './fal.js';
 import { MESSAGE_BANK } from './config.js';
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
@@ -129,6 +130,33 @@ async function probeDurationSeconds(buffer) {
         return null;
     } finally {
         fs.rm(tmp, { force: true }).catch(() => {});
+    }
+}
+
+// Extract the source's audio track (its trending sound) to an mp3 and host it on
+// Blob, so the remake can ride the original sound as a bed. Returns the URL or
+// null (no audio track, ffmpeg/Blob unavailable, etc.).
+async function extractSourceAudioUrl(buffer) {
+    if (!ffmpegPath || !buffer || !buffer.length || !fal.isFalBlobConfigured) return null;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const tmp = path.join(os.tmpdir(), `aud-src-${id}.mp4`);
+    const out = path.join(os.tmpdir(), `aud-out-${id}.mp3`);
+    try {
+        await fs.writeFile(tmp, buffer);
+        const ok = await new Promise((resolve) => {
+            const proc = spawn(ffmpegPath, ['-y', '-i', tmp, '-vn', '-ac', '2', '-ar', '44100', '-b:a', '128k', out], { stdio: ['ignore', 'ignore', 'ignore'] });
+            proc.on('error', () => resolve(false));
+            proc.on('close', (code) => resolve(code === 0));
+        });
+        if (!ok) return null;
+        const bytes = await fs.readFile(out).catch(() => null);
+        if (!bytes || !bytes.length) return null;
+        return await fal.uploadPublic(bytes, 'audio/mpeg', `source-audio/${id}.mp3`);
+    } catch {
+        return null;
+    } finally {
+        fs.rm(tmp, { force: true }).catch(() => {});
+        fs.rm(out, { force: true }).catch(() => {});
     }
 }
 
@@ -318,10 +346,15 @@ export async function analyzeCandidate(candidateId) {
     try { measured = await probeDurationSeconds(buffer); } catch { measured = null; }
     reconcileTiming(analysis, measured);
 
+    // Capture the source's own audio (trending sound) for reuse as a bed.
+    let audioUrl = null;
+    try { audioUrl = await extractSourceAudioUrl(buffer); } catch { audioUrl = null; }
+
     analysis.analyzedAt = new Date().toISOString();
-    await query('update candidates set analysis = $1, analyzed_at = now() where id = $2', [
-        JSON.stringify(analysis),
-        candidateId,
-    ]);
-    return { ...c, analysis, analyzed_at: analysis.analyzedAt };
+    await query(
+        `update candidates set analysis = $1, analyzed_at = now(),
+            source_audio_url = coalesce($3, source_audio_url) where id = $2`,
+        [JSON.stringify(analysis), candidateId, audioUrl]
+    );
+    return { ...c, analysis, analyzed_at: analysis.analyzedAt, source_audio_url: audioUrl };
 }

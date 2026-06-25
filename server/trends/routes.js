@@ -32,6 +32,9 @@ import { runMotion, isMotionConfigured } from './motion.js';
 import { runVideo, isVideoAgentConfigured } from './video.js';
 import { runCopy, isCopyConfigured } from './copy.js';
 import { runAssembly, isAssemblyConfigured, isVoiceoverConfigured } from './assembly.js';
+import { runSlides, isSlidesConfigured } from './slides.js';
+import { recordPerformance, sweepPerformance } from './performance.js';
+import { addNote, recentNotes } from './memory.js';
 import { advanceGeneration, runChainSweep } from './chain.js';
 import { isCaptionsConfigured } from './captions.js';
 import {
@@ -177,6 +180,7 @@ router.get('/health', async (req, res) => {
             captions: isCaptionsConfigured,
             music: !!MUSIC_URL,
         },
+        slideshow: { configured: isSlidesConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -355,11 +359,12 @@ router.post('/candidates/:id/direct', async (req, res) => {
         return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured. Add it to run the Director.' });
     }
     try {
-        const { target_mode, product_id, custom_prompt, dryRun, variants } = req.body || {};
+        const { target_mode, product_id, custom_prompt, dryRun, variants, output_type } = req.body || {};
         const opts = {
             targetMode: target_mode || 'auto',
             productId: product_id || null,
             customPrompt: custom_prompt || null,
+            outputType: output_type === 'slideshow' ? 'slideshow' : 'video',
             variants: variants ? parseInt(variants) : undefined,
         };
         if (dryRun) {
@@ -477,6 +482,25 @@ router.post('/generations/:id/assemble', async (req, res) => {
     }
 });
 
+// ─── Slides agent: compose a photo slideshow/carousel from the stills ──
+// POST /api/trends/generations/:id/slides → slide_urls + reel asset_url, 'review'
+router.post('/generations/:id/slides', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isSlidesConfigured) {
+        return res.status(503).json({ error: 'Slideshow assembly not available (needs BLOB_READ_WRITE_TOKEN + ffmpeg runtime).' });
+    }
+    try {
+        const out = await runSlides(req.params.id);
+        if (out?.asset_url) {
+            await notify(`🖼️ CeleriTech slideshow composed and ready for review (Queue tab).`).catch(() => {});
+        }
+        res.json(out);
+    } catch (err) {
+        console.error('❌ Slides agent error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── Chain runner: advance a generation one step (manual resume) ──
 // POST /api/trends/generations/:id/advance
 router.post('/generations/:id/advance', async (req, res) => {
@@ -576,19 +600,75 @@ router.post('/generations/:id/refresh', async (req, res) => {
     }
 });
 
-// PUT /api/trends/generations/:id  { status, approvedBy? }
+// PUT /api/trends/generations/:id  { status, approvedBy?, posted_url? }
 router.put('/generations/:id', async (req, res) => {
     if (!requireDb(res)) return;
     try {
-        const { status, approvedBy } = req.body || {};
-        const gen = await updateGenerationStatus(req.params.id, status, approvedBy);
+        const { status, approvedBy, posted_url } = req.body || {};
+        const gen = await updateGenerationStatus(req.params.id, status, approvedBy, { postedUrl: posted_url || null });
         if (!gen) return res.status(404).json({ error: 'Generation not found' });
         if (status === 'approved') {
             await notify(`✅ Approved for posting: ${gen.caption || gen.id}\nAsset: ${gen.asset_url || '(script only)'}`);
         }
+        if (status === 'posted') {
+            // Memory: log what we posted so it compounds into the next run.
+            addNote({
+                note: `Posted a ${gen.output_type || 'video'} (${gen.director_json?.format || ''}) for "${gen.resolved_target || ''}" — ${gen.target_mode || ''} mode, remaking a ${gen.platform || ''} source.`,
+                outputType: gen.output_type || 'video',
+            }).catch(() => {});
+            // Kick off an initial performance snapshot if we have the public URL.
+            if (gen.posted_url) recordPerformance(gen.id).catch(() => {});
+        }
         res.json(gen);
     } catch (err) {
         console.error('❌ Generation update error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/trends/generations/:id/performance  { url? } → scrape + store stats
+router.post('/generations/:id/performance', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json(await recordPerformance(req.params.id, { url: req.body?.url || null }));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET/POST /api/trends/performance/cron → refresh stats for posted generations
+async function performanceCronHandler(req, res) {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+        const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        if (token !== cronSecret && req.query.secret !== cronSecret) return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!requireDb(res)) return;
+    try {
+        res.json(await sweepPerformance({}));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+router.get('/performance/cron', performanceCronHandler);
+router.post('/performance/cron', performanceCronHandler);
+
+// Strategy notes (run memory) — list + add.
+router.get('/notes', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        res.json({ notes: await recentNotes({ outputType: req.query.output_type || null, limit: 20 }) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+router.post('/notes', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        const note = await addNote({ note: req.body?.note, scope: req.body?.scope || 'global', outputType: req.body?.output_type || null });
+        if (!note) return res.status(400).json({ error: 'note text required' });
+        res.json(note);
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });

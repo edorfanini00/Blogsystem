@@ -281,6 +281,11 @@ export const REMAKE_MAX_SHOTS = Math.min(Math.max(Number(process.env.REMAKE_MAX_
 // 10s; we round a shot's target up to the model's nearest option, then trim.
 export const VIDEO_CLIP_MIN = Number(process.env.VIDEO_CLIP_MIN) || 2;
 export const VIDEO_CLIP_MAX = Number(process.env.VIDEO_CLIP_MAX) || 10;
+
+// ─── Slideshow output ───────────────────────────────────────────
+// Seconds each slide is shown in the rendered slideshow reel (the raw slide
+// images are also produced for posting as a native photo carousel).
+export const SLIDE_SECONDS = Number(process.env.SLIDE_SECONDS) || 2.8;
 // ElevenLabs voiceover. Voice id + model are env-overridable; VO is optional —
 // assembly produces a (silent) cut when ElevenLabs is not configured.
 export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';

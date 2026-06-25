@@ -223,7 +223,10 @@ export async function runQc(generationId) {
     // so the next tick finishes the remaining regen work.
     const allResolved = shots.every(resolved);
     const anyPass = shots.some((s) => s.qc?.pass);
-    const status = allResolved ? 'animating' : 'qc';
+    // Slideshows skip animation — once stills pass QC they go straight to slide
+    // composition; videos go to animation.
+    const nextStage = gen.output_type === 'slideshow' ? 'composing' : 'animating';
+    const status = allResolved ? nextStage : 'qc';
     await query(`update generations set shots = $2, status = $3 where id = $1`, [generationId, JSON.stringify(shots), status]);
     return { generationId, total: shots.length, passed, failed, errored, regens, allResolved, anyPass, status };
 }

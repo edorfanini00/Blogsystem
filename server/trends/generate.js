@@ -254,7 +254,7 @@ const VALID_STATUSES = [
     'script_only', 'review', 'approved', 'posted', 'killed', 'failed',
 ];
 
-export async function updateGenerationStatus(id, status, approvedBy = 'web') {
+export async function updateGenerationStatus(id, status, approvedBy = 'web', { postedUrl = null } = {}) {
     if (!VALID_STATUSES.includes(status)) throw new Error(`Invalid status: ${status}`);
     const sets = ['status = $2'];
     const params = [id, status];
@@ -263,6 +263,10 @@ export async function updateGenerationStatus(id, status, approvedBy = 'web') {
         sets.push(`approved_by = $${params.length}`);
     }
     if (status === 'posted') sets.push('posted_at = now()');
+    if (postedUrl) {
+        params.push(String(postedUrl).slice(0, 500));
+        sets.push(`posted_url = $${params.length}`);
+    }
     const r = await query(
         `update generations set ${sets.join(', ')} where id = $1 returning *`,
         params

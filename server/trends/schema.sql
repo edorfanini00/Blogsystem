@@ -182,6 +182,50 @@ alter table generations add column if not exists shots           jsonb;   -- per
 alter table generations add column if not exists copy_json       jsonb;   -- Copy agent: { voiceover, captions{platform}, hashtags[] }
 alter table generations add column if not exists vo_url          text;    -- ElevenLabs voiceover asset (public URL)
 
+-- ─── Output type: video remake vs photo slideshow/carousel ──────
+-- The same image-first chain powers two outputs. 'video' animates stills into
+-- clips; 'slideshow' burns on-screen text onto the stills and packages a photo
+-- carousel (+ a rendered preview reel). Idempotent adds.
+alter table generations add column if not exists output_type     text default 'video'; -- video | slideshow
+alter table generations add column if not exists slide_urls      jsonb;   -- composed slides [{url, text, text_position}]
+alter table generations add column if not exists posted_url      text;    -- public URL once posted (feedback loop)
+
+-- Trending sound: the source's own audio, extracted at analyze/keyframe time,
+-- reused as the bed for the remake (video or slideshow reel).
+alter table candidates add column if not exists source_audio_url text;
+
+-- ─── strategy_notes (run-over-run memory) ───────────────────────
+-- Compounding strategy log: short reflections fed back into the Director/Copy so
+-- the engine learns what to make next instead of starting cold each time.
+create table if not exists strategy_notes (
+    id          uuid primary key default gen_random_uuid(),
+    scope       text,                       -- 'global' or an industry/format tag
+    output_type text,                       -- video | slideshow | null (any)
+    note        text not null,
+    created_at  timestamptz not null default now()
+);
+create index if not exists idx_strategy_notes_created on strategy_notes (created_at desc);
+
+-- ─── generation_performance (closed feedback loop) ──────────────
+-- Real metrics for what we posted, scraped from the public post URL over time.
+-- Top performers feed the research brain so the next remake leans on proof.
+create table if not exists generation_performance (
+    id             uuid primary key default gen_random_uuid(),
+    generation_id  uuid references generations (id) on delete cascade,
+    candidate_id   uuid references candidates (id) on delete set null,
+    public_url     text,
+    platform       text,
+    views          bigint,
+    likes          bigint,
+    comments       bigint,
+    shares         bigint,
+    saves          bigint,
+    engagement_pct numeric,
+    captured_at    timestamptz not null default now()
+);
+create index if not exists idx_genperf_generation on generation_performance (generation_id, captured_at desc);
+create index if not exists idx_genperf_captured on generation_performance (captured_at desc);
+
 -- ─── trend_reports (weekly intelligence) ────────────────────────
 -- One row per weekly analysis run. The factual parts (signals, trending,
 -- rising/forecast) are computed deterministically from the data above; the

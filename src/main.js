@@ -5533,6 +5533,7 @@ setTimeout(function initOnePager() {
         dismissed: new Set(),
         generations: [],
         queueStatus: 'all',
+        queueOutput: 'all',
         recreating: new Set(),
         analyzing: new Set(),
         expandedAnalysis: new Set(),
@@ -5999,9 +6000,11 @@ setTimeout(function initOnePager() {
             if (!dres.ok) { toast(ddata.error || 'Director failed', 'error'); return; }
             const genId = ddata.generationId;
             await loadGenerations();
+            const isSlideshow = (target.output_type === 'slideshow') || (ddata.plan?.output_type === 'slideshow');
             const planLen = ddata.plan?.target_duration_total;
             const lenNote = planLen ? `, ~${Math.round(planLen)}s to match the source` : '';
-            toast(`Shot plan ready (${ddata.plan?.shots?.length || 0} shots${lenNote}). Rendering images…`);
+            const unit = isSlideshow ? 'slides' : 'shots';
+            toast(`${isSlideshow ? 'Slide' : 'Shot'} plan ready (${ddata.plan?.shots?.length || 0} ${unit}${isSlideshow ? '' : lenNote}). Rendering images…`);
 
             // 2) Image agent — render every shot (image-first).
             const ires = await fetch(tApi(`/api/trends/generations/${genId}/images`), {
@@ -6019,10 +6022,29 @@ setTimeout(function initOnePager() {
                 });
                 const qdata = await qres.json();
                 await loadGenerations();
-                if (qres.ok) { const m = qcMessage(qdata, ' Writing motion…'); toast(m.text, m.kind); }
+                if (qres.ok) { const m = qcMessage(qdata, isSlideshow ? ' Composing slides…' : ' Writing motion…'); toast(m.text, m.kind); }
                 else toast('QC will retry — images are ready to view', 'info');
             } catch {
                 toast('Images ready — QC can be re-run from the Queue', 'info');
+            }
+
+            // Slideshow branch: skip motion/animation — write copy, then compose
+            // the photo carousel + reel directly from the stills.
+            if (isSlideshow) {
+                try {
+                    await fetch(tApi(`/api/trends/generations/${genId}/copy`), {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                    });
+                } catch { /* slides still compose without captions */ }
+                toast('Composing the slideshow…');
+                const sres = await fetch(tApi(`/api/trends/generations/${genId}/slides`), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                });
+                const sdata = await sres.json();
+                await loadGenerations();
+                if (sres.ok && sdata.asset_url) toast(`Slideshow ready (${sdata.slides || 0} slides).`, 'success');
+                else toast(sdata.error || 'Slides will retry — images are ready in the Queue', 'info');
+                return;
             }
 
             // 4) Motion agent — write a camera/subject motion prompt per shot.
@@ -6107,6 +6129,10 @@ setTimeout(function initOnePager() {
               <div class="remake-modal" role="dialog" aria-modal="true">
                 <h3>Recreate this video</h3>
                 <p class="remake-sub">Image-first remake — same structure, hook, angle and format. Recreate it exactly, fit it to a product, or follow your own prompt.</p>
+                <div class="remake-output">
+                  <button type="button" class="remake-out-btn active" data-out="video">🎬 Video</button>
+                  <button type="button" class="remake-out-btn" data-out="slideshow">🖼️ Slideshow</button>
+                </div>
                 <label class="remake-mode"><input type="radio" name="rmode" value="exact" checked> <span><b>Exact recreation</b> — remake the original as-is (no product)</span></label>
                 <label class="remake-mode"><input type="radio" name="rmode" value="product" ${products.length ? '' : 'disabled'}> <span><b>Product</b> — fit it to a product, same structure/angle/format${products.length ? '' : ' (none added yet)'}</span></label>
                 <select class="remake-product" disabled>${opts || '<option>No products</option>'}</select>
@@ -6121,6 +6147,11 @@ setTimeout(function initOnePager() {
             document.body.appendChild(overlay);
             const productSel = overlay.querySelector('.remake-product');
             const customTa = overlay.querySelector('.remake-custom');
+            let outputType = 'video';
+            overlay.querySelectorAll('.remake-out-btn').forEach((b) => b.addEventListener('click', () => {
+                outputType = b.dataset.out;
+                overlay.querySelectorAll('.remake-out-btn').forEach((x) => x.classList.toggle('active', x === b));
+            }));
             overlay.querySelectorAll('input[name="rmode"]').forEach((r) => r.addEventListener('change', () => {
                 const mode = overlay.querySelector('input[name="rmode"]:checked').value;
                 productSel.disabled = mode !== 'product';
@@ -6135,15 +6166,15 @@ setTimeout(function initOnePager() {
                     const pid = productSel.value;
                     if (!pid) { toast('Pick a product', 'error'); return; }
                     setSelectedSolution(pid);
-                    close({ target_mode: 'product', product_id: pid });
+                    close({ target_mode: 'product', product_id: pid, output_type: outputType });
                 } else if (mode === 'custom') {
                     const txt = customTa.value.trim();
                     if (!txt) { toast('Type a custom angle', 'error'); return; }
-                    close({ target_mode: 'custom', custom_prompt: txt });
+                    close({ target_mode: 'custom', custom_prompt: txt, output_type: outputType });
                 } else if (mode === 'auto') {
-                    close({ target_mode: 'auto' });
+                    close({ target_mode: 'auto', output_type: outputType });
                 } else {
-                    close({ target_mode: 'exact' });
+                    close({ target_mode: 'exact', output_type: outputType });
                 }
             });
         });
@@ -6400,6 +6431,7 @@ setTimeout(function initOnePager() {
             case 'imaging': return { cls: 'gen-rendering', label: 'Rendering images' };
             case 'qc': return { cls: 'gen-rendering', label: 'QC grading' };
             case 'animating': return { cls: 'gen-rendering', label: 'Images approved' };
+            case 'composing': return { cls: 'gen-rendering', label: 'Composing slideshow' };
             case 'assembling': return { cls: 'gen-rendering', label: 'Assembling' };
             case 'rendering': return { cls: 'gen-rendering', label: 'Rendering' };
             case 'review': return { cls: 'gen-review', label: 'Ready for review' };
@@ -6456,6 +6488,7 @@ setTimeout(function initOnePager() {
         const empty = document.getElementById('queueEmpty');
         let items = state.generations.slice();
         if (state.queueStatus !== 'all') items = items.filter((g) => g.status === state.queueStatus);
+        if (state.queueOutput !== 'all') items = items.filter((g) => (g.output_type || 'video') === state.queueOutput);
 
         if (!items.length) {
             list.innerHTML = '';
@@ -6487,10 +6520,18 @@ setTimeout(function initOnePager() {
         // Image-first chain shots (Director → Image → QC).
         let shots = [];
         try { shots = typeof g.shots === 'string' ? JSON.parse(g.shots) : (g.shots || []); } catch { shots = []; }
-        const isChain = ['directed', 'imaging', 'qc', 'animating', 'assembling'].includes(g.status) || shots.length;
+        const isChain = ['directed', 'imaging', 'qc', 'animating', 'composing', 'assembling'].includes(g.status) || shots.length;
+        const isSlideshow = g.output_type === 'slideshow';
+        let slideUrls = [];
+        try { slideUrls = typeof g.slide_urls === 'string' ? JSON.parse(g.slide_urls) : (g.slide_urls || []); } catch { slideUrls = []; }
 
         let media;
-        if (g.asset_url) {
+        if (isSlideshow && slideUrls.length) {
+            // Composed carousel: the slide strip is the deliverable; the reel
+            // (asset_url) is the inline preview.
+            const reel = g.asset_url ? `<video class="trend-gen-video" src="${esc(g.asset_url)}" controls preload="metadata" style="margin-bottom:8px;"></video>` : '';
+            media = `${reel}<div class="trend-shot-grid">${slideUrls.map((s, i) => `<div class="trend-shot"><img src="${esc(s.url)}" alt="" loading="lazy"><span class="shot-role">slide ${i + 1}</span></div>`).join('')}</div>`;
+        } else if (g.asset_url) {
             media = `<video class="trend-gen-video" src="${esc(g.asset_url)}" controls preload="metadata"></video>`;
         } else if (isChain && shots.length) {
             media = `<div class="trend-shot-grid">${shots.map((s) => {
@@ -6522,14 +6563,22 @@ setTimeout(function initOnePager() {
         if (g.status === 'qc' || (isChain && shots.some((s) => s.image_url && !s.qc?.pass))) {
             actions.push(`<button class="btn-ghost" data-gen-qc="${esc(g.id)}">Run QC</button>`);
         }
-        // Animate: all images present but not every shot has a clip yet.
-        if (isChain && !g.asset_url && shots.length && shots.every((s) => s.image_url) && shots.some((s) => !s.video_url)) {
-            actions.push(`<button class="btn-ghost" data-gen-video="${esc(g.id)}">Animate clips</button>`);
-        }
-        // Assemble: every shot has a clip but there is no final cut yet.
-        if (isChain && !g.asset_url && shots.length && shots.every((s) => s.video_url)) {
-            actions.push(`<button class="btn-ghost" data-gen-copy="${esc(g.id)}">Copy</button>`);
-            actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-assemble="${esc(g.id)}">Assemble video</button>`);
+        if (isSlideshow) {
+            // Compose: every slide has an image but the carousel/reel isn't built.
+            if (!g.asset_url && shots.length && shots.every((s) => s.image_url)) {
+                actions.push(`<button class="btn-ghost" data-gen-copy="${esc(g.id)}">Copy</button>`);
+                actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-slides="${esc(g.id)}">Compose slideshow</button>`);
+            }
+        } else {
+            // Animate: all images present but not every shot has a clip yet.
+            if (isChain && !g.asset_url && shots.length && shots.every((s) => s.image_url) && shots.some((s) => !s.video_url)) {
+                actions.push(`<button class="btn-ghost" data-gen-video="${esc(g.id)}">Animate clips</button>`);
+            }
+            // Assemble: every shot has a clip but there is no final cut yet.
+            if (isChain && !g.asset_url && shots.length && shots.every((s) => s.video_url)) {
+                actions.push(`<button class="btn-ghost" data-gen-copy="${esc(g.id)}">Copy</button>`);
+                actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-assemble="${esc(g.id)}">Assemble video</button>`);
+            }
         }
         if (g.status === 'review') {
             actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-approve="${esc(g.id)}">✓ Approve</button>`);
@@ -6547,6 +6596,7 @@ setTimeout(function initOnePager() {
           <div class="trend-gen-body">
             <div class="trend-gen-head">
               <span class="trend-gen-status ${sm.cls}">${sm.label}</span>
+              <span class="trend-gen-type">${isSlideshow ? '🖼️ Slideshow' : '🎬 Video'}</span>
               <span class="trend-gen-title">${esc(title)}</span>
             </div>
             ${hook ? `<div class="trend-gen-hook">"${esc(hook)}"</div>` : ''}
@@ -6571,7 +6621,7 @@ setTimeout(function initOnePager() {
         list.querySelectorAll('[data-gen-kill]').forEach((b) =>
             b.addEventListener('click', () => setGenStatus(b.dataset.genKill, 'killed')));
         list.querySelectorAll('[data-gen-posted]').forEach((b) =>
-            b.addEventListener('click', () => setGenStatus(b.dataset.genPosted, 'posted')));
+            b.addEventListener('click', () => markPosted(b.dataset.genPosted)));
         list.querySelectorAll('[data-gen-images]').forEach((b) =>
             b.addEventListener('click', () => runChainStage(b.dataset.genImages, 'images', b)));
         list.querySelectorAll('[data-gen-qc]').forEach((b) =>
@@ -6582,6 +6632,31 @@ setTimeout(function initOnePager() {
             b.addEventListener('click', () => runChainStage(b.dataset.genCopy, 'copy', b)));
         list.querySelectorAll('[data-gen-assemble]').forEach((b) =>
             b.addEventListener('click', () => runChainStage(b.dataset.genAssemble, 'assemble', b)));
+        list.querySelectorAll('[data-gen-slides]').forEach((b) =>
+            b.addEventListener('click', () => runChainStage(b.dataset.genSlides, 'slides', b)));
+    }
+
+    // Mark posted, capturing the public URL so the feedback loop can scrape its
+    // real performance and feed winners back into the next run.
+    async function markPosted(id) {
+        const url = window.prompt('Paste the public post URL (TikTok/Instagram/YouTube) to track its performance. Leave blank to skip.', '');
+        if (url === null) return; // cancelled
+        try {
+            const res = await fetch(tApi(`/api/trends/generations/${id}`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'posted', posted_url: (url || '').trim() || null }),
+            });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
+            const idx = state.generations.findIndex((g) => g.id === id);
+            if (idx !== -1) state.generations[idx] = { ...state.generations[idx], ...data };
+            updateQueueBadge();
+            renderGenerations();
+            toast((url || '').trim() ? 'Marked posted — tracking performance' : 'Marked posted', 'success');
+        } catch (err) {
+            toast('Update failed: ' + err.message, 'error');
+        }
     }
 
     // Resume a chain stage from the Queue: images / qc / video / copy / assemble.
@@ -6604,7 +6679,7 @@ setTimeout(function initOnePager() {
     }
 
     async function runChainStage(genId, stage, btn) {
-        const busyLabel = { images: 'Rendering…', qc: 'Grading…', video: 'Animating…', copy: 'Writing…', assemble: 'Assembling…' }[stage] || 'Working…';
+        const busyLabel = { images: 'Rendering…', qc: 'Grading…', video: 'Animating…', copy: 'Writing…', assemble: 'Assembling…', slides: 'Composing…' }[stage] || 'Working…';
         if (btn) { btn.disabled = true; btn.dataset.orig = btn.textContent; btn.textContent = busyLabel; }
         try {
             // Video is staged + resumable; drive it to completion in a loop.
@@ -6624,6 +6699,7 @@ setTimeout(function initOnePager() {
             else if (stage === 'qc') { const m = qcMessage(data); toast(m.text, m.kind); }
             else if (stage === 'copy') toast('Voiceover and captions written', 'success');
             else if (stage === 'assemble') toast(data.asset_url ? 'Final video ready for review' : (data.error || 'Assembly will retry'), data.asset_url ? 'success' : 'info');
+            else if (stage === 'slides') toast(data.asset_url ? `Slideshow ready (${data.slides || 0} slides)` : (data.error || 'Slides will retry'), data.asset_url ? 'success' : 'info');
         } catch (err) {
             toast(`${stage} failed: ` + err.message, 'error');
         } finally {
@@ -7051,6 +7127,18 @@ setTimeout(function initOnePager() {
             c.addEventListener('click', () => {
                 state.queueStatus = c.dataset.qstatus;
                 page.querySelectorAll('#trendQueueFilter .trend-chip').forEach((x) => {
+                    const on = x === c;
+                    x.classList.toggle('active', on);
+                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                renderGenerations();
+            }));
+
+        // Queue output-type filter (Video / Slideshow)
+        page.querySelectorAll('#trendQueueOutput .trend-chip').forEach((c) =>
+            c.addEventListener('click', () => {
+                state.queueOutput = c.dataset.qoutput;
+                page.querySelectorAll('#trendQueueOutput .trend-chip').forEach((x) => {
                     const on = x === c;
                     x.classList.toggle('active', on);
                     x.setAttribute('aria-pressed', on ? 'true' : 'false');

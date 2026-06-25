@@ -13,6 +13,8 @@
 import { query } from './db.js';
 import { getProductEntry, listProductsBrief } from './solutions.js';
 import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
+import { buildResearchGrounding } from './research.js';
+import { buildMemoryBlock } from './memory.js';
 import { claudeJSON, isLlmConfigured } from './llm.js';
 import {
     EDITORIAL_RULES, MESSAGE_BANK, REMAKE_VARIANTS,
@@ -70,6 +72,14 @@ function buildShotTiming(analysis) {
     const total = Number(a?.durationSeconds) || totalFromClips || null;
     clips = mergeClipsToMax(clips, REMAKE_MAX_SHOTS);
     return { clips, total, measured: !!a?.durationMeasured };
+}
+
+// Slide-count instruction for slideshow mode (carousels have a slide count, not
+// a runtime). Uses the source's distinct beats as the slide count proxy.
+function slideCountBriefText(timing) {
+    const n = timing.clips?.length;
+    if (!n) return 'SLIDE COUNT: aim for 6-8 slides unless the source clearly uses a different count.';
+    return `SLIDE COUNT: the source has about ${n} distinct slides/beats — produce ${n} slides in the same order, one per beat.`;
 }
 
 // Human-readable timing instruction block for the Director.
@@ -205,10 +215,54 @@ function editorialFor(mode) {
     return EDITORIAL_RULES;
 }
 
+// Slideshow Director prompt: a PHOTO CAROUSEL instead of a video. Each slide is
+// a still with one bold on-screen text line; the words ARE the content. Mirrors
+// the source carousel's slide-by-slide structure. Reuses the same shots[] shape
+// (image_prompt + on_screen_text + model_choice) so image/qc are unchanged.
+function buildSlideSystem(mode) {
+    const exact = mode === 'exact';
+    const intro = exact
+        ? `You are the director for a FAITHFUL RECREATION of a viral short-form PHOTO SLIDESHOW (carousel). You receive the analysis of the source. Reproduce it slide-by-slide: same structure, same hook, same on-screen text (reproduce the original words), same number of slides, same flow. There is NO product and NO brand: do not introduce, sell, or mention anything new. Recreate the original carousel itself.`
+        : `You are the director for a viral short-form PHOTO SLIDESHOW (carousel) remake. You receive the analysis of a viral post and a target that says what this remake should be about. Reproduce the source carousel's STRUCTURE and FLOW slide-by-slide, and change only the content so it fits the target. Same number of slides, same kind of hook, same pacing of reveals. Swap what it's about, not how it's built.
+
+The WORDS are the product. Do not freestyle generic copy — lift and adapt the phrasing/structure of proven winners. Slide 1 must be a scroll-stopping hook. Each subsequent slide advances one beat and earns the next swipe; the last slide pays off (save/share/comment bait).`;
+
+    return `${intro}
+
+For EACH slide, write:
+- image_prompt: a full, detailed background image in complete sentences (4 layers: scene, subject, atmosphere, camera). Shoot for a real, native, candid look (amateur iPhone photo, natural light, slight grain) — NOT a glossy AI render. Keep an area calm/uncluttered where the text sits. Do NOT ask the image to render the on-screen words (image text garbles); the text is overlaid separately.
+- on_screen_text: the EXACT line that goes on this slide (this is the content). Short, punchy, readable. Slide 1 = the hook.
+- text_position: "top" | "middle" | "bottom" — where the text box sits on this slide.
+- model_choice: "nano_banana_pro" (default; people/products/precise scenes), "seedream" (keep the same person/scene consistent across slides), "grok" (fast photographic meme look).
+- use_source_frame: true where the slide should copy the source slide's composition.
+
+Rules:
+- 4-8 slides unless the source clearly uses a different count; match the source's slide count when known.
+- People must look real — prefer use_source_frame off a real reference.
+- Apply these editorial rules to ALL on-screen text: ${editorialFor(mode).join('; ')}.
+
+Return JSON only:
+{
+  "format": "slideshow",
+  "resolved_target": "${exact ? 'exact recreation' : 'product name | custom | auto-selected product'}",
+  "shots": [
+    {
+      "role": "hero | setup | action | resolution",
+      "image_prompt": "full 4-layer background prompt in complete sentences",
+      "on_screen_text": "the exact slide line",
+      "text_position": "top | middle | bottom",
+      "use_source_frame": true,
+      "model_choice": "nano_banana_pro | seedream | grok"
+    }
+  ]
+}`;
+}
+
 // The Director system prompt, specialized by target mode. In exact mode the
 // goal is a faithful recreation (no product, keep the original content and
 // on-screen text); otherwise it retargets the source to sell the target.
-function buildSystem(mode) {
+function buildSystem(mode, outputType = 'video') {
+    if (outputType === 'slideshow') return buildSlideSystem(mode);
     const exact = mode === 'exact';
     const intro = exact
         ? `You are the director for a short-form video remake whose goal is a FAITHFUL RECREATION of a viral source video. You receive the analysis of the source (hook, format, beats, pacing, why it works). Reproduce it as closely as possible — same structure, hook, style, visuals, beats, pacing, framing, camera language, AND the same subject matter and on-screen text. There is NO product and NO brand: do not introduce, sell, or mention any product, company, or new message. Recreate the original content itself.`
@@ -276,6 +330,7 @@ function normalizeShots(raw) {
         model_choice: MODEL_CHOICES.includes(s.model_choice) ? s.model_choice : 'nano_banana_pro',
         motion_intent: String(s.motion_intent || '').trim(),
         target_duration: Number(s.target_duration) > 0 ? round1(Number(s.target_duration)) : null,
+        text_position: ['top', 'middle', 'bottom'].includes(s.text_position) ? s.text_position : 'bottom',
     })).filter((s) => s.image_prompt);
 }
 
@@ -320,8 +375,9 @@ async function loadCandidate(candidateId) {
 }
 
 // Run the Director. Returns the shot plan + the concept brief it consumed.
-export async function runDirector(candidateId, { targetMode = 'auto', productId = null, customPrompt = null } = {}) {
+export async function runDirector(candidateId, { targetMode = 'auto', productId = null, customPrompt = null, outputType = 'video' } = {}) {
     if (!isLlmConfigured) throw new Error('ANTHROPIC_API_KEY not configured');
+    const isSlideshow = outputType === 'slideshow';
     let candidate = await loadCandidate(candidateId);
     if (!candidate) throw new Error('Candidate not found');
 
@@ -345,27 +401,38 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
     const timing = buildShotTiming(candidate.analysis);
     const target = await resolveTarget({ targetMode, productId, customPrompt }, candidate, { bridge_line: candidate.bridge_line });
 
+    // Ground in real winning copy + prior-run memory ("lift, don't invent").
+    const [grounding, memoryBlock] = await Promise.all([
+        buildResearchGrounding({ platform: candidate.platform, format: deep?.format, outputType }).catch(() => ''),
+        buildMemoryBlock({ outputType }).catch(() => ''),
+    ]);
+
     const sourceMediaUrl = candidate.media_url || candidate.url || '';
     const user = [
         'CONCEPT BRIEF',
         `Platform: ${candidate.platform}`,
+        `Output: ${isSlideshow ? 'PHOTO SLIDESHOW (carousel)' : 'VIDEO'}`,
         `Bucket: ${candidate.bucket || 'unknown'}`,
-        `Source video (structural + motion reference): ${sourceMediaUrl}`,
+        `Source (structural reference): ${sourceMediaUrl}`,
         candidate.caption ? `Source caption: ${candidate.caption}` : '',
         '',
         analysisBriefText(deep),
         '',
-        timingBriefText(timing),
+        isSlideshow ? slideCountBriefText(timing) : timingBriefText(timing),
         '',
+        memoryBlock,
+        memoryBlock ? '' : null,
+        grounding,
+        grounding ? '' : null,
         target.block,
-    ].filter(Boolean).join('\n');
+    ].filter((x) => x != null && x !== '').join('\n');
 
     // Retry once on transient/no-JSON (Claude occasionally returns prose or
     // trips a content filter on the first pass).
     let plan = null;
     for (let attempt = 0; attempt < 2 && !plan; attempt++) {
         try {
-            plan = await claudeJSON(buildSystem(target.mode), user, { maxTokens: 2600 });
+            plan = await claudeJSON(buildSystem(target.mode, outputType), user, { maxTokens: 2600 });
         } catch (err) {
             if (attempt === 1) throw err;
         }
@@ -374,18 +441,20 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
 
     let shots = normalizeShots(plan.shots);
     if (!shots.length) throw new Error('Director produced no usable shots');
-    shots = applyTiming(shots, timing);
+    // Video matches the source length; slideshow has no per-clip timing.
+    if (!isSlideshow) shots = applyTiming(shots, timing);
 
     return {
         candidate_id: candidateId,
         platform: candidate.platform,
         source_media_url: sourceMediaUrl,
+        output_type: isSlideshow ? 'slideshow' : 'video',
         target_mode: target.mode,
         product_id: target.productId,
         resolved_target: plan.resolved_target || target.resolvedHint,
-        format: plan.format === 'story' ? 'story' : (shots.length > 1 ? 'story' : 'single'),
+        format: isSlideshow ? 'slideshow' : (plan.format === 'story' ? 'story' : (shots.length > 1 ? 'story' : 'single')),
         has_deep_analysis: !!deep,
-        target_duration_total: MATCH_SOURCE_LENGTH ? timing.total : null,
+        target_duration_total: (!isSlideshow && MATCH_SOURCE_LENGTH) ? timing.total : null,
         duration_measured: timing.measured,
         shots,
     };
@@ -400,8 +469,8 @@ export async function directAndSave(candidateId, opts = {}) {
     const ins = await query(
         `insert into generations
             (candidate_id, solution_id, status, target_mode, custom_prompt,
-             resolved_target, director_json, shots)
-         values ($1,$2,'directed',$3,$4,$5,$6,$7)
+             resolved_target, director_json, shots, output_type)
+         values ($1,$2,'directed',$3,$4,$5,$6,$7,$8)
          returning *`,
         [
             candidateId,
@@ -411,6 +480,7 @@ export async function directAndSave(candidateId, opts = {}) {
             plan.resolved_target,
             JSON.stringify(plan),
             JSON.stringify(shotState),
+            plan.output_type || 'video',
         ]
     );
     return { generation: ins.rows[0], plan };
