@@ -15,12 +15,27 @@ import {
     TREND_DISCOVERY,
     SEARCH_TERMS,
     SEARCH_PLATFORMS,
+    INGEST_HASHTAG_BATCH,
+    INGEST_SEARCH_BATCH,
     TREND_MIN_VIEWS,
     TREND_BREAKOUT_RATIO,
     TREND_BREAKOUT_MIN_VIEWS,
     TREND_MIN_ENGAGEMENT,
     TREND_LANG,
 } from './config.js';
+
+// Pick a random subset of a pool so each ingest cycle rotates its coverage
+// (different hashtags/terms each run → fresh, varied videos instead of the same
+// ones). Returns the whole pool when it's already <= n.
+function pickRotating(pool, n) {
+    const arr = Array.isArray(pool) ? [...pool] : [];
+    if (arr.length <= n) return arr;
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, n);
+}
 
 // Upsert a candidate by url; returns its id.
 async function upsertCandidate(c) {
@@ -158,6 +173,14 @@ export async function runIngestCycle({
         const enabled = (platforms && platforms.length ? platforms : PLATFORMS);
         summary.discovery = TREND_DISCOVERY;
 
+        // Rotate a random subset of the (broad) pools each cycle so we monitor
+        // what's going viral across categories and keep the feed fresh instead
+        // of resurfacing the same videos.
+        const tagBatch = pickRotating(hashtags, INGEST_HASHTAG_BATCH);
+        const termBatch = pickRotating(SEARCH_TERMS, INGEST_SEARCH_BATCH);
+        summary.hashtags = tagBatch;
+        summary.searchTerms = termBatch;
+
         // Pick ONE net per platform (avoids redundant actor runs that trip the
         // account memory cap). Search-capable platforms (TikTok, YouTube) use
         // the views-ranked search net; the rest (Instagram) use the hashtag net.
@@ -168,13 +191,13 @@ export async function runIngestCycle({
         for (const p of enabled) {
             const canSearch = SEARCH_PLATFORMS.includes(p);
             if (TREND_DISCOVERY === 'hashtag') {
-                tasks.push({ label: `${p}:hashtag`, run: () => ingestPlatform(p, hashtags) });
+                tasks.push({ label: `${p}:hashtag`, run: () => ingestPlatform(p, tagBatch) });
             } else if (TREND_DISCOVERY === 'search') {
-                if (canSearch) tasks.push({ label: `${p}:search`, run: () => searchPlatform(p, SEARCH_TERMS) });
+                if (canSearch) tasks.push({ label: `${p}:search`, run: () => searchPlatform(p, termBatch) });
             } else {
                 // 'both' — best net per platform
-                if (canSearch) tasks.push({ label: `${p}:search`, run: () => searchPlatform(p, SEARCH_TERMS) });
-                else tasks.push({ label: `${p}:hashtag`, run: () => ingestPlatform(p, hashtags) });
+                if (canSearch) tasks.push({ label: `${p}:search`, run: () => searchPlatform(p, termBatch) });
+                else tasks.push({ label: `${p}:hashtag`, run: () => ingestPlatform(p, tagBatch) });
             }
         }
 

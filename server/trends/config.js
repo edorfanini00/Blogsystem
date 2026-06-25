@@ -11,19 +11,36 @@
 // Trimmed to the 4 most on-brand tags to conserve EnsembleData quota (each
 // tag = 1 API request per ingest cycle). Re-add the commented tags below once
 // on a paid plan with more headroom.
-export const SEED_HASHTAGS = [
-    'manufacturing',
-    'supplychain',
-    'foodmanufacturing',
-    'oilandgas',
-    // 'plantmanager',
-    // 'operations',
-    // 'inventorymanagement',
-    // 'erphumor',
-    // 'corporatehumor',
-    // 'smallbusinessowner',
-    // 'logistics',
+// Broad discovery pool — we monitor what's going viral ACROSS categories, not
+// just a few B2B niches. The quality gate (min views / breakout ratio) keeps
+// only real performers, so casting a wide net surfaces winning formats without
+// flooding the feed with junk. Each ingest cycle uses a rotating subset (see
+// INGEST_HASHTAG_BATCH) so the feed stays fresh instead of resurfacing the same
+// videos. Override the whole list with TREND_HASHTAGS (comma-separated).
+const DEFAULT_HASHTAGS = [
+    // General virality
+    'viral', 'trending', 'fyp', 'foryou', 'viralvideo',
+    // Business / brand / creator
+    'smallbusiness', 'entrepreneur', 'business', 'marketing', 'startup', 'founder',
+    // Formats that travel across topics
+    'howto', 'lifehack', 'satisfying', 'behindthescenes', 'review',
+    // Food (massive on short-form)
+    'food', 'foodie', 'cooking', 'restaurant',
+    // Industry / ops (kept from the original niche)
+    'manufacturing', 'supplychain', 'logistics', 'oilandgas', 'foodmanufacturing',
 ];
+export const SEED_HASHTAGS = (process.env.TREND_HASHTAGS
+    ? process.env.TREND_HASHTAGS.split(',')
+    : DEFAULT_HASHTAGS
+)
+    .map((s) => s.trim().replace(/^#/, ''))
+    .filter(Boolean);
+
+// How many hashtags / search terms to use PER ingest cycle (a rotating random
+// subset of the pools above). Keeps Apify cost bounded while rotating coverage
+// so each run pulls different videos. Raise for wider coverage per run.
+export const INGEST_HASHTAG_BATCH = Number(process.env.INGEST_HASHTAG_BATCH) || 10;
+export const INGEST_SEARCH_BATCH = Number(process.env.INGEST_SEARCH_BATCH) || 10;
 
 // Watchlist of B2B and ops creator accounts (expand later).
 export const WATCHLIST_ACCOUNTS = [];
@@ -94,21 +111,15 @@ export const TREND_DISCOVERY = (process.env.TREND_DISCOVERY || 'both').toLowerCa
 // each one (Companies / Food / Oil) actually gets populated. Override with
 // TREND_SEARCH_TERMS (comma-separated) for a dedicated hunt list.
 const DEFAULT_SEARCH_TERMS = [
-    // General "companies going viral"
-    'factory tour',
-    'how its made',
-    'manufacturing process',
-    'warehouse operations',
-    'company behind the scenes',
-    // Food industry
-    'food factory',
-    'food manufacturing',
-    'food recall',
-    'cold chain logistics',
-    // Oil & gas industry
-    'oil and gas',
-    'oil refinery',
-    'oil rig life',
+    // What's going viral broadly
+    'went viral', 'viral moment', 'oddly satisfying', 'life hack',
+    'before and after', 'day in the life', 'how its made', 'behind the scenes',
+    // Business / product / creator
+    'small business', 'product review', 'startup story', 'marketing idea', 'founder story',
+    // Food
+    'food factory', 'restaurant kitchen', 'street food', 'recipe',
+    // Industry / ops (kept)
+    'factory tour', 'warehouse operations', 'oil rig life', 'oil and gas',
 ];
 export const SEARCH_TERMS = (process.env.TREND_SEARCH_TERMS
     ? process.env.TREND_SEARCH_TERMS.split(',')
