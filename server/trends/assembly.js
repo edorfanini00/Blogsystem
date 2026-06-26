@@ -123,17 +123,20 @@ function finalArgs({ concatPath, voPath, musicPath, assPath, finalPath, maxLen }
 }
 
 // Normalize one clip to a uniform 9:16 / 30fps / h264+aac file so the concat
-// demuxer can stream-copy them together. A silent stereo track is added so
-// every segment has audio (required for clean concat) before the VO overlay.
+// demuxer can stream-copy them together. By default a silent stereo track is
+// added so every segment has audio (required for clean concat) before the VO
+// overlay. When `keepAudio` is set (on-camera dialogue clips from Veo 3), the
+// clip's OWN audio — the generated speech — is kept instead of being replaced.
 // When `trimTo` (seconds) is set, the clip is cut to that length so the
 // assembled cut reproduces the source's per-shot pacing and total runtime.
-async function normalizeClip(src, dest, trimTo = null) {
-    const args = ['-y', '-i', src,
-        '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-        '-map', '0:v:0', '-map', '1:a:0',
+async function normalizeClip(src, dest, trimTo = null, keepAudio = false) {
+    const args = ['-y', '-i', src];
+    if (!keepAudio) args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+    args.push(
+        '-map', '0:v:0', '-map', keepAudio ? '0:a:0' : '1:a:0',
         '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p',
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-        '-c:a', 'aac', '-ar', '44100', '-ac', '2'];
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2');
     if (trimTo && trimTo > 0) args.push('-t', String(trimTo));
     else args.push('-shortest');
     args.push(dest);
@@ -179,16 +182,24 @@ export async function runAssembly(generationId) {
         ? totalTarget
         : (Number(gen.director_json?.target_duration_total) || VIDEO_TARGET_MAX);
 
+    // On-camera dialogue: the speaking clips (Veo 3) already contain the
+    // generated voice. Keep their own audio and skip the ElevenLabs narrator so
+    // we don't double up a voice over a talking character.
+    const onCamera = gen.director_json?.speech_mode === 'on_camera';
+    const clipsHaveAudio = onCamera && clips.some((s) => s.has_audio === true);
+
     const work = await fs.mkdtemp(path.join(os.tmpdir(), `asm-${generationId.slice(0, 8)}-`));
     try {
-        // 1. Download + normalize (and length-trim) every clip in order.
+        // 1. Download + normalize (and length-trim) every clip in order. For
+        //    on-camera dialogue, keep each speaking clip's generated speech.
         const normalized = [];
         for (let i = 0; i < clips.length; i++) {
             const raw = path.join(work, `raw-${i}.mp4`);
             await download(clips[i].video_url, raw);
             const norm = path.join(work, `norm-${i}.mp4`);
             const trimTo = hasTargets ? (Number(clips[i].target_duration) || null) : null;
-            await normalizeClip(raw, norm, trimTo);
+            const keepAudio = clipsHaveAudio && clips[i].has_audio === true;
+            await normalizeClip(raw, norm, trimTo, keepAudio);
             normalized.push(norm);
         }
 
@@ -199,14 +210,19 @@ export async function runAssembly(generationId) {
         await ffmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', concatPath]);
 
         // 3. Voiceover (timestamped) → caption cues, optional music bed.
+        // Skip the ElevenLabs narrator entirely for on-camera dialogue — the
+        // speech is already baked into the clips.
         const voText = gen.copy_json?.voiceover || gen.script || '';
         const finalPath = path.join(work, 'final.mp4');
         let voPath = null, alignment = null, voUrl = null, assPath = null, captionCount = 0;
-        try {
-            const vo = await synthVoiceoverTimed(voText, path.join(work, 'vo.mp3'));
-            if (vo) { voPath = vo.path; alignment = vo.alignment; }
-        } catch {
-            voPath = null; // VO failure should not block the silent cut
+        if (!clipsHaveAudio) {
+            try {
+                const voiceId = gen.director_json?.voice_id || undefined;
+                const vo = await synthVoiceoverTimed(voText, path.join(work, 'vo.mp3'), voiceId);
+                if (vo) { voPath = vo.path; alignment = vo.alignment; }
+            } catch {
+                voPath = null; // VO failure should not block the silent cut
+            }
         }
 
         // Burned captions from the VO alignment (skip gracefully if disabled or
@@ -220,9 +236,10 @@ export async function runAssembly(generationId) {
             }
         }
 
-        // Optional music bed (per-generation override → env default).
+        // Optional music bed (per-generation override → env default). Skipped for
+        // on-camera dialogue so a music track doesn't fight the spoken voice.
         let musicPath = null;
-        const musicUrl = gen.copy_json?.music_url || gen.source_audio_url || MUSIC_URL;
+        const musicUrl = clipsHaveAudio ? null : (gen.copy_json?.music_url || gen.source_audio_url || MUSIC_URL);
         if (musicUrl) {
             try { musicPath = await download(musicUrl, path.join(work, 'music.mp3')); }
             catch { musicPath = null; }

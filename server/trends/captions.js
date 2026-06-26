@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, CAPTIONS_ENABLED, CAPTION_MAX_WORDS,
+    VOICE_MATCH_ENABLED, VOICE_LIBRARY,
 } from './config.js';
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
@@ -19,11 +20,40 @@ export const CAPTION_FONT_PATH = path.join(HERE, 'assets', 'caption-font.ttf');
 export const CAPTION_FONT_NAME = 'Anton';
 export const isCaptionsConfigured = CAPTIONS_ENABLED && !!ELEVENLABS_KEY;
 
+// Pick the ElevenLabs voice that best matches the analyzed source's delivery.
+// Scores library voices on gender (highest weight), then energy, then age.
+// Falls back to the configured default when matching is off or no profile.
+export function pickVoiceId(voiceProfile) {
+    if (!VOICE_MATCH_ENABLED || !voiceProfile || !Array.isArray(VOICE_LIBRARY) || !VOICE_LIBRARY.length) {
+        return ELEVENLABS_VOICE_ID;
+    }
+    const want = {
+        gender: String(voiceProfile.gender || '').toLowerCase(),
+        age: String(voiceProfile.age || '').toLowerCase(),
+        energy: String(voiceProfile.energy || '').toLowerCase(),
+    };
+    // Map "hyped"/"moderate" synonyms onto the library's energy buckets.
+    const energyAlias = (e) => (e === 'hyped' ? 'high' : e === 'medium' ? 'moderate' : e);
+    want.energy = energyAlias(want.energy);
+
+    let best = null, bestScore = -1;
+    for (const v of VOICE_LIBRARY) {
+        let score = 0;
+        if (want.gender && v.gender && want.gender === String(v.gender).toLowerCase()) score += 10;
+        if (want.energy && v.energy && want.energy === energyAlias(String(v.energy).toLowerCase())) score += 4;
+        if (want.age && v.age && want.age === String(v.age).toLowerCase()) score += 2;
+        if (score > bestScore) { bestScore = score; best = v; }
+    }
+    return (best && best.id) ? best.id : ELEVENLABS_VOICE_ID;
+}
+
 // Synthesize VO with character-level timestamps. Writes the mp3 to `dest` and
 // returns { path, alignment } (alignment may be null if the API shape changes).
-export async function synthVoiceoverTimed(text, dest) {
+// `voiceId` defaults to the configured voice; pass a per-video match to vary it.
+export async function synthVoiceoverTimed(text, dest, voiceId = ELEVENLABS_VOICE_ID) {
     if (!ELEVENLABS_KEY || !text || !text.trim()) return null;
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/with-timestamps`, {
+    const useVoice = voiceId || ELEVENLABS_VOICE_ID;
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${useVoice}/with-timestamps`, {
         method: 'POST',
         headers: { 'xi-api-key': ELEVENLABS_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({

@@ -18,7 +18,21 @@ import { runImages, isImageConfigured } from './image.js';
 import { runQc, isQcConfigured } from './qc.js';
 import { runVideo, isVideoAgentConfigured } from './video.js';
 import { runAssembly, isAssemblyConfigured } from './assembly.js';
+import { runCopy, isCopyConfigured } from './copy.js';
 import { runSlides, isSlidesConfigured } from './slides.js';
+
+// Ensure the Copy agent has written voiceover/captions before assembly. Runs
+// once (skips slideshows and anything that already has copy). Best-effort — a
+// missing copy just means assembly falls back to a silent/script-only cut.
+async function ensureCopy(id) {
+    if (!isCopyConfigured) return;
+    try {
+        const { rows } = await query('select copy_json, output_type from generations where id = $1', [id]);
+        const g = rows[0];
+        if (!g || g.output_type === 'slideshow' || g.copy_json) return;
+        await runCopy(id);
+    } catch { /* assembly degrades gracefully */ }
+}
 
 const ACTIVE_STATUSES = ['directed', 'imaging', 'qc', 'animating', 'composing', 'assembling'];
 
@@ -45,6 +59,19 @@ export async function advanceGeneration(id) {
         if (g.status === 'animating') {
             if (!isVideoAgentConfigured) return { id, status: g.status, skipped: 'video not configured' };
             const out = await runVideo(id, { max: 2 });
+            // When that just landed the final clip, finish the job in the same
+            // tick (copy → assemble) so the user never has to click Assemble and
+            // it doesn't stall waiting for the next cron pass.
+            if (out.status === 'assembling' && isAssemblyConfigured) {
+                try {
+                    await ensureCopy(id);
+                    const a = await runAssembly(id);
+                    return { id, step: 'assemble', status: a.status, asset_url: a.asset_url };
+                } catch (err) {
+                    // Leave it at 'assembling' — the next tick (or manual) retries.
+                    return { id, step: 'video', ...out, assembleError: err.message };
+                }
+            }
             return { id, step: 'video', ...out };
         }
         if (g.status === 'composing') {
@@ -54,6 +81,7 @@ export async function advanceGeneration(id) {
         }
         if (g.status === 'assembling') {
             if (!isAssemblyConfigured) return { id, status: g.status, skipped: 'assembly not configured' };
+            await ensureCopy(id);
             const out = await runAssembly(id);
             return { id, step: 'assemble', status: out.status, asset_url: out.asset_url };
         }

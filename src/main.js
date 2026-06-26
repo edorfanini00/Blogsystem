@@ -328,8 +328,10 @@ blogForm.addEventListener('submit', async (e) => {
 
                         // Render blog body — HTML from Claude
                         let cleanContent = data.content
+                            .replace(/<!--\s*FOCUS_KEYPHRASE:.*?-->\n?/g, '')
                             .replace(/<!--\s*SEO_TITLE:.*?-->\n?/g, '')
                             .replace(/<!--\s*META_DESC:.*?-->\n?/g, '')
+                            .replace(/<!--\s*SLUG:.*?-->\n?/g, '')
                             .replace(/<!--\s*SEO_KEYWORDS:.*?-->\n?/g, '');
                         blogBody.innerHTML = cleanContent;
                         englishBlogHtml = cleanContent;
@@ -363,6 +365,8 @@ blogForm.addEventListener('submit', async (e) => {
                                 seoTitle: data.metaTitle,
                                 seoDescription: data.metaDescription,
                                 seoKeywords: data.seoKeywords,
+                                focusKeyphrase: data.focusKeyphrase || '',
+                                slug: data.slug || '',
                                 keywords, description, wordCount,
                                 userName: window.currentUser?.name || 'Unknown',
                                 spanishHtml: data.spanishHtmlContent || null,
@@ -442,6 +446,11 @@ publishBtn.addEventListener('click', async () => {
                 title: generatedBlog.title,
                 htmlContent: englishBlogHtml || blogBody.innerHTML,
                 featuredMediaId: generatedBlog.featuredMediaId || null,
+                focusKeyphrase: generatedBlog.focusKeyphrase || '',
+                metaTitle: generatedBlog.metaTitle || '',
+                metaDescription: generatedBlog.metaDescription || '',
+                seoKeywords: generatedBlog.seoKeywords || [],
+                slug: generatedBlog.slug || '',
             }),
         });
 
@@ -464,6 +473,8 @@ publishBtn.addEventListener('click', async () => {
                         title: spanishTitle,
                         htmlContent: spanishBlogHtml,
                         featuredMediaId: generatedBlog.featuredMediaId || null,
+                        focusKeyphrase: generatedBlog.focusKeyphrase || '',
+                        slug: generatedBlog.slug ? `${generatedBlog.slug}-es` : '',
                     }),
                 });
                 if (spanishRes.ok) {
@@ -484,12 +495,17 @@ publishBtn.addEventListener('click', async () => {
     `;
         publishResult.style.display = 'block';
 
-        // Mark blog as published in history
+        // Mark blog as published in history (store the live URL/slug so future posts can link to it)
         if (currentBlogId) {
             await fetch(`${API_BASE}/api/blogs/${currentBlogId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ published: true, html: englishBlogHtml }),
+                body: JSON.stringify({
+                    published: true,
+                    html: englishBlogHtml,
+                    url: result.viewUrl || '',
+                    slug: result.slug || generatedBlog.slug || '',
+                }),
             });
             loadBlogHistory();
         }
@@ -5678,7 +5694,7 @@ setTimeout(function initOnePager() {
 
         loading.style.display = '';
         try {
-            const res = await fetch(tApi('/api/trends/candidates?limit=100'));
+            const res = await fetch(tApi('/api/trends/candidates?limit=1000'));
             if (!res.ok) throw new Error('Failed to load candidates');
             state.candidates = await res.json();
         } catch (err) {
@@ -6244,75 +6260,105 @@ setTimeout(function initOnePager() {
     }
 
     // ─── Autopilot (autonomous daily generation) ────────────────
-    function setApEnabledUI(on) {
-        const t = document.getElementById('apEnabledToggle');
-        const lbl = document.getElementById('apEnabledLabel');
+    // Two parallel agents share the same UI logic, keyed by `agent`:
+    //   • default → Trend Autopilot (fits viral concepts to a product/brand)
+    //   • ownpage → Instagram Autopilot (retargets concepts to our IG content)
+    const AP_AGENTS = {
+        default: {
+            agent: 'default',
+            hasTargetMode: true,
+            ids: { toggle: 'apEnabledToggle', label: 'apEnabledLabel', daily: 'apDailyCount',
+                output: 'apOutputType', mode: 'apTargetMode', min: 'apMinScore',
+                cooldown: 'apCooldown', save: 'apSaveBtn', run: 'apRunBtn', feed: 'apFeed' },
+        },
+        ownpage: {
+            agent: 'ownpage',
+            hasTargetMode: false,
+            ids: { toggle: 'ap2EnabledToggle', label: 'ap2EnabledLabel', daily: 'ap2DailyCount',
+                output: 'ap2OutputType', mode: null, min: 'ap2MinScore',
+                cooldown: 'ap2Cooldown', save: 'ap2SaveBtn', run: 'ap2RunBtn', feed: 'ap2Feed' },
+        },
+    };
+
+    function setApEnabledUI(cfg, on) {
+        const t = document.getElementById(cfg.ids.toggle);
+        const lbl = document.getElementById(cfg.ids.label);
         if (t) t.checked = !!on;
         if (lbl) lbl.textContent = on ? 'On' : 'Off';
     }
 
-    async function loadAutopilot() {
-        const dbOk = state.health && state.health.db && state.health.db.ok;
-        if (!dbOk) return;
+    async function loadAutopilotAgent(cfg) {
         try {
-            const res = await fetch(tApi('/api/trends/autopilot'));
+            const res = await fetch(tApi(`/api/trends/autopilot?agent=${cfg.agent}`));
             if (!res.ok) throw new Error('load failed');
             const data = await res.json();
             const s = data.settings || {};
-            setApEnabledUI(s.enabled);
-            const set = (id, v) => { const el = document.getElementById(id); if (el != null && v != null) el.value = v; };
-            set('apDailyCount', s.dailyCount);
-            set('apOutputType', s.outputType);
-            set('apTargetMode', s.targetMode);
-            set('apMinScore', s.minScore);
-            set('apCooldown', s.cooldownDays);
-            renderAutopilotRuns(data.runs || []);
+            setApEnabledUI(cfg, s.enabled);
+            const set = (id, v) => { if (!id) return; const el = document.getElementById(id); if (el != null && v != null) el.value = v; };
+            set(cfg.ids.daily, s.dailyCount);
+            set(cfg.ids.output, s.outputType);
+            if (cfg.hasTargetMode) set(cfg.ids.mode, s.targetMode);
+            set(cfg.ids.min, s.minScore);
+            set(cfg.ids.cooldown, s.cooldownDays);
+            renderAutopilotRuns(cfg, data.runs || []);
         } catch {
             toast('Could not load Autopilot', 'error');
         }
     }
 
-    function apSettingsFromUI() {
-        const val = (id) => document.getElementById(id)?.value;
-        return {
-            enabled: !!document.getElementById('apEnabledToggle')?.checked,
-            dailyCount: parseInt(val('apDailyCount'), 10) || 3,
-            outputType: val('apOutputType') || 'mix',
-            targetMode: val('apTargetMode') || 'auto',
-            minScore: parseFloat(val('apMinScore')) || 0,
-            cooldownDays: parseInt(val('apCooldown'), 10) || 0,
-        };
+    async function loadAutopilot() {
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) return;
+        await Promise.all(Object.values(AP_AGENTS).map(loadAutopilotAgent));
     }
 
-    async function saveAutopilotSettings() {
+    function apSettingsFromUI(cfg) {
+        const val = (id) => (id ? document.getElementById(id)?.value : undefined);
+        const out = {
+            agent: cfg.agent,
+            enabled: !!document.getElementById(cfg.ids.toggle)?.checked,
+            dailyCount: parseInt(val(cfg.ids.daily), 10) || 3,
+            outputType: val(cfg.ids.output) || 'mix',
+            minScore: parseFloat(val(cfg.ids.min)) || 0,
+            cooldownDays: parseInt(val(cfg.ids.cooldown), 10) || 0,
+        };
+        if (cfg.hasTargetMode) out.targetMode = val(cfg.ids.mode) || 'auto';
+        return out;
+    }
+
+    async function saveAutopilotSettings(cfg) {
         try {
             const res = await fetch(tApi('/api/trends/autopilot/settings'), {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(apSettingsFromUI()),
+                body: JSON.stringify(apSettingsFromUI(cfg)),
             });
             const data = await res.json();
             if (!res.ok) { toast(data.error || 'Save failed', 'error'); return; }
-            setApEnabledUI(data.settings?.enabled);
-            toast(data.settings?.enabled ? 'Autopilot is ON — it will run daily' : 'Settings saved (Autopilot is off)', 'success');
+            setApEnabledUI(cfg, data.settings?.enabled);
+            const name = cfg.agent === 'ownpage' ? 'Instagram Autopilot' : 'Autopilot';
+            toast(data.settings?.enabled ? `${name} is ON — it will run daily` : `Settings saved (${name} is off)`, 'success');
         } catch (err) {
             toast('Save failed: ' + err.message, 'error');
         }
     }
 
-    async function runAutopilotNow() {
-        const btn = document.getElementById('apRunBtn');
+    async function runAutopilotNow(cfg) {
+        const btn = document.getElementById(cfg.ids.run);
         const orig = btn ? btn.textContent : '';
         if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
         try {
             // Persist current settings first so a manual run honors the latest UI.
             await fetch(tApi('/api/trends/autopilot/settings'), {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(apSettingsFromUI()),
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(apSettingsFromUI(cfg)),
             }).catch(() => {});
-            const res = await fetch(tApi('/api/trends/autopilot/run'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const res = await fetch(tApi('/api/trends/autopilot/run'), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent: cfg.agent }),
+            });
             const data = await res.json();
             if (!res.ok) { toast(data.error || 'Run failed', 'error'); return; }
             toast(data.made ? `Autopilot started ${data.made} remake${data.made > 1 ? 's' : ''} — see the Queue` : (data.notes || 'No eligible candidates right now'), data.made ? 'success' : 'info');
-            await loadAutopilot();
+            await loadAutopilotAgent(cfg);
         } catch (err) {
             toast('Run failed: ' + err.message, 'error');
         } finally {
@@ -6320,8 +6366,8 @@ setTimeout(function initOnePager() {
         }
     }
 
-    function renderAutopilotRuns(runs) {
-        const feed = document.getElementById('apFeed');
+    function renderAutopilotRuns(cfg, runs) {
+        const feed = document.getElementById(cfg.ids.feed);
         if (!feed) return;
         if (!runs.length) {
             feed.innerHTML = '<div class="trend-empty-inline">No runs yet. Turn Autopilot on, or hit “Run now” to test it.</div>';
@@ -6582,7 +6628,7 @@ setTimeout(function initOnePager() {
 
         loading.style.display = '';
         try {
-            const res = await fetch(tApi('/api/trends/generations?limit=100'));
+            const res = await fetch(tApi('/api/trends/generations?limit=1000'));
             if (!res.ok) throw new Error('load failed');
             state.generations = await res.json();
         } catch (err) {
@@ -6617,6 +6663,32 @@ setTimeout(function initOnePager() {
         empty.style.display = 'none';
         list.innerHTML = items.map(buildGenCard).join('');
         bindGenActions();
+    }
+
+    // The source video this remake was built from — shown alongside the result
+    // so you can compare the concept reference to the output. Prefers the
+    // playable media_url; falls back to the post thumbnail, then a source link.
+    function buildConceptReference(g) {
+        let dj = {};
+        try { dj = typeof g.director_json === 'string' ? JSON.parse(g.director_json) : (g.director_json || {}); } catch { dj = {}; }
+        const src = g.source_media_url || dj.source_media_url || '';
+        const thumb = g.source_thumb || '';
+        const link = g.source_url || '';
+        if (!src && !thumb && !link) return '';
+        let inner;
+        if (src) {
+            inner = `<video class="trend-gen-ref-video" src="${esc(src)}" controls muted loop preload="metadata" playsinline></video>`;
+        } else if (thumb) {
+            inner = `<a href="${esc(link)}" target="_blank" rel="noopener"><img class="trend-gen-ref-img" src="${esc(thumb)}" alt="reference" loading="lazy"></a>`;
+        } else {
+            inner = `<a class="btn-ghost" href="${esc(link)}" target="_blank" rel="noopener">Open reference ↗</a>`;
+        }
+        const meta = [g.platform ? esc(g.platform) : '', link ? `<a class="trend-gen-ref-link" href="${esc(link)}" target="_blank" rel="noopener">view original ↗</a>` : '']
+            .filter(Boolean).join(' · ');
+        return `<div class="trend-gen-reference">
+          <div class="trend-gen-ref-label">🎯 Concept reference${meta ? ` <span>${meta}</span>` : ''}</div>
+          ${inner}
+        </div>`;
     }
 
     function buildGenCard(g) {
@@ -6708,7 +6780,7 @@ setTimeout(function initOnePager() {
 
         return `
         <div class="trend-gen-card" data-gen="${esc(g.id)}">
-          <div class="trend-gen-media">${media}</div>
+          <div class="trend-gen-media">${media}${buildConceptReference(g)}</div>
           <div class="trend-gen-body">
             <div class="trend-gen-head">
               <span class="trend-gen-status ${sm.cls}">${sm.label}</span>
@@ -6798,11 +6870,25 @@ setTimeout(function initOnePager() {
         const busyLabel = { images: 'Rendering…', qc: 'Grading…', video: 'Animating…', copy: 'Writing…', assemble: 'Assembling…', slides: 'Composing…' }[stage] || 'Working…';
         if (btn) { btn.disabled = true; btn.dataset.orig = btn.textContent; btn.textContent = busyLabel; }
         try {
-            // Video is staged + resumable; drive it to completion in a loop.
+            // Video is staged + resumable; drive it to completion in a loop, then
+            // finish the job automatically (copy + assemble) so there's no manual
+            // "Assemble video" step.
             if (stage === 'video') {
                 const out = await runVideoLoop(genId);
                 await loadGenerations();
-                toast(out.done ? 'All clips rendered — ready to assemble' : (out.message || 'Clips still rendering'), out.done ? 'success' : 'info');
+                if (!out.done) { toast(out.message || 'Clips still rendering', 'info'); return; }
+                toast('All clips rendered. Writing voiceover and assembling…');
+                try {
+                    await fetch(tApi(`/api/trends/generations/${genId}/copy`), {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                    });
+                } catch { /* assembly produces a silent cut if copy is missing */ }
+                const ares = await fetch(tApi(`/api/trends/generations/${genId}/assemble`), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+                });
+                const adata = await ares.json().catch(() => ({}));
+                await loadGenerations();
+                toast(ares.ok && adata.asset_url ? 'Final video ready for review' : (adata.error || 'Assembly will retry — clips are ready in the Queue'), ares.ok && adata.asset_url ? 'success' : 'info');
                 return;
             }
             const res = await fetch(tApi(`/api/trends/generations/${genId}/${stage}`), {
@@ -7196,13 +7282,15 @@ setTimeout(function initOnePager() {
         const sortSel = document.getElementById('trendSort');
         if (sortSel) sortSel.addEventListener('change', () => { state.sort = sortSel.value; renderCandidates(); });
 
-        // Autopilot
-        const apToggle = document.getElementById('apEnabledToggle');
-        if (apToggle) apToggle.addEventListener('change', saveAutopilotSettings);
-        const apSave = document.getElementById('apSaveBtn');
-        if (apSave) apSave.addEventListener('click', saveAutopilotSettings);
-        const apRun = document.getElementById('apRunBtn');
-        if (apRun) apRun.addEventListener('click', runAutopilotNow);
+        // Autopilot — bind both agents (Trend + Instagram)
+        Object.values(AP_AGENTS).forEach((cfg) => {
+            const toggle = document.getElementById(cfg.ids.toggle);
+            if (toggle) toggle.addEventListener('change', () => saveAutopilotSettings(cfg));
+            const save = document.getElementById(cfg.ids.save);
+            if (save) save.addEventListener('click', () => saveAutopilotSettings(cfg));
+            const run = document.getElementById(cfg.ids.run);
+            if (run) run.addEventListener('click', () => runAutopilotNow(cfg));
+        });
 
         const refresh = document.getElementById('trendRefreshBtn');
         if (refresh) refresh.addEventListener('click', async () => { await loadHealth(); await loadCandidates(); });

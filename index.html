@@ -2190,10 +2190,12 @@
 
         <!-- ─── Sub-tab: Autopilot (autonomous daily generation) ─── -->
         <div class="trend-subpanel" id="trendPanelAutopilot" style="display:none;">
+
+          <!-- Agent 1 — Trend → Product/Brand -->
           <div class="ap-head">
             <div>
-              <h3 class="ap-title">Autopilot</h3>
-              <p class="ap-sub">An autonomous agent. Every day it scans your highest-scoring videos and what's performed for you, then auto-creates new remakes — no clicks. Everything it makes lands in the Queue for your review.</p>
+              <h3 class="ap-title">Trend Autopilot</h3>
+              <p class="ap-sub">An autonomous agent. Every day it scans your highest-scoring videos and what's performed for you, then auto-creates new remakes fitted to your product/brand — no clicks. Everything it makes lands in the Queue for your review.</p>
             </div>
             <label class="ap-switch">
               <input type="checkbox" id="apEnabledToggle">
@@ -2239,6 +2241,51 @@
           <h4 class="ap-feed-title">Activity</h4>
           <div id="apFeed" class="ap-feed">
             <div class="trend-empty-inline">No runs yet. Turn Autopilot on, or hit “Run now” to test it.</div>
+          </div>
+
+          <!-- Agent 2 — Trend → our Instagram content -->
+          <div class="ap-head" style="margin-top:36px;">
+            <div>
+              <h3 class="ap-title">Instagram Autopilot</h3>
+              <p class="ap-sub">Same scanning + ranking, but every viral concept is retargeted to <strong>what you actually post on your Instagram</strong>. It lifts only the format, person type, pacing and delivery from the viral video and tells one of <em>your own</em> stories — never the source's topic. Needs your Instagram connected (OWN_INSTAGRAM_HANDLE + APIFY_TOKEN).</p>
+            </div>
+            <label class="ap-switch">
+              <input type="checkbox" id="ap2EnabledToggle">
+              <span class="ap-switch-track"><span class="ap-switch-thumb"></span></span>
+              <span class="ap-switch-label" id="ap2EnabledLabel">Off</span>
+            </label>
+          </div>
+
+          <div class="ap-settings" id="ap2Settings">
+            <div class="ap-field">
+              <label for="ap2DailyCount">New remakes / day</label>
+              <input type="number" id="ap2DailyCount" min="1" max="10" value="3">
+            </div>
+            <div class="ap-field">
+              <label for="ap2OutputType">Format</label>
+              <select id="ap2OutputType">
+                <option value="mix">Mix (video + slideshow)</option>
+                <option value="video">Video only</option>
+                <option value="slideshow">Slideshow only</option>
+              </select>
+            </div>
+            <div class="ap-field">
+              <label for="ap2MinScore">Min score</label>
+              <input type="number" id="ap2MinScore" min="0" max="10" step="0.5" value="0">
+            </div>
+            <div class="ap-field">
+              <label for="ap2Cooldown">Cooldown (days)</label>
+              <input type="number" id="ap2Cooldown" min="0" max="90" value="14">
+            </div>
+            <div class="ap-actions">
+              <button class="btn-ghost" id="ap2SaveBtn">Save settings</button>
+              <button class="trend-btn-recreate" id="ap2RunBtn">Run now</button>
+            </div>
+          </div>
+
+          <h4 class="ap-feed-title">Activity</h4>
+          <div id="ap2Feed" class="ap-feed">
+            <div class="trend-empty-inline">No runs yet. Turn the Instagram Autopilot on, or hit “Run now” to test it.</div>
           </div>
         </div>
 

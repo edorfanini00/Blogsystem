@@ -94,11 +94,23 @@ async function uploadSourceFrame(thumbUrl) {
     }
 }
 
+// When we copy the source frame for COMPOSITION in a non-exact remake, the
+// image /edit lane tends to preserve the original person's identity. This
+// directive forces a different individual so we don't ship a near-duplicate of
+// the source (which platforms penalize). Composition/framing/lighting are kept.
+const REPLACE_PERSON_DIRECTIVE =
+    ' IMPORTANT: Use the reference image ONLY for composition, framing, camera angle and lighting. '
+    + 'Replace any person with a COMPLETELY DIFFERENT individual — different face, age, ethnicity, '
+    + 'hair, body type and clothing. Do NOT reproduce the person from the reference.';
+
 // Generate one shot image. promptOverride lets the QC loop retry with a
-// refined prompt. Returns { image_url } | { pending, request_id, status_url }.
-export async function generateShotImage(shot, { sourceFrameUrl = null, promptOverride = null } = {}) {
-    const prompt = promptOverride || shot.image_prompt;
+// refined prompt. replacePerson appends the identity-swap directive when a
+// non-exact remake reuses the source frame for composition.
+// Returns { image_url } | { pending, request_id, status_url }.
+export async function generateShotImage(shot, { sourceFrameUrl = null, promptOverride = null, replacePerson = false } = {}) {
     const wantsFrame = !!(shot.use_source_frame && sourceFrameUrl);
+    let prompt = promptOverride || shot.image_prompt;
+    if (wantsFrame && replacePerson) prompt = `${prompt}${REPLACE_PERSON_DIRECTIVE}`;
 
     if (USE_FAL) {
         const lane = falLaneFor(shot.model_choice);
@@ -195,6 +207,10 @@ export async function runImages(generationId, { max = Infinity } = {}) {
     const shots = Array.isArray(gen.shots) ? gen.shots : (gen.director_json?.shots || []);
     if (!shots.length) throw new Error('No shots to render (run the Director first)');
 
+    // Exact recreations intentionally reproduce the source; everything else must
+    // swap the person so we don't post a near-duplicate (algorithm penalty).
+    const replacePerson = gen.target_mode !== 'exact';
+
     await query(`update generations set status = 'imaging' where id = $1`, [generationId]);
 
     // Per-beat source frames (TikTok/IG): one extracted frame per shot so each
@@ -217,7 +233,7 @@ export async function runImages(generationId, { max = Infinity } = {}) {
         rendered++;
         try {
             const sourceFrameUrl = shot.source_frame_url || thumbFrameUrl;
-            const out = await generateShotImage(shot, { sourceFrameUrl });
+            const out = await generateShotImage(shot, { sourceFrameUrl, replacePerson });
             if (out.pending) {
                 shot.image_request_id = out.request_id;
                 shot.image_status_url = out.status_url;

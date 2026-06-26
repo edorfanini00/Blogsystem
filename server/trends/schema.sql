@@ -247,7 +247,12 @@ create table if not exists autopilot_runs (
     started_at  timestamptz not null default now(),
     finished_at timestamptz
 );
+-- Which agent produced this run: 'default' (product/brand) or 'ownpage'
+-- (retargets viral concepts to our own Instagram content). Idempotent add so
+-- existing deployments migrate forward.
+alter table autopilot_runs add column if not exists agent text not null default 'default';
 create index if not exists idx_autopilot_runs_started on autopilot_runs (started_at desc);
+create index if not exists idx_autopilot_runs_agent on autopilot_runs (agent, started_at desc);
 
 -- ─── trend_reports (weekly intelligence) ────────────────────────
 -- One row per weekly analysis run. The factual parts (signals, trending,

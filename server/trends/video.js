@@ -18,9 +18,14 @@ import { runMotion } from './motion.js';
 import {
     HF_VIDEO_MODELS, HF_VIDEO_DOP_MODEL, VIDEO_MAX_REGENS, MAX_VIDEO_RENDERS,
     VIDEO_PROVIDER, FAL_VIDEO_MODEL, FAL_VIDEO_DURATION,
+    TALKING_AUDIO_NATIVE, FAL_TALKING_MODEL,
 } from './config.js';
 
 const USE_FAL_VIDEO = VIDEO_PROVIDER === 'fal';
+// On-camera dialogue is generated with an audio-native model on fal (Kling
+// 2.6/3.0 by default, optionally Veo 3), available whenever FAL_KEY is set —
+// independent of the base video provider.
+const TALKING_AVAILABLE = TALKING_AUDIO_NATIVE && fal.isFalConfigured;
 
 // Total animation submissions consumed (clips + in-flight + regens) for the
 // cost ceiling.
@@ -45,54 +50,104 @@ function dopArgs(imageUrl, motionPrompt) {
     };
 }
 
-// Pick the clip length to REQUEST so the generated clip is long enough to be
-// trimmed down to the shot's target_duration in assembly. Kling only offers
-// "5"|"10"; Seedance takes an integer 3..12. Falls back to the configured
-// default when no target is set.
-function falVideoDuration(targetDuration) {
+// Kling 2.6 / 3.0 / o3 use a different image-to-video schema than the older
+// Kling 2.x / 2.5-turbo: { start_image_url } (not image_url), a 3..15s duration
+// window, and native audio via generate_audio. Detect them so we send the right
+// fields (and can render lip-synced on-camera speech).
+function isKlingAudioGen(model) {
+    return /kling-video\/(v2\.6|v3|o3)/i.test(model || '');
+}
+
+// Pick the clip length to REQUEST (string, per fal's enum) so the generated clip
+// is long enough to trim down to the shot's target_duration in assembly. Window
+// depends on the model: Kling 2.6/3.0 = 3..15, Seedance = 3..12, older Kling =
+// "5"|"10". Falls back to the configured default when no target is set.
+function falDurationFor(model, targetDuration) {
     const t = Number(targetDuration);
-    if (!t || t <= 0) return FAL_VIDEO_DURATION;
-    if (/seedance/i.test(FAL_VIDEO_MODEL)) {
+    if (isKlingAudioGen(model)) {
+        const n = (!t || t <= 0) ? (Number(FAL_VIDEO_DURATION) || 5) : t;
+        return String(Math.min(Math.max(Math.ceil(n), 3), 15));
+    }
+    if (/seedance/i.test(model)) {
+        if (!t || t <= 0) return FAL_VIDEO_DURATION;
         return String(Math.min(Math.max(Math.ceil(t), 3), 12));
     }
-    // Kling (and unknown models): quantize up to the nearest supported option.
+    if (!t || t <= 0) return FAL_VIDEO_DURATION;
     return t <= 5 ? '5' : '10';
 }
 
-// Build the fal image-to-video input. Kling takes { prompt, image_url,
-// duration }; Seedance additionally accepts resolution/aspect_ratio.
-function falVideoInput(imageUrl, motionPrompt, targetDuration) {
-    const input = { prompt: motionPrompt, image_url: imageUrl, duration: falVideoDuration(targetDuration) };
-    if (/seedance/i.test(FAL_VIDEO_MODEL)) {
-        input.resolution = '1080p';
-        input.aspect_ratio = 'auto';
+// Build a fal image-to-video input for any supported model. Handles the schema
+// split between Kling 2.6/3.0 (start_image_url, generate_audio, 3..15s) and the
+// older image_url models, plus Seedance extras. When `dialogue` is given (and
+// the model is audio-capable Kling), the line is embedded in the prompt and
+// generate_audio is set so the character speaks it lip-synced.
+function falVideoInput(model, { imageUrl, motionPrompt, targetDuration, audio = false, dialogue = '' }) {
+    const duration = falDurationFor(model, targetDuration);
+    if (isKlingAudioGen(model)) {
+        const spoken = (audio && dialogue)
+            ? ` The person looks at the camera and says, clearly and naturally: "${dialogue}". Their lips are precisely synced to these words.`
+            : '';
+        const input = {
+            prompt: `${motionPrompt}${spoken}`.trim(),
+            start_image_url: imageUrl,
+            duration,
+        };
+        if (audio) input.generate_audio = true;
+        return input;
     }
-    return input;
+    if (/seedance/i.test(model)) {
+        return { prompt: motionPrompt, image_url: imageUrl, duration, resolution: '1080p', aspect_ratio: 'auto' };
+    }
+    return { prompt: motionPrompt, image_url: imageUrl, duration };
 }
 
 // Submit one still for animation. Returns
-//   { video_url } | { pending, request_id, status_url, response_url }.
-async function animateShot(shot, { deadlineMs = 110000 } = {}) {
+//   { video_url } | { pending, request_id, status_url, response_url }, tagged
+// with provider ('fal'|'hf') and has_audio so resume/assembly handle it right.
+async function animateShot(shot, { deadlineMs = 110000, talking = false } = {}) {
     const motion = shot.motion_prompt || shot.motion_intent || DEFAULT_MOTION;
-    if (USE_FAL_VIDEO) {
-        const out = await fal.subscribe(FAL_VIDEO_MODEL, falVideoInput(shot.image_url, motion, shot.target_duration), { deadlineMs, pollMs: 4000 });
+    if (talking) {
+        // On-camera dialogue → audio-native Kling (2.6/3.0): same engine the
+        // playbook recommends, with the spoken line baked into the clip.
+        const input = falVideoInput(FAL_TALKING_MODEL, {
+            imageUrl: shot.image_url, motionPrompt: motion,
+            targetDuration: shot.target_duration, audio: true, dialogue: shot.dialogue,
+        });
+        const out = await fal.subscribe(FAL_TALKING_MODEL, input, { deadlineMs, pollMs: 4000 });
         if (out.pending) {
             return {
                 pending: true, request_id: out.request_id,
                 status_url: out.status_url, response_url: out.response_url,
+                provider: 'fal', has_audio: true,
+            };
+        }
+        const url = fal.pickVideoUrl(out.result);
+        if (!url) throw new Error(`${FAL_TALKING_MODEL} completed but no video URL`);
+        return { video_url: url, request_id: out.request_id, provider: 'fal', has_audio: true };
+    }
+    if (USE_FAL_VIDEO) {
+        const input = falVideoInput(FAL_VIDEO_MODEL, {
+            imageUrl: shot.image_url, motionPrompt: motion, targetDuration: shot.target_duration,
+        });
+        const out = await fal.subscribe(FAL_VIDEO_MODEL, input, { deadlineMs, pollMs: 4000 });
+        if (out.pending) {
+            return {
+                pending: true, request_id: out.request_id,
+                status_url: out.status_url, response_url: out.response_url,
+                provider: 'fal',
             };
         }
         const url = fal.pickVideoUrl(out.result);
         if (!url) throw new Error(`${FAL_VIDEO_MODEL} completed but no video URL`);
-        return { video_url: url, request_id: out.request_id };
+        return { video_url: url, request_id: out.request_id, provider: 'fal' };
     }
     const out = await subscribe(DOP, dopArgs(shot.image_url, motion), { deadlineMs, pollMs: 4000 });
     if (out.pending) {
-        return { pending: true, request_id: out.request_id, status_url: out.status_url };
+        return { pending: true, request_id: out.request_id, status_url: out.status_url, provider: 'hf' };
     }
     const url = pickVideoUrl(out.result);
     if (!url) throw new Error('DoP completed but no video URL');
-    return { video_url: url, request_id: out.request_id };
+    return { video_url: url, request_id: out.request_id, provider: 'hf' };
 }
 
 async function loadGen(generationId) {
@@ -111,12 +166,15 @@ async function save(generationId, shots, status) {
 // Resume a still-running DoP job for one shot. Returns true if it resolved a
 // video_url (or terminal failure), false if it is still pending.
 async function resumePending(shot) {
+    // The talking (Veo 3) path runs on fal even when the base provider is
+    // Higgsfield, so resume by the provider recorded on the shot at submit time.
+    const useFal = shot.video_provider ? shot.video_provider === 'fal' : USE_FAL_VIDEO;
     try {
-        const r = USE_FAL_VIDEO
+        const r = useFal
             ? await fal.poll(shot.video_status_url, shot.video_response_url, { deadlineMs: 100000, pollMs: 4000 })
             : await poll(shot.video_status_url, { deadlineMs: 100000, pollMs: 4000 });
         if (r.pending) return false;
-        const url = USE_FAL_VIDEO ? fal.pickVideoUrl(r.result) : pickVideoUrl(r.result);
+        const url = useFal ? fal.pickVideoUrl(r.result) : pickVideoUrl(r.result);
         if (url) {
             shot.video_url = url;
             shot.video_status_url = null;
@@ -148,6 +206,11 @@ export async function runVideo(generationId, { max = 2 } = {}) {
     if (!gen) throw new Error('Generation not found');
     const shots = Array.isArray(gen.shots) ? gen.shots : [];
     if (!shots.length) throw new Error('No shots to animate (run the Director first)');
+
+    // On-camera dialogue sources render their speaking shots with an audio-native
+    // model (Veo 3) so the character actually talks; everything else stays on the
+    // normal silent-clip path. Requires fal (Veo 3 host).
+    const onCamera = gen.director_json?.speech_mode === 'on_camera';
 
     // Ensure every shot has a motion prompt before animating.
     if (shots.some((s) => !s.motion_prompt)) {
@@ -188,21 +251,26 @@ export async function runVideo(generationId, { max = 2 } = {}) {
             // else fell through to retry below
         }
 
+        const talking = onCamera && shot.speaking === true && TALKING_AVAILABLE;
         let attempt = shot.video_regens || 0;
         let ok = false, concurrencyHit = false;
         while (attempt <= VIDEO_MAX_REGENS && !ok) {
             try {
-                const out = await animateShot(shot);
+                const out = await animateShot(shot, { talking });
                 if (out.pending) {
                     shot.video_request_id = out.request_id;
                     shot.video_status_url = out.status_url;
                     shot.video_response_url = out.response_url || null;
+                    shot.video_provider = out.provider || null;
+                    shot.has_audio = out.has_audio === true;
                     shot.video_error = null;
                     pending++;
                     ok = true; // submitted; resume next call
                 } else {
                     shot.video_url = out.video_url;
                     shot.video_request_id = out.request_id;
+                    shot.video_provider = out.provider || null;
+                    shot.has_audio = out.has_audio === true;
                     shot.video_error = null;
                     made++;
                     ok = true;

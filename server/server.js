@@ -362,10 +362,11 @@ Your research must cover ALL of these areas:
 - What OBJECTIONS or SKEPTICISMS they have about existing solutions
 - What EMOTIONAL triggers drive their decisions
 
-## 2. SEO KEYWORD RESEARCH
+## 2. SEMANTIC SEO & KEYWORD RESEARCH (NLP-first)
 - Primary keyword (high volume, moderate competition)
 - 5-10 secondary/long-tail keywords
-- LSI (Latent Semantic Indexing) keywords — related terms search engines associate with this topic
+- SYNONYM & WORD-FORM BANK (critical): for the primary keyword AND each major secondary keyword, list a rich set of synonyms, paraphrases, and natural word-form variants — different parts of speech and inflections (e.g. for "optimize": optimizing, optimization, optimized, fine-tune, streamline, improve, refine). The writer will use these to AVOID repeating the exact keyword and to write naturally.
+- Semantically related terms & ENTITIES (people, brands, products, tools, places, concepts) that modern NLP models (Google BERT/MUM, Gemini) associate with this topic
 - Question-based keywords ("how to…", "what is…", "why does…")
 - Competitor keywords — what top-ranking articles target
 - Search intent classification for each keyword (informational, navigational, transactional, commercial)
@@ -404,7 +405,7 @@ Desired tone: ${customization.tone || 'Professional'}
 Scan Reddit posts, X/Twitter discussions, Quora, industry forums, and top-ranking Google results.
 Identify the exact search terms people use, the questions they ask, the pain points they express.
 Analyze what the top 5 competing articles do well and what content gaps exist.
-Provide specific LSI keywords, long-tail variations, and question-based keywords.
+Provide a rich synonym & word-form bank for the main keywords (so the writer can vary language instead of repeating phrases), plus semantically related terms, entities, long-tail variations, and question-based keywords.
 Include GEO optimization recommendations — what makes content get cited by AI engines.
 Focus specifically on the ${customization.target || 'general'} audience and ${customization.product || 'general'} industry.
 Be extremely specific and actionable.`
@@ -428,7 +429,7 @@ Be extremely specific and actionable.`
 // ─── Claude System Prompt ────────────────────────────────────────
 function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls, customization = {}) {
     const researchBlock = researchInsights
-        ? `\n\n═══ RESEARCH BRIEF (all research has already been completed for you — use it directly) ═══\n${researchInsights}\n═══ END RESEARCH BRIEF ═══\n\nYOU MUST USE THE RESEARCH ABOVE — do NOT guess, invent stats, or do your own research. Everything you need is in the brief above. Specifically:\n- Use the EXACT primary keyword in H1, first paragraph, and throughout\n- Work ALL secondary/long-tail keywords naturally into H2s, H3s, and body text\n- Use LSI keywords throughout to build topical authority\n- Turn question-based keywords into H2/H3 headings\n- Mirror the exact language, phrases, and jargon from the audience research\n- Address the specific objections and pain points found in forums and Reddit\n- Fill the content gaps identified in competitor analysis\n- Include the specific statistics, data points, and authoritative sources from the research for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n- Reference the named entities, brands, and tools mentioned in the research\n`
+        ? `\n\n═══ RESEARCH BRIEF (all research has already been completed for you — use it directly) ═══\n${researchInsights}\n═══ END RESEARCH BRIEF ═══\n\nYOU MUST USE THE RESEARCH ABOVE — do NOT guess, invent stats, or do your own research. Everything you need is in the brief above. Specifically:\n- Treat the FIRST item in the synonym bank (or the primary keyword) as the single FOCUS KEYPHRASE for this article\n- Use the EXACT focus keyphrase in: the H1, the first sentence of the intro (within the first 100 words), at least one H2/H3 subheading, the SEO title (at the very start), the meta description, the URL slug, and at least one image alt text\n- Use the exact focus keyphrase a few more times across the body so its density lands around 0.5–1.5% (roughly once every 200–300 words) — enough for Yoast to detect it, never so much it feels stuffed\n- Everywhere ELSE, reach for SYNONYMS, paraphrases, and varied WORD FORMS from the synonym bank instead of repeating the exact phrase. The focus keyphrase is the only term you may repeat verbatim; balancing exact keyphrase placement with synonym variety is what passes both the "keyphrase density" and "synonyms & word form recognition" SEO checks\n- Weave secondary/long-tail keywords and semantically related terms in naturally, ONLY where they genuinely fit the sentence — never force them\n- Keep keyword density low (~1-2%). Prioritize semantic variety and meaning over repetition. If any sentence sounds repetitive or keyword-stuffed when read aloud, rewrite it\n- Build topical authority by covering the related ENTITIES (brands, tools, people, concepts) from the research, not by repeating keywords\n- Turn question-based keywords into H2/H3 headings, rephrased in natural, human language rather than pasted verbatim\n- Echo the audience's real concerns and pain points, but paraphrase them in fresh wording instead of copying the same phrases over and over\n- Fill the content gaps identified in competitor analysis\n- Include the specific statistics, data points, and authoritative sources from the research for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n`
         : '';
 
     // Build image injection instructions
@@ -501,10 +502,30 @@ CONTENT OBJECTIVES:
 - End with a clear CTA section that feels earned
 - Make the tone conversational, confident, and human
 
-SEO META — Include these as HTML comments at the very top BEFORE the blog div:
-<!-- SEO_TITLE: Your 60-char title here -->
-<!-- META_DESC: Your 155-char meta description here -->
-<!-- SEO_KEYWORDS: keyword1, keyword2, keyword3 -->
+NATURAL LANGUAGE & READABILITY — write for a human first, the algorithm second:
+- Vary your vocabulary. Never repeat the same keyword or noun phrase sentence after sentence — swap in synonyms, paraphrases, and different word forms (e.g. "boost / improve / lift / strengthen" instead of "improve, improve, improve").
+- Vary sentence length and rhythm. Mix short, punchy sentences with longer flowing ones so the prose reads like a skilled human writer, not a template.
+- Use natural transitions and connective phrases between ideas so the article flows instead of feeling like a keyword checklist.
+- Prefer plain, conversational language. Use contractions, address the reader as "you", and avoid stiff, robotic phrasing.
+- Read every sentence aloud in your head — if it sounds repetitive, stuffed, or unnatural, rewrite it.
+- Demonstrate topical depth through related concepts and entities, not through keyword frequency.
+- Avoid AI-tell phrases and filler ("In today's fast-paced world", "It's important to note", "When it comes to", "In conclusion"). Get specific instead.
+
+FOCUS KEYPHRASE & ON-PAGE SEO (these make the post pass Yoast-style SEO analysis — follow ALL of them):
+- Choose ONE short focus keyphrase (2-4 words, the main thing this article is about). Use this SAME keyphrase consistently everywhere below.
+- H1: must contain the EXACT focus keyphrase.
+- INTRODUCTION: the very first <p> must contain the EXACT focus keyphrase, ideally in the first sentence.
+- SUBHEADINGS: at least one H2 or H3 must contain the EXACT focus keyphrase (others may use synonyms).
+- DENSITY: the exact focus keyphrase should appear naturally a handful of times in the body (~0.5–1.5% density). Use synonyms and word forms for all other mentions.
+- OUTBOUND LINKS: include 2-4 contextual outbound links to authoritative EXTERNAL sources (studies, official docs, reputable publications, the named entities/sources from the research brief). Format: <a href="https://full-real-url" target="_blank" rel="noopener noreferrer" style="color:#FF8300;text-decoration:underline;font-weight:600;">descriptive anchor text</a>. Only link to real, well-known URLs — never invent links. Anchor text must be descriptive, never "click here".
+- IMAGE ALT: when you reference images later, alt text should include the focus keyphrase or a close synonym (image tags are added separately, so just keep alt-friendly section headings).
+
+SEO META — Include these as HTML comments at the very top BEFORE the blog div (the focus keyphrase MUST appear at the START of the SEO title, inside the meta description, and inside the slug):
+<!-- FOCUS_KEYPHRASE: your 2-4 word focus keyphrase -->
+<!-- SEO_TITLE: Focus keyphrase first, then the rest — max 60 chars -->
+<!-- META_DESC: One compelling sentence containing the focus keyphrase — max 155 chars -->
+<!-- SLUG: focus-keyphrase-based-url-slug-lowercase-hyphenated -->
+<!-- SEO_KEYWORDS: focus keyphrase, secondary keyword, synonym, related term -->
 
 Preserve all apostrophes, quotes, em dashes, and punctuation properly. No Unicode junk. Make it STUNNING.`;
 }
@@ -757,12 +778,20 @@ async function generateOnePagerImage(prompt) {
     });
 }
 
-function injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles) {
+function injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles, focusKeyphrase = '') {
     if (!uploadedImages.length) return htmlContent;
 
     const imgStyle = 'width:100%;height:auto;margin:32px 0 24px;display:block;border-radius:12px;';
+    const kp = (focusKeyphrase || '').replace(/"/g, '').trim();
+    // Yoast wants the keyphrase (or a synonym) in image alt text — build descriptive, keyphrase-aware alts.
+    const buildAlt = (sectionTitle, image, index) => {
+        const base = (sectionTitle || image.alt || '').replace(/<[^>]+>/g, '').replace(/"/g, '').trim();
+        if (!kp) return base || `Blog image ${index + 1}`;
+        if (!base) return index === 0 ? kp : `${kp} — illustration ${index + 1}`;
+        return base.toLowerCase().includes(kp.toLowerCase()) ? base : `${base} — ${kp}`;
+    };
     const buildImgTag = (image, sectionTitle, index) =>
-        `\n<img src="${image.url}" alt="${sectionTitle || image.alt || `Blog image ${index + 1}`}" style="${imgStyle}" />\n`;
+        `\n<img src="${image.url}" alt="${buildAlt(sectionTitle, image, index)}" style="${imgStyle}" />\n`;
 
     if (h2Matches.length > 0) {
         const insertionPoints = [];
@@ -865,12 +894,126 @@ async function uploadImageToWordPress(imageData, altText, filename) {
     }
 }
 
+// ─── Slugify a string into a URL-safe slug ───────────────────────
+function slugify(str) {
+    return String(str || '')
+        .toLowerCase()
+        .normalize('NFKD').replace(/[\u0300-\u036f]/g, '') // strip accents
+        .replace(/<[^>]+>/g, '')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 75)
+        .replace(/-+$/g, '');
+}
+
 // ─── Parse SEO meta from HTML content ────────────────────────────
-function parseSeoMeta(content) {
+function parseSeoMeta(content, fallbackKeyphrase = '') {
     const seoTitle = content.match(/<!--\s*SEO_TITLE:\s*(.+?)\s*-->/)?.[1] || '';
-    const metaDesc = content.match(/<!--\s*META_DESC:\s*(.+?)\s*-->/)?.[1] || '';
-    const seoKeywords = content.match(/<!--\s*SEO_KEYWORDS:\s*(.+?)\s*-->/)?.[1]?.split(',').map(k => k.trim()) || [];
-    return { seoTitle, metaDesc, seoKeywords };
+    let metaDesc = content.match(/<!--\s*META_DESC:\s*(.+?)\s*-->/)?.[1] || '';
+    const seoKeywords = content.match(/<!--\s*SEO_KEYWORDS:\s*(.+?)\s*-->/)?.[1]?.split(',').map(k => k.trim()).filter(Boolean) || [];
+
+    // Focus keyphrase: explicit comment → first SEO keyword → caller fallback
+    const focusKeyphrase = (content.match(/<!--\s*FOCUS_KEYPHRASE:\s*(.+?)\s*-->/)?.[1] || seoKeywords[0] || fallbackKeyphrase || '').trim();
+
+    // Slug: explicit comment → slugified focus keyphrase
+    const rawSlug = content.match(/<!--\s*SLUG:\s*(.+?)\s*-->/)?.[1] || '';
+    const slug = slugify(rawSlug || focusKeyphrase);
+
+    // Yoast flags meta descriptions over 156 chars — keep it tight (≤155), cut on a word boundary.
+    if (metaDesc.length > 155) {
+        metaDesc = metaDesc.slice(0, 155);
+        const lastSpace = metaDesc.lastIndexOf(' ');
+        if (lastSpace > 120) metaDesc = metaDesc.slice(0, lastSpace);
+        metaDesc = metaDesc.replace(/[\s,;:.\-]+$/, '');
+    }
+
+    return { seoTitle, metaDesc, seoKeywords, focusKeyphrase, slug };
+}
+
+// ─── Fetch existing published posts (the blog "network") for internal linking ──
+async function fetchWordPressPosts(limit = 50) {
+    const wpUrl = process.env.WORDPRESS_URL;
+    if (!wpUrl) return [];
+    try {
+        const url = `${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=${Math.min(limit, 100)}&_fields=id,link,slug,title,excerpt`;
+        const headers = {};
+        // Auth is optional for public posts, but include it if available (lets us see more).
+        if (process.env.WORDPRESS_USERNAME && process.env.WORDPRESS_APP_PASSWORD) {
+            headers.Authorization = `Basic ${Buffer.from(`${process.env.WORDPRESS_USERNAME}:${process.env.WORDPRESS_APP_PASSWORD}`).toString('base64')}`;
+        }
+        const r = await withTimeout(fetch(url, { headers }), 12000);
+        if (!r || !r.ok) return [];
+        const posts = await r.json();
+        return (Array.isArray(posts) ? posts : []).map(p => ({
+            id: p.id,
+            url: p.link,
+            slug: p.slug,
+            title: (p.title?.rendered || '').replace(/<[^>]+>/g, '').replace(/&#?\w+;/g, ' ').trim(),
+            excerpt: (p.excerpt?.rendered || '').replace(/<[^>]+>/g, '').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200),
+        })).filter(p => p.url && p.title);
+    } catch (err) {
+        console.error('fetchWordPressPosts error:', err.message);
+        return [];
+    }
+}
+
+// ─── Insert internal links to existing network posts (SEO interlinking) ───────
+async function insertNetworkLinks(htmlContent, { focusKeyphrase = '', internalTargets = [] } = {}) {
+    if (!internalTargets || internalTargets.length === 0) return htmlContent;
+
+    // Cap the catalog we send to the model so the prompt stays lean.
+    const catalog = internalTargets.slice(0, 25);
+    const catalogList = catalog
+        .map((t, i) => `${i + 1}. "${t.title}" → ${t.url}${t.excerpt ? `\n   (about: ${t.excerpt})` : ''}`)
+        .join('\n');
+
+    try {
+        const resp = await callClaude({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 8192,
+            temperature: 0.3,
+            messages: [{
+                role: 'user',
+                content: `You are an SEO interlinking specialist building a connected network of blog posts.
+
+Below is an HTML blog post (focus keyphrase: "${focusKeyphrase}"). Underneath it is a CATALOG of OTHER existing posts on the same site.
+
+Your job: analyze the article and insert contextually relevant INTERNAL links to the most topically related posts in the catalog. This builds a strong internal link network for SEO.
+
+STRICT RULES:
+- Insert between 2 and 5 internal links total (only as many as are genuinely relevant — quality over quantity).
+- Link from words/phrases that ALREADY EXIST in the body paragraphs, choosing anchor text that is descriptive and naturally matches the target post's topic.
+- Wrap the chosen existing anchor text like: <a href="TARGET_URL" style="color:#FF8300;text-decoration:underline;font-weight:600;">existing anchor text</a>
+- Use each target URL at most ONCE. Do not link the same phrase twice.
+- Only link where it makes real editorial sense (the linked post genuinely expands on that phrase). If fewer than 2 are genuinely relevant, add fewer (or none).
+- Do NOT add links inside headings (h1-h3), inside existing <a> tags, inside image alt text, or inside the SEO comment block.
+- Do NOT change, add, or remove ANY other text, HTML tags, attributes, inline styles, images, or SEO comments. Preserve the document EXACTLY except for the inserted <a> wrappers.
+- Output ONLY the full, updated HTML — no markdown, no code fences, no commentary.
+
+CATALOG OF EXISTING POSTS:
+${catalogList}
+
+HTML ARTICLE TO ADD INTERNAL LINKS TO:
+${htmlContent}`,
+            }],
+        });
+
+        let out = resp.content[0].text.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+        // Safety: only accept the rewrite if it still looks like the same document (kept the wrapper) and actually added a link.
+        if (out.includes('<div') && out.length > htmlContent.length * 0.7 && /<a\s+href=/i.test(out)) {
+            const added = (out.match(/<a\s+href=/gi) || []).length - (htmlContent.match(/<a\s+href=/gi) || []).length;
+            console.log(`🔗 Inserted ${Math.max(added, 0)} internal network link(s)`);
+            return out;
+        }
+        console.warn('⚠ Internal-link pass produced unexpected output — keeping original HTML');
+        return htmlContent;
+    } catch (err) {
+        console.error('insertNetworkLinks error:', err.message);
+        return htmlContent;
+    }
 }
 
 // ─── POST /api/generate (SSE progress streaming) ────────────────
@@ -938,10 +1081,11 @@ app.post('/api/generate', async (req, res) => {
         const message = await callClaude({
             model: 'claude-sonnet-4-6',
             max_tokens: 8192,
+            temperature: 0.85,
             messages: [
                 {
                     role: 'user',
-                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}.${language === 'spanish' ? ' IMPORTANT: Write the ENTIRE blog in Spanish. All headings, body text, callout badges, CTA — everything must be in Spanish.' : ' IMPORTANT: Write the ENTIRE blog in ENGLISH. Even if the topic, keywords, or description are provided in another language (e.g. Spanish), you MUST write the blog entirely in English. All headings, body text, callout badges, CTA — everything must be in English.'} Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
+                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}.${language === 'spanish' ? ' IMPORTANT: Write the ENTIRE blog in Spanish. All headings, body text, callout badges, CTA — everything must be in Spanish.' : ' IMPORTANT: Write the ENTIRE blog in ENGLISH. Even if the topic, keywords, or description are provided in another language (e.g. Spanish), you MUST write the blog entirely in English. All headings, body text, callout badges, CTA — everything must be in English.'} Write naturally and conversationally: vary your sentence length, use synonyms and different word forms instead of repeating the same keyword, and make every paragraph flow into the next. Do not keyword-stuff. Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
                 },
             ],
             system: systemPrompt,
@@ -949,6 +1093,11 @@ app.post('/api/generate', async (req, res) => {
 
         let htmlContent = message.content[0].text;
         htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+        // Parse SEO meta up-front so the focus keyphrase can drive image alt text + internal links.
+        const seo = parseSeoMeta(htmlContent, keywords);
+        const focusKeyphrase = seo.focusKeyphrase || (keywords || '').split(',')[0].trim();
+        console.log(`🎯 Focus keyphrase: "${focusKeyphrase}" | slug: "${seo.slug}"`);
 
         // Step 3: Analyze blog sections and create image prompts
         if (imageCount > 0) {
@@ -1055,14 +1204,28 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
             console.warn(`⚠ Only ${uploadedImages.length}/${imageCount} blog images were generated.`);
         }
 
-        // Step after images: Inject images into blog HTML
+        // Step after images: Inject images into blog HTML (alt text carries the focus keyphrase for SEO)
         sendProgress(insertStep, TOTAL_STEPS, 'Inserting images into blog…');
-        htmlContent = injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles);
+        htmlContent = injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles, focusKeyphrase);
+
+        // Internal linking step: weave this post into the existing blog network for SEO.
+        try {
+            sendProgress(insertStep, TOTAL_STEPS, 'Linking to your blog network…');
+            const networkPosts = await fetchWordPressPosts(50);
+            const internalTargets = networkPosts.filter(p => p.slug !== seo.slug);
+            if (internalTargets.length > 0) {
+                console.log(`🔗 Found ${internalTargets.length} existing post(s) for internal linking`);
+                htmlContent = await insertNetworkLinks(htmlContent, { focusKeyphrase, internalTargets });
+            } else {
+                console.log('🔗 No existing network posts found — skipping internal linking');
+            }
+        } catch (linkErr) {
+            console.error('Internal linking step failed (non-fatal):', linkErr.message);
+        }
 
         // SEO step
         sendProgress(insertStep + 1, TOTAL_STEPS, 'Extracting SEO metadata…');
-        const seo = parseSeoMeta(htmlContent);
-        console.log(`📝 SEO Title: ${seo.seoTitle}`);
+        console.log(`📝 SEO Title: ${seo.seoTitle} | Focus: "${focusKeyphrase}"`);
 
         const titleMatch = htmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
         const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : seo.seoTitle || keywords;
@@ -1127,6 +1290,8 @@ ${htmlContent}`,
             metaTitle: seo.seoTitle,
             metaDescription: seo.metaDesc,
             seoKeywords: seo.seoKeywords,
+            focusKeyphrase,
+            slug: seo.slug,
             images: uploadedImages,
             featuredMediaId: uploadedImages[0]?.id || null,
             spanishHtmlContent,
@@ -1141,7 +1306,8 @@ ${htmlContent}`,
 // ─── POST /api/publish ───────────────────────────────────────────
 app.post('/api/publish', async (req, res) => {
     try {
-        const { title, htmlContent, featuredMediaId } = req.body;
+        const { title, htmlContent, featuredMediaId, focusKeyphrase, metaTitle, metaDescription, seoKeywords } = req.body;
+        let { slug } = req.body;
 
         const wpUrl = process.env.WORDPRESS_URL;
         const wpUser = process.env.WORDPRESS_USERNAME;
@@ -1155,11 +1321,37 @@ app.post('/api/publish', async (req, res) => {
 
         const credentials = Buffer.from(`${wpUser}:${wpPass}`).toString('base64');
 
+        // Keyphrase-rich slug (Yoast: "Keyphrase in slug")
+        slug = slugify(slug || focusKeyphrase || title);
+
+        // Trim meta description to Yoast's 156-char limit, on a word boundary.
+        let metaDesc = (metaDescription || '').trim();
+        if (metaDesc.length > 155) {
+            metaDesc = metaDesc.slice(0, 155);
+            const sp = metaDesc.lastIndexOf(' ');
+            if (sp > 120) metaDesc = metaDesc.slice(0, sp);
+            metaDesc = metaDesc.replace(/[\s,;:.\-]+$/, '');
+        }
+
         const postData = {
             title,
             content: htmlContent,
             status: 'draft',
         };
+
+        if (slug) postData.slug = slug;
+        if (metaDesc) postData.excerpt = metaDesc; // native fallback + good practice
+
+        // Push Yoast SEO fields. Requires the meta keys to be registered for REST
+        // (see server/.env.example for the one-time mu-plugin snippet). Harmless if ignored.
+        const yoastMeta = {};
+        if (focusKeyphrase) yoastMeta._yoast_wpseo_focuskw = focusKeyphrase;
+        if (metaTitle) yoastMeta._yoast_wpseo_title = metaTitle;
+        if (metaDesc) yoastMeta._yoast_wpseo_metadesc = metaDesc;
+        if (Array.isArray(seoKeywords) && seoKeywords.length) {
+            yoastMeta._yoast_wpseo_focuskw = focusKeyphrase || seoKeywords[0];
+        }
+        if (Object.keys(yoastMeta).length) postData.meta = yoastMeta;
 
         if (featuredMediaId) {
             postData.featured_media = featuredMediaId;
@@ -1181,10 +1373,11 @@ app.post('/api/publish', async (req, res) => {
 
         const post = await wpRes.json();
 
-        console.log(`📤 Draft published to WordPress: ${post.link}`);
+        console.log(`📤 Draft published to WordPress: ${post.link} (focus: "${focusKeyphrase || '—'}", slug: "${post.slug || slug}")`);
 
         res.json({
             postId: post.id,
+            slug: post.slug || slug,
             editUrl: `${wpUrl}/wp-admin/post.php?post=${post.id}&action=edit`,
             viewUrl: post.link,
         });
@@ -1234,7 +1427,7 @@ async function saveBlogs(blogs) {
 
 // ─── POST /api/blogs — Save a generated blog ───────────────────
 app.post('/api/blogs', async (req, res) => {
-    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, keywords, description, wordCount, userName, spanishHtml, spanishTitle } = req.body;
+    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, focusKeyphrase, slug, keywords, description, wordCount, userName, spanishHtml, spanishTitle } = req.body;
     const blogs = await loadBlogs();
     const blog = {
         id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
@@ -1245,6 +1438,9 @@ app.post('/api/blogs', async (req, res) => {
         seoTitle: seoTitle || '',
         seoDescription: seoDescription || '',
         seoKeywords: seoKeywords || [],
+        focusKeyphrase: focusKeyphrase || '',
+        slug: slug || '',
+        url: '',
         keywords: keywords || '',
         description: description || '',
         wordCount: wordCount || 0,
@@ -1278,12 +1474,15 @@ app.put('/api/blogs/:id', async (req, res) => {
     const blogs = await loadBlogs();
     const idx = blogs.findIndex(b => b.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Blog not found' });
-    const { html, markdown, title, seoTitle, seoDescription, published } = req.body;
+    const { html, markdown, title, seoTitle, seoDescription, focusKeyphrase, slug, url, published } = req.body;
     if (html !== undefined) blogs[idx].html = html;
     if (markdown !== undefined) blogs[idx].markdown = markdown;
     if (title !== undefined) blogs[idx].title = title;
     if (seoTitle !== undefined) blogs[idx].seoTitle = seoTitle;
     if (seoDescription !== undefined) blogs[idx].seoDescription = seoDescription;
+    if (focusKeyphrase !== undefined) blogs[idx].focusKeyphrase = focusKeyphrase;
+    if (slug !== undefined) blogs[idx].slug = slug;
+    if (url !== undefined) blogs[idx].url = url;
     if (published !== undefined) blogs[idx].published = published;
     blogs[idx].updatedAt = new Date().toISOString();
     await saveBlogs(blogs);

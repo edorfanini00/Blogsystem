@@ -45,6 +45,20 @@ export const INGEST_SEARCH_BATCH = Number(process.env.INGEST_SEARCH_BATCH) || 10
 // Watchlist of B2B and ops creator accounts (expand later).
 export const WATCHLIST_ACCOUNTS = [];
 
+// ─── Own Instagram page (the account we post to) ────────────────
+// Set OWN_INSTAGRAM_HANDLE to your account's username (without @).
+// The engine uses this to:
+//   1. Scrape your own profile to understand your content style + audience
+//   2. Feed that style context into every Director/Copy generation
+//   3. Track real post performance when you mark generations as "posted"
+// Leave blank to skip own-page awareness (the system still works without it).
+export const OWN_INSTAGRAM_HANDLE = (process.env.OWN_INSTAGRAM_HANDLE || '').replace(/^@/, '').trim();
+// Apify actor used to scrape own IG profile + post stats. Default uses the
+// same actor as hashtag ingest; swap here if you prefer a different one.
+export const OWN_INSTAGRAM_ACTOR = process.env.OWN_INSTAGRAM_ACTOR || 'apify/instagram-scraper';
+// How many of our own recent posts to pull per own-page refresh.
+export const OWN_PAGE_POST_LIMIT = Number(process.env.OWN_PAGE_POST_LIMIT) || 50;
+
 // How many days back to bound the hashtag recent-posts pull (EnsembleData
 // fallback only; the Apify actors are bounded by results-per-hashtag instead).
 export const INGEST_DAYS = 7;
@@ -194,7 +208,7 @@ export const TREND_LANG = process.env.TREND_LANG != null
 // The Director sets model_choice per shot; we map it to a Higgsfield
 // application slug (CLI job_set_type). Override any via env if Higgsfield
 // renames a slug. Defaults: Nano Banana Pro (precision/text/dashboards),
-// Seedream (multi-shot subject continuity), Grok (fast scroll-stoppers).
+// Seedream (multi-shot subject continuity).
 // Higgsfield's platform API uses hierarchical path slugs (e.g.
 // 'flux-pro/kontext/max/text-to-image'), not the CLI short IDs. The valid set
 // is account/version-specific and not publicly listed, so these are env-
@@ -206,7 +220,6 @@ const HF_DEFAULT_IMAGE_SLUG = process.env.HF_MODEL_DEFAULT || 'flux-pro/kontext/
 export const HF_IMAGE_MODELS = {
     nano_banana_pro: process.env.HF_MODEL_NANO_BANANA || HF_DEFAULT_IMAGE_SLUG,
     seedream: process.env.HF_MODEL_SEEDREAM || HF_DEFAULT_IMAGE_SLUG,
-    grok: process.env.HF_MODEL_GROK || HF_DEFAULT_IMAGE_SLUG,
 };
 // Vertical short-form by default.
 export const HF_IMAGE_ASPECT = process.env.HF_IMAGE_ASPECT || '9:16';
@@ -227,8 +240,7 @@ export const IMAGE_PROVIDER = (process.env.IMAGE_PROVIDER
 // fal model routing per Director model_choice. Each lane has a text-to-image
 // slug (t2i) and an image-to-image slug (edit, used when use_source_frame is
 // set so the viral composition is carried over). Env-overridable so a renamed
-// slug is a config change, not a code change. grok has no fal home, so it maps
-// to Nano Banana Pro.
+// slug is a config change, not a code change.
 const FAL_NANO_T2I = process.env.FAL_MODEL_NANO || 'fal-ai/nano-banana-pro';
 const FAL_NANO_EDIT = process.env.FAL_MODEL_NANO_EDIT || 'fal-ai/nano-banana-pro/edit';
 export const FAL_IMAGE_MODELS = {
@@ -239,10 +251,6 @@ export const FAL_IMAGE_MODELS = {
     seedream: {
         t2i: process.env.FAL_MODEL_SEEDREAM || 'fal-ai/bytedance/seedream/v4/text-to-image',
         edit: process.env.FAL_MODEL_SEEDREAM_EDIT || 'fal-ai/bytedance/seedream/v4/edit',
-    },
-    grok: {
-        t2i: process.env.FAL_MODEL_GROK || FAL_NANO_T2I,
-        edit: process.env.FAL_MODEL_GROK_EDIT || FAL_NANO_EDIT,
     },
 };
 // Image-to-video endpoint (confirmed: v1/image2video/dop). Kling slugs were not
@@ -262,13 +270,34 @@ export const HF_VIDEO_DOP_MODEL = process.env.HF_VIDEO_DOP_MODEL || 'dop-turbo';
 export const VIDEO_PROVIDER = (process.env.VIDEO_PROVIDER
     || (process.env.FAL_KEY ? 'fal' : 'higgsfield')
 ).toLowerCase();
-// fal image-to-video model. Default = Kling 2.5 Turbo Pro (spec's Kling,
-// best cinematic motion). Swap to Seedance for cheaper/faster:
-//   FAL_VIDEO_MODEL=fal-ai/bytedance/seedance/v1/pro/image-to-video
+// fal image-to-video model. Per the platform playbook, Kling is the video
+// engine and "Kling 2.6 or 3.0 give the best results" (2.6 = smoother motion,
+// better camera control, cinematic/storytelling/social; 3.0 = highest realism
+// & physics). 2.5 Turbo is the fast/cheap tier for quick tests. Default = 2.6
+// Pro (cinematic + native audio). Override to taste:
+//   FAL_VIDEO_MODEL=fal-ai/kling-video/v3/pro/image-to-video        (premium)
+//   FAL_VIDEO_MODEL=fal-ai/kling-video/v2.5-turbo/pro/image-to-video (fast)
+//   FAL_VIDEO_MODEL=fal-ai/bytedance/seedance/v1/pro/image-to-video  (cheap)
 export const FAL_VIDEO_MODEL = process.env.FAL_VIDEO_MODEL
-    || 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video';
-// Per-clip duration (seconds, as a string per fal's enum). Kling: "5" | "10".
+    || 'fal-ai/kling-video/v2.6/pro/image-to-video';
+// Per-clip duration (seconds, as a string per fal's enum). Kling 2.6/3.0 accept
+// 3..15; Kling 2.5/2.1 accept "5"|"10"; Seedance 3..12. We clamp per model.
 export const FAL_VIDEO_DURATION = process.env.FAL_VIDEO_DURATION || '5';
+
+// ─── On-camera dialogue (audio-native generation) ───────────────
+// When the source is a person SPEAKING ON CAMERA (talking head/dialogue), the
+// remake's speaking shots are generated with an audio-native video model that
+// produces the character AND their speech together (lip-synced), instead of
+// overlaying a separate ElevenLabs narrator. Other shots (and pure-voiceover
+// sources) keep the normal silent-clip + VO path. Requires FAL_KEY.
+// Per the playbook we stay on Kling: 2.6/3.0 Pro generate native audio + speech
+// (embed the line in the prompt and set generate_audio), so dialogue stays in
+// the same recommended engine. Override to Veo 3 if preferred:
+//   FAL_TALKING_MODEL=fal-ai/veo3/fast/image-to-video
+// Set TALKING_AUDIO_NATIVE=off to disable and fall back to ElevenLabs VO.
+export const TALKING_AUDIO_NATIVE = (process.env.TALKING_AUDIO_NATIVE || 'on').toLowerCase() !== 'off';
+export const FAL_TALKING_MODEL = process.env.FAL_TALKING_MODEL
+    || 'fal-ai/kling-video/v2.6/pro/image-to-video';
 // Per-shot image generation retry cap (spec §7: cap regenerations at 3).
 export const REMAKE_MAX_REGENS = Number(process.env.REMAKE_MAX_REGENS) || 3;
 // Per-shot video (animation) retry cap (spec §8: cap regenerations at 3).
@@ -285,11 +314,17 @@ export const VIDEO_TARGET_MAX = Number(process.env.VIDEO_TARGET_MAX) || 25;
 // length — so a 34s source yields a ~34s remake. MATCH_SOURCE_LENGTH=off
 // reverts to the fixed VIDEO_TARGET_MIN..MAX window.
 export const MATCH_SOURCE_LENGTH = (process.env.MATCH_SOURCE_LENGTH || 'on').toLowerCase() !== 'off';
-// Cap on shots per remake (cost guard). Sources with more cuts get adjacent
-// cuts merged so the total length is still preserved.
+// Soft target for the number of shots per remake. Sources with more cuts get
+// adjacent cuts merged; LONGER sources get MORE shots so the full runtime is
+// preserved (a 45s source becomes ~5+ stitched clips, not a truncated 25s cut).
 export const REMAKE_MAX_SHOTS = Math.min(Math.max(Number(process.env.REMAKE_MAX_SHOTS) || 10, 1), 20);
+// Hard ceiling on shots regardless of source length (cost guard). A long source
+// is covered up to this many clips; per-clip cap (VIDEO_CLIP_MAX) × this ceiling
+// is the longest remake we'll build. Default 24 → up to ~240s at 10s/clip.
+export const REMAKE_SHOT_CEILING = Math.min(Math.max(Number(process.env.REMAKE_SHOT_CEILING) || 24, 1), 60);
 // A single generated clip's allowed length window (seconds). Kling tops out at
 // 10s; we round a shot's target up to the model's nearest option, then trim.
+// Beats longer than this are SPLIT into multiple stitchable clips.
 export const VIDEO_CLIP_MIN = Number(process.env.VIDEO_CLIP_MIN) || 2;
 export const VIDEO_CLIP_MAX = Number(process.env.VIDEO_CLIP_MAX) || 10;
 
@@ -307,12 +342,42 @@ export const AUTOPILOT_DEFAULTS = {
     outputType: process.env.AUTOPILOT_OUTPUT || 'mix',           // video | slideshow | mix
     targetMode: process.env.AUTOPILOT_MODE || 'auto',            // auto | exact
     minScore: Number(process.env.AUTOPILOT_MIN_SCORE) || 0,      // skip candidates below this composite score
-    cooldownDays: Number(process.env.AUTOPILOT_COOLDOWN_DAYS) || 14, // don't re-remake a candidate within N days
+    cooldownDays: Number(process.env.AUTOPILOT_COOLDOWN_DAYS) || 7, // don't re-remake a candidate within N days
 };
 // ElevenLabs voiceover. Voice id + model are env-overridable; VO is optional —
 // assembly produces a (silent) cut when ElevenLabs is not configured.
 export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';
 export const ELEVENLABS_MODEL = process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2';
+
+// ─── Dynamic voice matching ─────────────────────────────────────
+// The voiceover voice is chosen PER VIDEO to match the analyzed source's
+// delivery (gender / age / energy), instead of always using one fixed voice.
+// These are ElevenLabs premade voices present in every default account; tagged
+// with attributes so we can pick the closest match. Override the whole library
+// with VOICE_LIBRARY env (JSON array of {id,gender,age,energy,name}). Set
+// VOICE_MATCH=off to always use ELEVENLABS_VOICE_ID.
+export const VOICE_MATCH_ENABLED = (process.env.VOICE_MATCH || 'on').toLowerCase() !== 'off';
+const DEFAULT_VOICE_LIBRARY = [
+    { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', gender: 'male', age: 'adult', energy: 'moderate' },
+    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', gender: 'male', age: 'young', energy: 'high' },
+    { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold', gender: 'male', age: 'adult', energy: 'high' },
+    { id: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam', gender: 'male', age: 'young', energy: 'moderate' },
+    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', gender: 'male', age: 'adult', energy: 'calm' },
+    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', gender: 'female', age: 'adult', energy: 'calm' },
+    { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi', gender: 'female', age: 'young', energy: 'high' },
+    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', gender: 'female', age: 'young', energy: 'moderate' },
+    { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', gender: 'female', age: 'young', energy: 'high' },
+];
+function parseVoiceLibrary() {
+    if (!process.env.VOICE_LIBRARY) return DEFAULT_VOICE_LIBRARY;
+    try {
+        const arr = JSON.parse(process.env.VOICE_LIBRARY);
+        return Array.isArray(arr) && arr.length ? arr : DEFAULT_VOICE_LIBRARY;
+    } catch {
+        return DEFAULT_VOICE_LIBRARY;
+    }
+}
+export const VOICE_LIBRARY = parseVoiceLibrary();
 // Platforms the Copy agent writes captions/hashtags for.
 export const PUBLISH_PLATFORMS = (process.env.PUBLISH_PLATFORMS
     ? process.env.PUBLISH_PLATFORMS.split(',')
@@ -337,7 +402,7 @@ export const MUSIC_GAIN = process.env.MUSIC_GAIN != null ? Number(process.env.MU
 // runaway improve-loop can't burn credits. 0 = no cap.
 export const MAX_IMAGE_RENDERS = Number(process.env.MAX_IMAGE_RENDERS) || 24;
 // Hard ceiling on video (animation) submissions per generation. 0 = no cap.
-export const MAX_VIDEO_RENDERS = Number(process.env.MAX_VIDEO_RENDERS) || 12;
+export const MAX_VIDEO_RENDERS = Number(process.env.MAX_VIDEO_RENDERS) || 24;
 // How many remake variants the Director produces per candidate (pick the best
 // in review). 1 = single. Kept modest to control spend.
 export const REMAKE_VARIANTS = Math.min(Math.max(Number(process.env.REMAKE_VARIANTS) || 1, 1), 3);

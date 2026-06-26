@@ -14,14 +14,16 @@ import { query } from './db.js';
 import { getProductEntry, listProductsBrief } from './solutions.js';
 import { analyzeCandidate, isAnalyzeConfigured } from './analyze.js';
 import { buildResearchGrounding } from './research.js';
+import { buildOwnPageTargetBlock } from './ownpage.js';
 import { buildMemoryBlock } from './memory.js';
+import { pickVoiceId } from './captions.js';
 import { claudeJSON, isLlmConfigured } from './llm.js';
 import {
     EDITORIAL_RULES, MESSAGE_BANK, REMAKE_VARIANTS,
-    MATCH_SOURCE_LENGTH, REMAKE_MAX_SHOTS, VIDEO_CLIP_MIN, VIDEO_CLIP_MAX,
+    MATCH_SOURCE_LENGTH, REMAKE_MAX_SHOTS, REMAKE_SHOT_CEILING, VIDEO_CLIP_MIN, VIDEO_CLIP_MAX,
 } from './config.js';
 
-const MODEL_CHOICES = ['nano_banana_pro', 'seedream', 'grok'];
+const MODEL_CHOICES = ['nano_banana_pro', 'seedream'];
 const SHOT_ROLES = ['hero', 'setup', 'action', 'resolution'];
 
 // Map analyze.js output → the spec's deep_analysis contract (§1).
@@ -40,6 +42,25 @@ function mapDeepAnalysis(analysis) {
 }
 
 function safeParse(s) { try { return JSON.parse(s); } catch { return null; } }
+
+// Classify how the source delivers speech so the remake can match it:
+//   on_camera → a person speaks ON screen (talking head / dialogue) → generate
+//               speaking shots with an audio-native model (Veo 3).
+//   voiceover → off-screen narration → ElevenLabs VO overlay (default path).
+//   none      → no speech (music/sfx only).
+// Falls back to the voiceProfile / format when speechType is absent.
+function deriveSpeechMode(analysis) {
+    const a = typeof analysis === 'string' ? safeParse(analysis) : analysis;
+    if (!a) return 'voiceover';
+    const t = String(a.speechType || '').toLowerCase();
+    if (t === 'on_camera' || t === 'voiceover' || t === 'none') return t;
+    // Fallbacks: a talking-head format with a real voice ⇒ on-camera.
+    const vp = a.voiceProfile || {};
+    const fmt = String(a.format || '').toLowerCase();
+    if (vp.hasVoiceover === false) return 'none';
+    if (/talking head|interview|skit|dialogue|vlog|pov/.test(fmt)) return 'on_camera';
+    return 'voiceover';
+}
 
 function round1(n) { return Math.round(n * 10) / 10; }
 
@@ -60,9 +81,36 @@ function mergeClipsToMax(clips, max) {
     return out;
 }
 
+// Split any clip longer than the per-clip cap into evenly-sized sub-shots so a
+// long beat (e.g. a 15s segment) becomes multiple stitchable clips instead of
+// being truncated to the cap. Total duration is preserved. This is what lets a
+// 45s source become several clips that add back up to 45s.
+function splitClipsToMax(clips, maxLen) {
+    if (!(maxLen > 0)) return clips;
+    const out = [];
+    for (const c of clips) {
+        const d = Number(c.durationSeconds) || 0;
+        if (d <= maxLen) { out.push({ ...c }); continue; }
+        const parts = Math.ceil(d / maxLen);
+        const each = round1(d / parts);
+        const desc = String(c.description || '').slice(0, 150);
+        for (let i = 0; i < parts; i++) {
+            out.push({
+                durationSeconds: each,
+                description: parts > 1 ? `${desc} (continued ${i + 1}/${parts})` : c.description,
+            });
+        }
+    }
+    return out;
+}
+
 // Derive the shot-timing plan from the analysis: an ordered list of
 // { durationSeconds, description } (one per intended shot) plus the total
 // target length and whether it was measured (vs. the model's estimate).
+//
+// Long sources are covered by MULTIPLE clips: we split beats that exceed the
+// per-clip cap, then allow as many shots as needed to span the full runtime
+// (ceil(total / VIDEO_CLIP_MAX)), bounded by REMAKE_SHOT_CEILING for cost.
 function buildShotTiming(analysis) {
     const a = typeof analysis === 'string' ? safeParse(analysis) : analysis;
     let clips = Array.isArray(a?.clips)
@@ -70,7 +118,21 @@ function buildShotTiming(analysis) {
         : [];
     const totalFromClips = clips.reduce((n, c) => n + (Number(c.durationSeconds) || 0), 0);
     const total = Number(a?.durationSeconds) || totalFromClips || null;
-    clips = mergeClipsToMax(clips, REMAKE_MAX_SHOTS);
+
+    // 1. Split long beats so no single beat exceeds the per-clip cap.
+    clips = splitClipsToMax(clips, VIDEO_CLIP_MAX);
+
+    // 2. Allow enough shots to actually cover the runtime, bounded by the ceiling.
+    const needed = total && VIDEO_CLIP_MAX > 0 ? Math.ceil(total / VIDEO_CLIP_MAX) : clips.length;
+    const cap = Math.min(Math.max(REMAKE_MAX_SHOTS, needed), REMAKE_SHOT_CEILING);
+
+    // 3. Only merge when we genuinely have more cuts than the cap; re-split any
+    //    merged group that ends up over the per-clip cap, then enforce the ceiling.
+    if (clips.length > cap) {
+        clips = mergeClipsToMax(clips, cap);
+        clips = splitClipsToMax(clips, VIDEO_CLIP_MAX).slice(0, REMAKE_SHOT_CEILING);
+    }
+
     return { clips, total, measured: !!a?.durationMeasured };
 }
 
@@ -180,23 +242,58 @@ async function resolveTarget({ targetMode, productId, customPrompt }, candidate,
             productId: null,
         };
     }
-    // auto: prefer the trend engine's bridge line; offer the product catalog so
-    // the Director can choose the best-fit entry itself.
+    // ownpage: ALWAYS retarget to what we actually post on Instagram — no
+    // product pitch, no brand catalog. Lifts the source's FORMAT and applies it
+    // to our page's recurring subjects. This is the "Instagram autopilot" agent.
+    if (mode === 'ownpage') {
+        const ownPageTarget = await buildOwnPageTargetBlock().catch(() => '');
+        if (ownPageTarget) {
+            return {
+                mode,
+                block: [
+                    "TARGET: OUR Instagram page. This remake MUST be about OUR page's own content/topics — NOT the source video's topic, and NOT a product pitch.",
+                    'Lift ONLY the mechanics from the source (format, hook structure, how the person delivers it, pacing, shot progression, camera language, length) and apply them to one of OUR page\'s recurring subjects below. Keep how it is built; tell one of OUR stories.',
+                    ownPageTarget,
+                ].join('\n'),
+                resolvedHint: 'own Instagram page',
+                productId: null,
+            };
+        }
+        // No own-page data yet (handle not set / not scraped) → brand fallback.
+        return {
+            mode,
+            block: [
+                "TARGET: our page/brand. Apply ONLY the source's FORMAT to our own content — do not pitch a specific product.",
+                defaultBrandText(),
+            ].join('\n'),
+            resolvedHint: 'own page (brand fallback — connect Instagram for page-specific topics)',
+            productId: null,
+        };
+    }
+    // auto: prefer our own page's subject matter, then the trend engine's bridge
+    // line + product catalog. The source video supplies the FORMAT only — never
+    // its topic. So a viral video about hiring becomes one of OUR topics, using
+    // that video's hook/pacing/delivery/length.
     const bridge = score?.bridge_line || '';
-    const products = await listProductsBrief().catch(() => []);
+    const [products, ownPageTarget] = await Promise.all([
+        listProductsBrief().catch(() => []),
+        buildOwnPageTargetBlock().catch(() => ''),
+    ]);
     const catalog = products.length
-        ? 'Available products to choose from (pick the single best fit and name it in resolved_target):\n' +
+        ? 'Available products/topics to choose from (pick the single best fit and name it in resolved_target):\n' +
           products.map((p) => `- ${p.name}: ${p.one_liner}${p.buyer ? ` (buyer: ${p.buyer})` : ''}`).join('\n')
         : '';
     return {
         mode,
         block: [
-            'TARGET: auto. Decide what this remake should sell.',
-            bridge ? `Trend-engine angle (preferred starting point): ${bridge}` : '',
+            'TARGET: auto. This remake must be about OUR page\'s content — NOT the source video\'s topic.',
+            'Lift ONLY the mechanics from the source: its format, hook structure, the way the person speaks/delivers it, the pacing, the shot progression, and the length. Then tell one of OUR stories instead. If the source is about (e.g.) hiring, do NOT make a hiring video — apply its format to what our page is about.',
+            ownPageTarget,
+            bridge ? `Trend-engine angle (a starting point, keep it on-brand): ${bridge}` : '',
             catalog,
-            catalog ? '' : `If no product fits, use the brand context:\n${defaultBrandText()}`,
+            (!ownPageTarget && !catalog) ? `Use the brand context:\n${defaultBrandText()}` : '',
         ].filter(Boolean).join('\n'),
-        resolvedHint: bridge ? 'auto (bridge line)' : 'auto',
+        resolvedHint: ownPageTarget ? 'auto (own-page subject)' : (bridge ? 'auto (bridge line)' : 'auto'),
         productId: null,
     };
 }
@@ -233,7 +330,7 @@ For EACH slide, write:
 - image_prompt: a full, detailed background image in complete sentences (4 layers: scene, subject, atmosphere, camera). Shoot for a real, native, candid look (amateur iPhone photo, natural light, slight grain) — NOT a glossy AI render. Keep an area calm/uncluttered where the text sits. Do NOT ask the image to render the on-screen words (image text garbles); the text is overlaid separately.
 - on_screen_text: the EXACT line that goes on this slide (this is the content). Short, punchy, readable. Slide 1 = the hook.
 - text_position: "top" | "middle" | "bottom" — where the text box sits on this slide.
-- model_choice: "nano_banana_pro" (default; people/products/precise scenes), "seedream" (keep the same person/scene consistent across slides), "grok" (fast photographic meme look).
+- model_choice per slide — match each engine (platform playbook): "nano_banana_pro" (DEFAULT — logical-precision engine; people, products, precise scenes, and legible text/branded layouts; prompt as a full "Director's Brief"), "seedream" (3D brand-consistency engine; keep the SAME person/scene identical across slides and hold a brand aesthetic).
 - use_source_frame: true where the slide should copy the source slide's composition.
 
 Rules:
@@ -261,29 +358,39 @@ Return JSON only:
 // The Director system prompt, specialized by target mode. In exact mode the
 // goal is a faithful recreation (no product, keep the original content and
 // on-screen text); otherwise it retargets the source to sell the target.
-function buildSystem(mode, outputType = 'video') {
+function buildSystem(mode, outputType = 'video', speechMode = 'voiceover') {
     if (outputType === 'slideshow') return buildSlideSystem(mode);
     const exact = mode === 'exact';
+    const onCamera = speechMode === 'on_camera';
     const intro = exact
         ? `You are the director for a short-form video remake whose goal is a FAITHFUL RECREATION of a viral source video. You receive the analysis of the source (hook, format, beats, pacing, why it works). Reproduce it as closely as possible — same structure, hook, style, visuals, beats, pacing, framing, camera language, AND the same subject matter and on-screen text. There is NO product and NO brand: do not introduce, sell, or mention any product, company, or new message. Recreate the original content itself.`
-        : `You are the director for a short-form video remake. You receive the analysis of a viral video (hook, format, beats, pacing, why it works) and a target that says what this remake should be about. The target is one of: a product entry from the knowledge base, a custom prompt written by the user, or auto (use the provided bridge line or choose the best-fit product yourself).
+        : `You are the director for a short-form video remake. You receive the analysis of a viral video (hook, format, beats, pacing, why it works) and a target that says what this remake should be about. The target is one of: a product entry from the knowledge base, a custom prompt written by the user, or auto (apply it to OUR page's subject matter).
 
-Your job: reproduce the source video's structure, hook, style, and visuals exactly, and change only the content so it sells the target. Same beats, same pacing, same shot progression, same camera language. Swap what the video is about, not how it is built. Faithful replication over invention.`;
+Your job: lift the viral MECHANICS from the source — its format, hook structure, how the person delivers/speaks the lines, pacing, shot progression, camera language, and length — and apply them to the TARGET's subject. You are NOT remaking the source's topic. If the source video is about hiring (or anything off-brand), you do NOT make a video about hiring; you take HOW it works and tell the target's story that way instead. Keep how it is built; completely replace what it is about. Faithful replication of the FORMAT, fresh on-brand CONTENT.`;
     const sceneLine = exact
         ? '- Scene: where it happens, matching the source setting as closely as possible.'
         : "- Scene: where it happens, matching the source's setting type but dressed for the target (use the target visual cues when relevant).";
     const subjectLine = exact
         ? '- Subject: who or what is in frame, matching the source as closely as possible. Use ORIGINAL generated people only (likenesses inspired by, not copies of, any real person). Never real public figures or copyrighted characters.'
-        : "- Subject: who or what is in frame, matching the source's framing. Use ORIGINAL generated people only. Never real public figures or copyrighted characters.";
+        : "- Subject: who or what is in frame. Match the source's TYPE of subject and framing (e.g. a single person talking to camera), but the person MUST be a brand-new, clearly DIFFERENT individual from the source — different face, age, ethnicity, hair, body type, and wardrobe. Never reproduce the source's actual person. Describe this new person concretely in the prompt. Use original generated people only; never real public figures or copyrighted characters.";
     const refRule = exact
         ? '- Where the source composition should be copied closely, set use_source_frame true so the image agent passes the source frame as a structural reference and recreates it faithfully.'
-        : '- Where the source composition should be copied closely, set use_source_frame true so the image agent passes the source frame as a structural reference and only swaps subject and context.';
+        : "- Set use_source_frame true ONLY to copy the source's COMPOSITION/framing/layout — never to copy the person. When a shot contains a person, the still must show a DIFFERENT individual than the source. If a shot is mostly a single person's face/identity and there is no strong compositional reason to mirror it, prefer use_source_frame false and generate the new person from scratch.";
     const textRule = exact
         ? '- Keep on-screen text the same as the source where legible (reproduce the original words).'
         : '- If the source uses on-screen text, write the target equivalent. Keep it short.';
     const editorialNote = exact
         ? `- Apply these editorial rules to ALL on-screen text: ${editorialFor(mode).join('; ')}.`
         : `- Apply these editorial rules to ALL on-screen text and any copy, plus any product editorial overrides (banned terms, required framing): ${editorialFor(mode).join('; ')}.`;
+
+    const speechRule = onCamera
+        ? `- SPEECH: the source is a person SPEAKING ON CAMERA. For every shot where a person is visibly talking, write a "dialogue" field with the EXACT words that on-screen person says in that shot (in the target's content/voice), and set "speaking": true. The dialogue is generated as real lip-synced speech in the clip, so it MUST be tight: about 2 words per second of the shot's target_duration (e.g. a 4s shot ≈ 8 words). Keep it natural, spoken, first-person. Shots with no speaker (pure b-roll/cutaways) get "dialogue": "" and "speaking": false. Do NOT also put the spoken line in on_screen_text unless the source burns captions.`
+        : `- SPEECH: the source uses OFF-SCREEN narration (voiceover). Do NOT write per-shot dialogue; leave "dialogue": "" and "speaking": false. The narration is voiced separately over the visuals.`;
+    const dialogueField = onCamera
+        ? '\n      "dialogue": "exact spoken line for this shot (on-camera), or empty",\n      "speaking": true,'
+        : '';
+    // dialogueField is inserted BEFORE target_duration so the last field never
+    // carries a trailing comma (strict JSON.parse rejects trailing commas).
 
     return `${intro}
 
@@ -297,8 +404,11 @@ Rules:
 ${refRule}
 - The first shot (role "hero") must match the energy of the source hook and stop the scroll: clear subject, strong contrast, emotion or tension.
 ${textRule}
-- model_choice per shot: "nano_banana_pro" (default; precision, on-screen text, packaging, dashboards, branded headlines), "seedream" (multi-shot stories where the same generated subject must look identical across shots), "grok" (fast photographic meme/trendjack scroll-stoppers).
+- model_choice per shot — match each engine to the shot (platform playbook):
+    • "nano_banana_pro" (DEFAULT): the logical-precision "thinking" engine. Best for reasoning-based composition, precise pose/identity consistency, structured scene control, high-detail cinematic realism, and legible on-screen TEXT (signs, packaging, headlines, UI, branded visuals). Write its image prompt as a full "Director's Brief": complete sentences covering camera lens, aperture, lighting, material textures, depth of field and photography style.
+    • "seedream": the 3D brand-consistency engine. Best when the SAME character/subject must stay identical across multiple shots, or for brand-aligned, recurring, campaign-style visuals. Prompt it cleanly with material finishes, an explicit 3D perspective/angle, and a clear brand aesthetic.
 - target_duration: seconds this shot stays on screen. When a LENGTH plan is given, follow it exactly (one shot per listed beat, with the listed seconds). The clip lengths must add up to the source length.
+${speechRule}
 ${editorialNote}
 
 Return JSON only:
@@ -311,8 +421,8 @@ Return JSON only:
       "image_prompt": "full 4-layer prompt in complete sentences",
       "use_source_frame": true,
       "on_screen_text": "",
-      "model_choice": "nano_banana_pro | seedream | grok",
-      "motion_intent": "what should move when this still is animated",
+      "model_choice": "nano_banana_pro | seedream",
+      "motion_intent": "what should move when this still is animated",${dialogueField}
       "target_duration": 0
     }
   ]
@@ -331,6 +441,10 @@ function normalizeShots(raw) {
         motion_intent: String(s.motion_intent || '').trim(),
         target_duration: Number(s.target_duration) > 0 ? round1(Number(s.target_duration)) : null,
         text_position: ['top', 'middle', 'bottom'].includes(s.text_position) ? s.text_position : 'bottom',
+        // On-camera dialogue: the exact words the on-screen person says in this
+        // shot. Drives audio-native (Veo 3) generation. Empty for non-speaking shots.
+        dialogue: String(s.dialogue || '').trim(),
+        speaking: s.speaking === true || s.speaking === 'true' || !!String(s.dialogue || '').trim(),
     })).filter((s) => s.image_prompt);
 }
 
@@ -348,13 +462,24 @@ function applyTiming(shots, timing) {
         const even = timing.total / shots.length;
         durations = shots.map(() => clamp(even));
     }
-    // Nudge the last shot so the realized total matches the target length when
-    // it fits inside the per-clip window (otherwise we just keep the clamps).
-    const sum = durations.reduce((n, d) => n + d, 0);
-    const drift = round1(timing.total - sum);
-    if (drift !== 0) {
-        const adj = clamp(durations[durations.length - 1] + drift);
-        durations[durations.length - 1] = adj;
+    // Distribute any leftover drift across EVERY shot that still has headroom (not
+    // just the last one), so the realized total matches the source length even
+    // when the remake spans many clips. Without this, a long source would lose
+    // time whenever the per-clip cap truncated the tail.
+    let drift = round1(timing.total - durations.reduce((n, d) => n + d, 0));
+    let guard = 0;
+    while (Math.abs(drift) >= 0.1 && guard++ < 200) {
+        let changed = false;
+        for (let i = durations.length - 1; i >= 0 && Math.abs(drift) >= 0.1; i--) {
+            if (drift > 0) {
+                const room = round1(VIDEO_CLIP_MAX - durations[i]);
+                if (room > 0) { const add = Math.min(room, drift); durations[i] = round1(durations[i] + add); drift = round1(drift - add); changed = true; }
+            } else {
+                const room = round1(durations[i] - VIDEO_CLIP_MIN);
+                if (room > 0) { const sub = Math.min(room, -drift); durations[i] = round1(durations[i] - sub); drift = round1(drift + sub); changed = true; }
+            }
+        }
+        if (!changed) break; // every shot is maxed/minned — can't absorb more
     }
     return shots.map((s, i) => ({ ...s, target_duration: durations[i] }));
 }
@@ -399,6 +524,8 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
 
     const deep = mapDeepAnalysis(candidate.analysis);
     const timing = buildShotTiming(candidate.analysis);
+    // Slideshows have no spoken audio; only video remakes carry a speech mode.
+    const speechMode = isSlideshow ? 'none' : deriveSpeechMode(candidate.analysis);
     const target = await resolveTarget({ targetMode, productId, customPrompt }, candidate, { bridge_line: candidate.bridge_line });
 
     // Ground in real winning copy + prior-run memory ("lift, don't invent").
@@ -420,6 +547,12 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
         '',
         isSlideshow ? slideCountBriefText(timing) : timingBriefText(timing),
         '',
+        (!isSlideshow && speechMode === 'on_camera')
+            ? 'DELIVERY: this is an ON-CAMERA talking video. Write a tight per-shot "dialogue" line (the words the on-screen person says) for every speaking shot — it becomes real lip-synced speech. Keep each line within ~2 words per second of that shot.'
+            : (!isSlideshow && speechMode === 'voiceover')
+                ? 'DELIVERY: this is a VOICEOVER (off-screen narration) video. Do not write per-shot dialogue; the narration is voiced separately.'
+                : null,
+        (!isSlideshow && speechMode !== 'none') ? '' : null,
         memoryBlock,
         memoryBlock ? '' : null,
         grounding,
@@ -432,7 +565,7 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
     let plan = null;
     for (let attempt = 0; attempt < 2 && !plan; attempt++) {
         try {
-            plan = await claudeJSON(buildSystem(target.mode, outputType), user, { maxTokens: 2600 });
+            plan = await claudeJSON(buildSystem(target.mode, outputType, speechMode), user, { maxTokens: 2600 });
         } catch (err) {
             if (attempt === 1) throw err;
         }
@@ -444,11 +577,18 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
     // Video matches the source length; slideshow has no per-clip timing.
     if (!isSlideshow) shots = applyTiming(shots, timing);
 
+    // Match the voiceover voice to the source's delivery (gender/age/energy).
+    const voiceProfile = candidate.analysis?.voiceProfile || null;
+    const voiceId = pickVoiceId(voiceProfile);
+
     return {
         candidate_id: candidateId,
         platform: candidate.platform,
         source_media_url: sourceMediaUrl,
         output_type: isSlideshow ? 'slideshow' : 'video',
+        speech_mode: speechMode,
+        voice_id: voiceId,
+        voice_profile: voiceProfile,
         target_mode: target.mode,
         product_id: target.productId,
         resolved_target: plan.resolved_target || target.resolvedHint,

@@ -49,6 +49,15 @@ Return ONLY JSON in this exact shape:
   "onScreenText": ["<each distinct text overlay / caption burned into the video, in order>"],
   "transcript": "<the key spoken lines or a close paraphrase of the narration; do NOT copy long verbatim passages; empty string if no speech>",
   "sound": "<describe the audio: voiceover, music genre/mood, trending sound, sfx>",
+  "speechType": "<voiceover | on_camera | none — 'voiceover' = an OFF-SCREEN narrator talks over visuals/b-roll; 'on_camera' = a person/character is visibly speaking ON screen (talking head, dialogue, lip movement); 'none' = no speech (music/sfx only)>",
+  "voiceProfile": {
+    "hasVoiceover": <true if a person narrates/speaks, false if music-only or no speech>,
+    "gender": "<male | female | unknown>",
+    "age": "<young | adult | older | unknown>",
+    "energy": "<calm | moderate | high | hyped>",
+    "tone": "<2-4 words: e.g. authoritative, friendly, dramatic, deadpan, hype, soothing>",
+    "accent": "<e.g. American, British, neutral, unknown>"
+  },
   "visualBreakdown": ["<beat-by-beat: what is shown in each segment>"],
   "durationSeconds": <total length of the video in seconds, as a number — your best estimate from watching it>,
   "clips": [

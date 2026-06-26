@@ -36,6 +36,7 @@ import { runSlides, isSlidesConfigured } from './slides.js';
 import { recordPerformance, sweepPerformance } from './performance.js';
 import { addNote, recentNotes } from './memory.js';
 import { getSettings as getAutopilotSettings, saveSettings as saveAutopilotSettings, runAutopilot, recentRuns as autopilotRuns } from './autopilot.js';
+import { refreshOwnPage, getOwnPageCache } from './ownpage.js';
 import { advanceGeneration, runChainSweep } from './chain.js';
 import { isCaptionsConfigured } from './captions.js';
 import {
@@ -235,7 +236,7 @@ router.post('/ingest', async (req, res) => {
 router.get('/candidates', async (req, res) => {
     if (!requireDb(res)) return;
     try {
-        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
         const rows = await listCandidates({ limit });
         res.json(rows);
     } catch (err) {
@@ -578,7 +579,7 @@ router.get('/generations', async (req, res) => {
     try {
         const rows = await listGenerations({
             status: req.query.status || null,
-            limit: Math.min(parseInt(req.query.limit) || 50, 200),
+            limit: Math.min(parseInt(req.query.limit) || 100, 1000),
         });
         res.json(rows);
     } catch (err) {
@@ -656,12 +657,23 @@ router.post('/performance/cron', performanceCronHandler);
 
 // ═══════════════════════════════════════════════════════════════
 // ─── Autopilot — autonomous daily generation ───────────────────
+// Two agents share these endpoints, selected by ?agent= (or body.agent):
+//   • default → fits viral concepts to a product/brand
+//   • ownpage → retargets viral concepts to our own Instagram content
 // GET status (settings + recent runs), PUT settings, POST run-now, cron.
+function pickAgent(v) {
+    return v === 'ownpage' ? 'ownpage' : 'default';
+}
+
 router.get('/autopilot', async (req, res) => {
     if (!requireDb(res)) return;
+    const agent = pickAgent(req.query.agent);
     try {
-        const [settings, runs] = await Promise.all([getAutopilotSettings(), autopilotRuns({ limit: 20 })]);
-        res.json({ settings, runs });
+        const [settings, runs] = await Promise.all([
+            getAutopilotSettings(agent),
+            autopilotRuns({ limit: 20, agent }),
+        ]);
+        res.json({ settings, runs, agent });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -669,8 +681,9 @@ router.get('/autopilot', async (req, res) => {
 
 router.put('/autopilot/settings', async (req, res) => {
     if (!requireDb(res)) return;
+    const agent = pickAgent(req.body?.agent || req.query.agent);
     try {
-        res.json({ settings: await saveAutopilotSettings(req.body || {}) });
+        res.json({ settings: await saveAutopilotSettings(req.body || {}, agent) });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -680,8 +693,9 @@ router.put('/autopilot/settings', async (req, res) => {
 router.post('/autopilot/run', async (req, res) => {
     if (!requireDb(res)) return;
     if (!isLlmConfigured) return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured (needed for the Director).' });
+    const agent = pickAgent(req.body?.agent || req.query.agent);
     try {
-        res.json(await runAutopilot({ trigger: 'manual', force: true }));
+        res.json(await runAutopilot({ trigger: 'manual', force: true, agent }));
     } catch (err) {
         console.error('❌ Autopilot run error:', err.message);
         res.status(500).json({ error: err.message });
@@ -689,24 +703,62 @@ router.post('/autopilot/run', async (req, res) => {
 });
 
 // GET/POST daily cron. Honors the enabled flag; advances nothing if disabled.
-async function autopilotCronHandler(req, res) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-        const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        if (token !== cronSecret && req.query.secret !== cronSecret) return res.status(401).json({ error: 'Unauthorized' });
-    }
-    if (!requireDb(res)) return;
+function makeAutopilotCron(agent) {
+    return async function autopilotCronHandler(req, res) {
+        const cronSecret = process.env.CRON_SECRET;
+        if (cronSecret) {
+            const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+            if (token !== cronSecret && req.query.secret !== cronSecret) return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!requireDb(res)) return;
+        try {
+            const out = await runAutopilot({ trigger: 'cron', agent });
+            if (out?.made) {
+                const src = agent === 'ownpage' ? 'your Instagram content' : 'your top-scoring videos';
+                await notify(`🤖 Autopilot started ${out.made} new remake${out.made > 1 ? 's' : ''} from ${src}.`).catch(() => {});
+            }
+            res.json(out);
+        } catch (err) {
+            console.error('❌ Autopilot cron error:', err.message);
+            res.status(500).json({ error: err.message });
+        }
+    };
+}
+router.get('/autopilot/cron', makeAutopilotCron('default'));
+router.post('/autopilot/cron', makeAutopilotCron('default'));
+router.get('/autopilot/ownpage/cron', makeAutopilotCron('ownpage'));
+router.post('/autopilot/ownpage/cron', makeAutopilotCron('ownpage'));
+
+// ─── Own Instagram page awareness ───────────────────────────────
+// GET  /api/trends/ownpage        → cached own-page insights
+// POST /api/trends/ownpage/refresh → scrape + refresh cache
+router.get('/ownpage', async (req, res) => {
     try {
-        const out = await runAutopilot({ trigger: 'cron' });
-        if (out?.made) await notify(`🤖 Autopilot started ${out.made} new remake${out.made > 1 ? 's' : ''} from your top-scoring videos.`).catch(() => {});
-        res.json(out);
+        const cache = await getOwnPageCache();
+        if (!cache) return res.json({ status: 'empty', message: 'No own-page data yet. Set OWN_INSTAGRAM_HANDLE and POST /ownpage/refresh.' });
+        res.json({ status: 'ok', ...cache });
     } catch (err) {
-        console.error('❌ Autopilot cron error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+// Accepts GET (Vercel Cron) + POST (manual). Optional CRON_SECRET guard.
+async function ownPageRefreshHandler(req, res) {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && req.method === 'GET') {
+        const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        if (token !== cronSecret && req.query.secret !== cronSecret) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+    }
+    try {
+        res.json(await refreshOwnPage());
+    } catch (err) {
+        console.error('❌ Own-page refresh error:', err.message);
         res.status(500).json({ error: err.message });
     }
 }
-router.get('/autopilot/cron', autopilotCronHandler);
-router.post('/autopilot/cron', autopilotCronHandler);
+router.get('/ownpage/refresh', ownPageRefreshHandler);
+router.post('/ownpage/refresh', ownPageRefreshHandler);
 
 // Strategy notes (run memory) — list + add.
 router.get('/notes', async (req, res) => {

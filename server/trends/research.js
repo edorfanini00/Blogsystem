@@ -8,6 +8,7 @@
 // copy, don't write fresh copy.
 // ═══════════════════════════════════════════════════════════════════
 import { query } from './db.js';
+import { buildOwnPageBlock } from './ownpage.js';
 
 function safeParse(s) {
     if (!s) return null;
@@ -158,11 +159,13 @@ export async function ourTopPerformers({ outputType = null, limit = 5 } = {}) {
 // Combined grounding block for the Director/Copy. Best-effort: returns '' when
 // we have no data yet (cold start), so prompts degrade cleanly. When a
 // sourceCandidateId is given, that video's own hook leads the block.
+// Also injects own-page style so every generation feels native to our Instagram.
 export async function buildResearchGrounding({ platform, format, outputType = null, sourceCandidateId = null } = {}) {
-    const [src, winners, ours] = await Promise.all([
+    const [src, winners, ours, ownPage] = await Promise.all([
         sourceGrounding(sourceCandidateId).catch(() => ''),
         researchExamples({ platform, format }).catch(() => ({ block: '' })),
         ourTopPerformers({ outputType }).catch(() => ({ block: '' })),
+        buildOwnPageBlock().catch(() => ''),
     ]);
-    return [src, ours.block, winners.block].filter(Boolean).join('\n\n');
+    return [src, ownPage, ours.block, winners.block].filter(Boolean).join('\n\n');
 }

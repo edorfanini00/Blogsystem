@@ -12,6 +12,8 @@
 import { query } from './db.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
+const APIFY_TOKEN = process.env.APIFY_TOKEN || process.env.APIFY_API_TOKEN || null;
+const BASE_URL = 'https://api.apify.com/v2';
 
 function engagementPct({ views, likes, comments, shares }) {
     return views > 0 ? Number((((likes + comments + shares) / views) * 100).toFixed(2)) : 0;
@@ -41,11 +43,43 @@ async function tiktokStats(url) {
     }
 }
 
+// Live Instagram post stats via Apify (apify/instagram-scraper).
+// Pulls the specific post URL and extracts engagement metrics.
+async function instagramStats(url) {
+    if (!APIFY_TOKEN) return null;
+    const actorId = 'apify/instagram-scraper';
+    const endpoint = `${BASE_URL}/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(APIFY_TOKEN)}&clean=true&memory=2048`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    try {
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ directUrls: [url], resultsType: 'posts', resultsLimit: 1 }),
+            signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        const items = await res.json();
+        const item = Array.isArray(items) ? items[0] : null;
+        if (!item) return null;
+        const views = Number(item.videoViewCount || item.videoPlayCount || item.play_count || 0);
+        const likes = Number(item.likesCount || item.like_count || item.likes || 0);
+        const comments = Number(item.commentsCount || item.comment_count || item.comments || 0);
+        const saves = Number(item.savesCount || item.save_count || 0);
+        return { views, likes, comments, shares: 0, saves };
+    } catch {
+        clearTimeout(timer);
+        return null;
+    }
+}
+
 // Fetch live stats for a posted URL by platform. Best-effort.
 export async function fetchPostStats(url, platform) {
     if (!url) return null;
     if (platform === 'tiktok' || url.includes('tiktok.com')) return tiktokStats(url);
-    return null; // IG/YouTube: wire a scraper later
+    if (platform === 'instagram' || url.includes('instagram.com')) return instagramStats(url);
+    return null; // YouTube: wire a scraper later
 }
 
 // Scrape + record one performance snapshot for a generation. Returns the row or

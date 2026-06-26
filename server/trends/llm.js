@@ -40,22 +40,32 @@ function extractText(msg) {
     return msg.content.map((b) => b.text || '').join('').trim();
 }
 
+// Strip trailing commas (",}" / ",]") that strict JSON.parse rejects but LLMs
+// occasionally emit. Conservative: only removes a comma immediately before a
+// closing brace/bracket (optionally across whitespace).
+function stripTrailingCommas(s) {
+    return s.replace(/,(\s*[}\]])/g, '$1');
+}
+
 // Parse JSON from a model response that may be fenced or have a preamble.
 export function parseJsonLoose(text) {
     if (!text) return null;
     let s = text.trim();
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fence) s = fence[1].trim();
-    try {
-        return JSON.parse(s);
-    } catch {
-        const start = s.indexOf('{');
-        const end = s.lastIndexOf('}');
-        if (start !== -1 && end > start) {
-            try { return JSON.parse(s.slice(start, end + 1)); } catch { /* fall through */ }
-        }
-        return null;
+    const attempt = (str) => {
+        try { return JSON.parse(str); } catch { /* try next */ }
+        try { return JSON.parse(stripTrailingCommas(str)); } catch { return undefined; }
+    };
+    let out = attempt(s);
+    if (out !== undefined) return out;
+    const start = s.indexOf('{');
+    const end = s.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+        out = attempt(s.slice(start, end + 1));
+        if (out !== undefined) return out;
     }
+    return null;
 }
 
 // Ask Claude for JSON. Returns the parsed object (or null on parse failure).

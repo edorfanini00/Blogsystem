@@ -21,6 +21,18 @@
         {
             "path": "/api/trends/autopilot/cron",
             "schedule": "0 2 * * *"
+        },
+        {
+            "path": "/api/trends/autopilot/ownpage/cron",
+            "schedule": "30 2 * * *"
+        },
+        {
+            "path": "/api/trends/ownpage/refresh",
+            "schedule": "0 1 * * *"
+        },
+        {
+            "path": "/api/trends/performance/cron",
+            "schedule": "0 3 * * *"
         }
     ],
     "rewrites": [

@@ -239,7 +239,8 @@ export async function listGenerations({ status = null, limit = 50 } = {}) {
     }
     params.push(limit);
     const r = await query(
-        `select g.*, c.url as source_url, c.caption as source_caption, c.platform, c.author_id
+        `select g.*, c.url as source_url, c.caption as source_caption, c.platform, c.author_id,
+                c.media_url as source_media_url, c.thumbnail as source_thumb
          from generations g
          join candidates c on c.id = g.candidate_id
          ${where}

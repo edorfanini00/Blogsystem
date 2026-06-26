@@ -6881,6 +6881,39 @@ body.light-theme .campaign-stat {
   max-height: 360px;
   object-fit: cover;
 }
+.trend-gen-reference {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-light, #e5e7eb);
+}
+.trend-gen-ref-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.trend-gen-ref-label span {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.85;
+}
+.trend-gen-ref-link { color: var(--accent-primary, #f97316); text-decoration: none; }
+.trend-gen-ref-video,
+.trend-gen-ref-img {
+  width: 100%;
+  border-radius: 10px;
+  background: #000;
+  aspect-ratio: 9 / 16;
+  max-height: 240px;
+  object-fit: cover;
+  display: block;
+}
 .trend-gen-media-placeholder {
   display: flex;
   align-items: center;
