@@ -106,6 +106,25 @@ const REPLACE_PERSON_DIRECTIVE =
 // Generate one shot image. promptOverride lets the QC loop retry with a
 // refined prompt. replacePerson appends the identity-swap directive when a
 // non-exact remake reuses the source frame for composition.
+// Copy a provider image URL into permanent Blob storage so it never expires.
+// fal.media / Higgsfield URLs are temporary — without this, older queue items
+// (and the source frames fed into animation) break once the link lapses, which
+// shows up as broken-image triangles in the grid. Best-effort: returns the
+// original URL when Blob isn't configured or the copy fails.
+async function persistImage(url) {
+    if (!url || !fal.isFalBlobConfigured) return url;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return url;
+        const buf = Buffer.from(await res.arrayBuffer());
+        const ct = res.headers.get('content-type') || 'image/jpeg';
+        const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
+        return await fal.uploadPublic(buf, ct, `shots/shot-${Date.now()}.${ext}`);
+    } catch {
+        return url;
+    }
+}
+
 // Returns { image_url } | { pending, request_id, status_url }.
 export async function generateShotImage(shot, { sourceFrameUrl = null, promptOverride = null, replacePerson = false } = {}) {
     const wantsFrame = !!(shot.use_source_frame && sourceFrameUrl);
@@ -125,7 +144,7 @@ export async function generateShotImage(shot, { sourceFrameUrl = null, promptOve
         }
         const url = fal.pickImageUrl(out.result);
         if (!url) throw new Error(`${model} completed but no image URL`);
-        return { image_url: url, request_id: out.request_id, model };
+        return { image_url: await persistImage(url), request_id: out.request_id, model };
     }
 
     // Higgsfield fallback.
@@ -143,7 +162,7 @@ export async function generateShotImage(shot, { sourceFrameUrl = null, promptOve
     }
     const url = pickImageUrl(out.result);
     if (!url) throw new Error(`${application} completed but no image URL`);
-    return { image_url: url, request_id: out.request_id, model: application };
+    return { image_url: await persistImage(url), request_id: out.request_id, model: application };
 }
 
 async function loadDirected(generationId) {
