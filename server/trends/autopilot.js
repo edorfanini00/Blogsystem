@@ -219,10 +219,23 @@ export async function runAutopilot({ trigger = 'manual', force = false, agent = 
         return { skipped: 'autopilot disabled', settings, agent: a };
     }
 
-    const run = await query(
-        `insert into autopilot_runs (status, trigger, agent) values ('running', $1, $2) returning *`,
-        [trigger, a]
-    );
+    let run;
+    try {
+        run = await query(
+            `insert into autopilot_runs (status, trigger, agent) values ('running', $1, $2) returning *`,
+            [trigger, a]
+        );
+    } catch (err) {
+        // Pre-migration fallback: insert without the agent column.
+        if (isMissingAgentColumn(err)) {
+            run = await query(
+                `insert into autopilot_runs (status, trigger) values ('running', $1) returning *`,
+                [trigger]
+            );
+        } else {
+            throw err;
+        }
+    }
     const runId = run.rows[0].id;
 
     try {
@@ -293,11 +306,29 @@ export async function runAutopilot({ trigger = 'manual', force = false, agent = 
     }
 }
 
+function isMissingAgentColumn(err) {
+    return /column .*agent.* does not exist/i.test(err?.message || '');
+}
+
 export async function recentRuns({ limit = 20, agent = 'default' } = {}) {
     const a = agentCfg(agent);
-    const { rows } = await query(
-        `select * from autopilot_runs where coalesce(agent, 'default') = $1 order by started_at desc limit $2`,
-        [a, limit]
-    );
-    return rows || [];
+    try {
+        const { rows } = await query(
+            `select * from autopilot_runs where coalesce(agent, 'default') = $1 order by started_at desc limit $2`,
+            [a, limit]
+        );
+        return rows || [];
+    } catch (err) {
+        // Pre-migration: the agent column may not exist yet. Fall back so the
+        // UI still loads. The ownpage agent simply has no history until migrated.
+        if (isMissingAgentColumn(err)) {
+            if (a !== 'default') return [];
+            const { rows } = await query(
+                `select * from autopilot_runs order by started_at desc limit $1`,
+                [limit]
+            );
+            return rows || [];
+        }
+        throw err;
+    }
 }
