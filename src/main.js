@@ -6852,6 +6852,11 @@ setTimeout(function initOnePager() {
                 : (g.caption ? `<div class="trend-gen-caption"><b>Caption:</b> ${esc(g.caption)}</div>` : '')}
             ${hashtags.length ? `<div class="trend-gen-tags">${hashtags.map((t) => `<span>#${esc(String(t).replace(/^#/, ''))}</span>`).join('')}</div>` : ''}
             ${g.error ? `<div class="trend-gen-error">${esc(g.error)}</div>` : ''}
+            ${(() => {
+                const errs = [...new Set(shots.filter((s) => s.image_error).map((s) => String(s.image_error)))];
+                if (!errs.length) return '';
+                return `<div class="trend-gen-error">⚠ Image error: ${esc(errs[0])}${errs.length > 1 ? ` (and ${errs.length - 1} more)` : ''}</div>`;
+            })()}
             <div class="trend-gen-actions">${actions.join('')}</div>
           </div>
         </div>`;
