@@ -47,6 +47,37 @@ function stripTrailingCommas(s) {
     return s.replace(/,(\s*[}\]])/g, '$1');
 }
 
+// Repair a JSON object that was cut off (model hit max_tokens mid-output). We
+// close any string still open, drop a dangling "key": with no value, strip a
+// trailing comma, and append the closing brackets the open stack still needs.
+// Best-effort: recovers the completed prefix instead of failing outright.
+function repairTruncatedJson(str) {
+    const start = str.indexOf('{');
+    if (start === -1) return null;
+    let s = str.slice(start);
+    let inStr = false, esc = false;
+    const stack = [];
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (esc) esc = false;
+            else if (ch === '\\') esc = true;
+            else if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') inStr = true;
+        else if (ch === '{') stack.push('}');
+        else if (ch === '[') stack.push(']');
+        else if (ch === '}' || ch === ']') stack.pop();
+    }
+    if (inStr) s += '"';                       // close an open string
+    s = s.replace(/,\s*$/, '');                // strip trailing comma
+    s = s.replace(/,?\s*"[^"]*"\s*:\s*$/, ''); // drop a dangling "key":
+    s = s.replace(/,\s*$/, '');
+    while (stack.length) s += stack.pop();      // balance brackets
+    return s;
+}
+
 // Parse JSON from a model response that may be fenced or have a preamble.
 export function parseJsonLoose(text) {
     if (!text) return null;
@@ -63,6 +94,12 @@ export function parseJsonLoose(text) {
     const end = s.lastIndexOf('}');
     if (start !== -1 && end > start) {
         out = attempt(s.slice(start, end + 1));
+        if (out !== undefined) return out;
+    }
+    // Last resort: the output was truncated (no valid closing). Repair + parse.
+    const repaired = repairTruncatedJson(s);
+    if (repaired) {
+        out = attempt(repaired);
         if (out !== undefined) return out;
     }
     return null;

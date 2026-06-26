@@ -565,7 +565,7 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
     let plan = null;
     for (let attempt = 0; attempt < 2 && !plan; attempt++) {
         try {
-            plan = await claudeJSON(buildSystem(target.mode, outputType, speechMode), user, { maxTokens: 2600 });
+            plan = await claudeJSON(buildSystem(target.mode, outputType, speechMode), user, { maxTokens: 6000 });
         } catch (err) {
             if (attempt === 1) throw err;
         }

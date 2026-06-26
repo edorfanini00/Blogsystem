@@ -6612,7 +6612,11 @@ setTimeout(function initOnePager() {
     function updateQueueBadge() {
         const badge = document.getElementById('trendQueueBadge');
         if (!badge) return;
-        const active = state.generations.filter((g) => g.status === 'review').length;
+        // Count everything still in the pipeline (rendering) or awaiting action,
+        // not just 'review' — so the badge grows when Autopilot starts remakes
+        // and shrinks as they get posted/killed/failed.
+        const TERMINAL = ['posted', 'killed', 'failed', 'script_only'];
+        const active = state.generations.filter((g) => !TERMINAL.includes(g.status)).length;
         badge.textContent = active;
         badge.style.display = active > 0 ? '' : 'none';
     }
