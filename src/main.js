@@ -6652,6 +6652,44 @@ setTimeout(function initOnePager() {
         state.generations.filter((g) => g.status === 'rendering').forEach((g) => pollGeneration(g.id));
     }
 
+    // ─── Auto-driver: build every remake to completion without clicks ───
+    // The server chain cron does this on a schedule, but on hosting plans that
+    // throttle crons it stalls between stages. While the app is open we push each
+    // in-flight generation forward one bounded step at a time (images → QC →
+    // animate → assemble) via the per-generation advance endpoint, so Autopilot
+    // remakes finish on their own. No cron secret needed.
+    const AUTO_DRIVE_STATUSES = ['directed', 'imaging', 'qc', 'animating', 'composing', 'assembling'];
+    let autoDriveBusy = false;
+    let autoDriveTimer = null;
+
+    async function autoDriveTick() {
+        if (autoDriveBusy) return;
+        const dbOk = state.health && state.health.db && state.health.db.ok;
+        if (!dbOk) return;
+        const active = (state.generations || []).filter((g) => AUTO_DRIVE_STATUSES.includes(g.status));
+        if (!active.length) return;
+        autoDriveBusy = true;
+        try {
+            // Advance the oldest in-flight generation by one step. Subsequent
+            // ticks cycle through the rest, so the whole queue keeps moving.
+            const g = active[active.length - 1]; // oldest (list is newest-first)
+            await fetch(tApi(`/api/trends/generations/${g.id}/advance`), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+            }).catch(() => {});
+            await loadGenerations();
+        } finally {
+            autoDriveBusy = false;
+        }
+    }
+
+    function startAutoDrive() {
+        if (autoDriveTimer) return;
+        // Kick once shortly after load, then poll. Steps are long (renders), so a
+        // modest interval plus the busy guard avoids overlapping calls.
+        autoDriveTimer = setInterval(autoDriveTick, 15000);
+        setTimeout(autoDriveTick, 3000);
+    }
+
     function renderGenerations() {
         const list = document.getElementById('trendQueueList');
         const empty = document.getElementById('queueEmpty');
@@ -7395,7 +7433,10 @@ setTimeout(function initOnePager() {
         // Resume polling any in-flight renders even if the user hasn't opened
         // the Queue tab yet, and keep the queue badge accurate.
         const dbOk = state.health && state.health.db && state.health.db.ok;
-        if (dbOk) loadGenerations();
+        if (dbOk) {
+            await loadGenerations();
+            startAutoDrive(); // keep building in-flight remakes automatically
+        }
     };
 
     console.log('✅ Trend Analysis module ready');
