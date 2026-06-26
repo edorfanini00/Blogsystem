@@ -20,6 +20,23 @@ import { runVideo, isVideoAgentConfigured } from './video.js';
 import { runAssembly, isAssemblyConfigured } from './assembly.js';
 import { runCopy, isCopyConfigured } from './copy.js';
 import { runSlides, isSlidesConfigured } from './slides.js';
+import { publishGeneration } from './publish.js';
+import { isInstagramPublishConfigured } from './config.js';
+
+// If a generation just reached 'review' AND it was flagged for auto-publish by
+// an Autopilot run, post it to Instagram now. Best-effort: a failure leaves it
+// in 'review' so it can be published manually. Returns the publish result or null.
+async function maybeAutoPublish(id, status) {
+    if (status !== 'review' || !isInstagramPublishConfigured) return null;
+    try {
+        const { rows } = await query('select auto_publish from generations where id = $1', [id]);
+        if (!rows[0]?.auto_publish) return null;
+        return await publishGeneration(id);
+    } catch (err) {
+        console.warn('auto-publish failed (left in review):', err.message);
+        return null;
+    }
+}
 
 // Ensure the Copy agent has written voiceover/captions before assembly. Runs
 // once (skips slideshows and anything that already has copy). Best-effort — a
@@ -66,7 +83,8 @@ export async function advanceGeneration(id) {
                 try {
                     await ensureCopy(id);
                     const a = await runAssembly(id);
-                    return { id, step: 'assemble', status: a.status, asset_url: a.asset_url };
+                    const pub = await maybeAutoPublish(id, a.status);
+                    return { id, step: 'assemble', status: pub ? 'posted' : a.status, asset_url: a.asset_url, published: pub || undefined };
                 } catch (err) {
                     // Leave it at 'assembling' — the next tick (or manual) retries.
                     return { id, step: 'video', ...out, assembleError: err.message };
@@ -77,13 +95,15 @@ export async function advanceGeneration(id) {
         if (g.status === 'composing') {
             if (!isSlidesConfigured) return { id, status: g.status, skipped: 'slides not configured' };
             const out = await runSlides(id);
-            return { id, step: 'slides', status: out.status, asset_url: out.asset_url };
+            const pub = await maybeAutoPublish(id, out.status);
+            return { id, step: 'slides', status: pub ? 'posted' : out.status, asset_url: out.asset_url, published: pub || undefined };
         }
         if (g.status === 'assembling') {
             if (!isAssemblyConfigured) return { id, status: g.status, skipped: 'assembly not configured' };
             await ensureCopy(id);
             const out = await runAssembly(id);
-            return { id, step: 'assemble', status: out.status, asset_url: out.asset_url };
+            const pub = await maybeAutoPublish(id, out.status);
+            return { id, step: 'assemble', status: pub ? 'posted' : out.status, asset_url: out.asset_url, published: pub || undefined };
         }
     } catch (err) {
         await query('update generations set error = $2 where id = $1', [id, String(err.message).slice(0, 400)]).catch(() => {});

@@ -5815,6 +5815,9 @@ body.light-theme .campaign-stat {
   border-radius: var(--radius-sm); padding: 8px 12px; font-size: 0.86rem; font-family: inherit; min-width: 120px;
 }
 .ap-field input:focus, .ap-field select:focus { outline: none; border-color: var(--accent-primary); }
+.ap-field-check { flex-direction: row; align-items: flex-end; }
+.ap-field-check label { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 0.82rem; color: var(--text-primary); cursor: pointer; }
+.ap-field-check input { min-width: 0; width: 16px; height: 16px; accent-color: var(--accent-primary); }
 .ap-actions { display: flex; gap: 10px; margin-left: auto; }
 
 .ap-feed-title { margin: 0 0 12px; font-size: 0.95rem; font-weight: 700; color: var(--text-primary); }

@@ -6269,14 +6269,14 @@ setTimeout(function initOnePager() {
             hasTargetMode: true,
             ids: { toggle: 'apEnabledToggle', label: 'apEnabledLabel', daily: 'apDailyCount',
                 output: 'apOutputType', mode: 'apTargetMode', min: 'apMinScore',
-                cooldown: 'apCooldown', save: 'apSaveBtn', run: 'apRunBtn', feed: 'apFeed' },
+                cooldown: 'apCooldown', autoPublish: 'apAutoPublish', save: 'apSaveBtn', run: 'apRunBtn', feed: 'apFeed' },
         },
         ownpage: {
             agent: 'ownpage',
             hasTargetMode: false,
             ids: { toggle: 'ap2EnabledToggle', label: 'ap2EnabledLabel', daily: 'ap2DailyCount',
                 output: 'ap2OutputType', mode: null, min: 'ap2MinScore',
-                cooldown: 'ap2Cooldown', save: 'ap2SaveBtn', run: 'ap2RunBtn', feed: 'ap2Feed' },
+                cooldown: 'ap2Cooldown', autoPublish: 'ap2AutoPublish', save: 'ap2SaveBtn', run: 'ap2RunBtn', feed: 'ap2Feed' },
         },
     };
 
@@ -6300,6 +6300,8 @@ setTimeout(function initOnePager() {
             if (cfg.hasTargetMode) set(cfg.ids.mode, s.targetMode);
             set(cfg.ids.min, s.minScore);
             set(cfg.ids.cooldown, s.cooldownDays);
+            const apEl = document.getElementById(cfg.ids.autoPublish);
+            if (apEl) apEl.checked = !!s.autoPublish;
             renderAutopilotRuns(cfg, data.runs || []);
         } catch {
             toast('Could not load Autopilot', 'error');
@@ -6321,6 +6323,7 @@ setTimeout(function initOnePager() {
             outputType: val(cfg.ids.output) || 'mix',
             minScore: parseFloat(val(cfg.ids.min)) || 0,
             cooldownDays: parseInt(val(cfg.ids.cooldown), 10) || 0,
+            autoPublish: !!document.getElementById(cfg.ids.autoPublish)?.checked,
         };
         if (cfg.hasTargetMode) out.targetMode = val(cfg.ids.mode) || 'auto';
         return out;
@@ -6775,6 +6778,12 @@ setTimeout(function initOnePager() {
         if (g.status === 'approved') {
             actions.push(`<button class="trend-btn-recreate" style="flex:0 0 auto;padding:9px 18px;" data-gen-posted="${esc(g.id)}">Mark posted</button>`);
         }
+        // Publish straight to Instagram (only when configured and the asset is ready).
+        const igReady = state.health?.instagramPublish?.configured;
+        const hasPostable = g.asset_url || (isSlideshow && Array.isArray(g.slide_urls) && g.slide_urls.length);
+        if (igReady && hasPostable && ['review', 'approved'].includes(g.status)) {
+            actions.push(`<button class="btn-ghost" style="flex:0 0 auto;padding:9px 18px;" data-gen-publish="${esc(g.id)}">📲 Publish to IG</button>`);
+        }
         if (g.asset_url) actions.push(`<a class="btn-ghost" href="${esc(g.asset_url)}" download target="_blank" rel="noopener">Download</a>`);
         if (g.source_url) actions.push(`<a class="btn-ghost" href="${esc(g.source_url)}" target="_blank" rel="noopener">Source ↗</a>`);
 
@@ -6810,6 +6819,8 @@ setTimeout(function initOnePager() {
             b.addEventListener('click', () => setGenStatus(b.dataset.genKill, 'killed')));
         list.querySelectorAll('[data-gen-posted]').forEach((b) =>
             b.addEventListener('click', () => markPosted(b.dataset.genPosted)));
+        list.querySelectorAll('[data-gen-publish]').forEach((b) =>
+            b.addEventListener('click', () => publishToInstagram(b.dataset.genPublish, b)));
         list.querySelectorAll('[data-gen-images]').forEach((b) =>
             b.addEventListener('click', () => runChainStage(b.dataset.genImages, 'images', b)));
         list.querySelectorAll('[data-gen-qc]').forEach((b) =>
@@ -6844,6 +6855,29 @@ setTimeout(function initOnePager() {
             toast((url || '').trim() ? 'Marked posted — tracking performance' : 'Marked posted', 'success');
         } catch (err) {
             toast('Update failed: ' + err.message, 'error');
+        }
+    }
+
+    // Publish a finished reel/carousel straight to Instagram (Graph API).
+    async function publishToInstagram(id, btn) {
+        if (!window.confirm('Publish this to your Instagram now with the generated caption?')) return;
+        const orig = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+        try {
+            const res = await fetch(tApi(`/api/trends/generations/${id}/publish`), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+            });
+            const data = await res.json();
+            if (!res.ok) { toast(data.error || 'Publish failed', 'error'); return; }
+            const idx = state.generations.findIndex((g) => g.id === id);
+            if (idx !== -1) state.generations[idx] = { ...state.generations[idx], status: 'posted', posted_url: data.permalink || state.generations[idx].posted_url };
+            updateQueueBadge();
+            renderGenerations();
+            toast(data.permalink ? 'Published to Instagram 🎉' : 'Published to Instagram', 'success');
+        } catch (err) {
+            toast('Publish failed: ' + err.message, 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = orig; }
         }
     }
 

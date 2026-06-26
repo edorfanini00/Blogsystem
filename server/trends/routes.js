@@ -39,6 +39,7 @@ import { getSettings as getAutopilotSettings, saveSettings as saveAutopilotSetti
 import { refreshOwnPage, getOwnPageCache } from './ownpage.js';
 import { advanceGeneration, runChainSweep } from './chain.js';
 import { isCaptionsConfigured } from './captions.js';
+import { publishGeneration } from './publish.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -58,6 +59,7 @@ import {
     MUSIC_URL,
     MATCH_SOURCE_LENGTH,
     REMAKE_MAX_SHOTS,
+    isInstagramPublishConfigured,
 } from './config.js';
 import { isKeyframesSupported } from './keyframes.js';
 
@@ -183,6 +185,7 @@ router.get('/health', async (req, res) => {
             music: !!MUSIC_URL,
         },
         slideshow: { configured: isSlidesConfigured },
+        instagramPublish: { configured: isInstagramPublishConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
@@ -634,6 +637,25 @@ router.post('/generations/:id/performance', async (req, res) => {
     try {
         res.json(await recordPerformance(req.params.id, { url: req.body?.url || null }));
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/trends/generations/:id/publish → post the finished reel/carousel to
+// Instagram, mark it posted, and start tracking performance.
+router.post('/generations/:id/publish', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!isInstagramPublishConfigured) {
+        return res.status(503).json({ error: 'Instagram publishing not configured (set IG_USER_ID and IG_ACCESS_TOKEN).' });
+    }
+    try {
+        const out = await publishGeneration(req.params.id);
+        addNote({ note: `Auto-published a ${out.type} to Instagram${out.permalink ? ` (${out.permalink})` : ''}.`, scope: 'global' }).catch(() => {});
+        if (out.permalink) recordPerformance(req.params.id, { url: out.permalink }).catch(() => {});
+        await notify(`📲 Published to Instagram: ${out.permalink || out.mediaId}`).catch(() => {});
+        res.json({ ok: true, ...out });
+    } catch (err) {
+        console.error('❌ Instagram publish error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

@@ -64,6 +64,7 @@ export async function saveSettings(patch = {}, agent = 'default') {
             : (['auto', 'exact'].includes(patch.targetMode) ? patch.targetMode : current.targetMode),
         minScore: Math.max(Number(patch.minScore ?? current.minScore) || 0, 0),
         cooldownDays: Math.max(parseInt(patch.cooldownDays ?? current.cooldownDays, 10) || 0, 0),
+        autoPublish: typeof patch.autoPublish === 'boolean' ? patch.autoPublish : !!current.autoPublish,
     };
     await query(
         `insert into app_settings (key, value, updated_at) values ($1,$2, now())
@@ -273,6 +274,12 @@ export async function runAutopilot({ trigger = 'manual', force = false, agent = 
                     outputType,
                     variants: 1,
                 });
+                // If this agent auto-publishes, flag the generation so the chain
+                // posts it to Instagram the moment it finishes rendering.
+                if (settings.autoPublish && primary?.generation?.id) {
+                    await query('update generations set auto_publish = true where id = $1', [primary.generation.id])
+                        .catch((e) => console.warn('autopilot: could not flag auto_publish:', e.message));
+                }
                 picked.push({
                     candidate_id: c.id,
                     title: (safeParse(c.analysis)?.hook || c.caption || c.author_id || 'Remake').slice(0, 120),

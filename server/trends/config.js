@@ -343,6 +343,7 @@ export const AUTOPILOT_DEFAULTS = {
     targetMode: process.env.AUTOPILOT_MODE || 'auto',            // auto | exact
     minScore: Number(process.env.AUTOPILOT_MIN_SCORE) || 0,      // skip candidates below this composite score
     cooldownDays: Number(process.env.AUTOPILOT_COOLDOWN_DAYS) || 7, // don't re-remake a candidate within N days
+    autoPublish: String(process.env.AUTOPILOT_AUTO_PUBLISH || 'off').toLowerCase() === 'on', // auto-post to Instagram when rendered
 };
 // ElevenLabs voiceover. Voice id + model are env-overridable; VO is optional —
 // assembly produces a (silent) cut when ElevenLabs is not configured.
@@ -383,6 +384,19 @@ export const PUBLISH_PLATFORMS = (process.env.PUBLISH_PLATFORMS
     ? process.env.PUBLISH_PLATFORMS.split(',')
     : ['tiktok', 'instagram', 'youtube']
 ).map((p) => p.trim().toLowerCase()).filter(Boolean);
+
+// ─── Instagram auto-publishing (Graph API) ──────────────────────
+// Optional. When configured, the autopilot (or the manual "Publish to IG"
+// button) can post a finished reel/carousel straight to your Instagram
+// Business/Creator account with the generated caption.
+//   IG_USER_ID       → your Instagram Business account id (numeric)
+//   IG_ACCESS_TOKEN  → a long-lived Page access token with
+//                      instagram_content_publish + pages_read_engagement
+//   IG_GRAPH_VERSION → Graph API version (default v21.0)
+export const IG_USER_ID = (process.env.IG_USER_ID || '').trim();
+export const IG_ACCESS_TOKEN = (process.env.IG_ACCESS_TOKEN || '').trim();
+export const IG_GRAPH_VERSION = (process.env.IG_GRAPH_VERSION || 'v21.0').trim();
+export const isInstagramPublishConfigured = Boolean(IG_USER_ID && IG_ACCESS_TOKEN);
 
 // ─── Burned captions (spec: short-form needs synced captions) ───
 // On by default; requires ElevenLabs (timestamp alignment). CAPTIONS=off to disable.

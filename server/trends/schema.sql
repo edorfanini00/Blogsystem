@@ -189,6 +189,9 @@ alter table generations add column if not exists vo_url          text;    -- Ele
 alter table generations add column if not exists output_type     text default 'video'; -- video | slideshow
 alter table generations add column if not exists slide_urls      jsonb;   -- composed slides [{url, text, text_position}]
 alter table generations add column if not exists posted_url      text;    -- public URL once posted (feedback loop)
+-- When true, the chain auto-publishes this generation to Instagram once it is
+-- fully rendered (set by an Autopilot run that has auto-publish enabled).
+alter table generations add column if not exists auto_publish    boolean default false;
 
 -- Trending sound: the source's own audio, extracted at analyze/keyframe time,
 -- reused as the bed for the remake (video or slideshow reel).
