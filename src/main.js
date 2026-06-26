@@ -6788,10 +6788,16 @@ setTimeout(function initOnePager() {
             media = `<div class="trend-gen-media-placeholder">${g.status === 'rendering' ? '<span class="spinner-orange"></span> Rendering video…' : (g.status === 'failed' ? '⚠ Render failed' : '📝 Script only')}</div>`;
         }
 
+        // A still is permanent only if it lives in Blob storage; provider URLs
+        // expire and render as broken triangles, so they need re-rendering.
+        const isPersistedShot = (s) => typeof s.image_url === 'string' && s.image_url.includes('blob.vercel-storage.com');
+        const hasBrokenShots = isChain && shots.length && shots.some((s) => s.image_url && !isPersistedShot(s));
+        const missingShots = isChain && shots.some((s) => !s.image_url);
+
         const actions = [];
         if (g.status === 'rendering') actions.push(`<button class="btn-ghost" data-gen-refresh="${esc(g.id)}">Check status</button>`);
-        if (g.status === 'directed' || (isChain && shots.some((s) => !s.image_url))) {
-            actions.push(`<button class="btn-ghost" data-gen-images="${esc(g.id)}">Render images</button>`);
+        if (g.status === 'directed' || missingShots || hasBrokenShots) {
+            actions.push(`<button class="btn-ghost" data-gen-images="${esc(g.id)}">${hasBrokenShots && !missingShots ? 'Fix broken images' : 'Render images'}</button>`);
         }
         if (g.status === 'qc' || (isChain && shots.some((s) => s.image_url && !s.qc?.pass))) {
             actions.push(`<button class="btn-ghost" data-gen-qc="${esc(g.id)}">Run QC</button>`);

@@ -27,6 +27,13 @@ export function imageRendersSpent(shots) {
 }
 
 export const isImageConfigured = USE_FAL ? fal.isFalConfigured : isHiggsfieldConfigured;
+
+// A still is "kept" only if it lives in our permanent Blob storage. Provider
+// URLs (fal.media / Higgsfield) are temporary and expire — those count as
+// needing a (re)render so old broken stills can be repaired in place.
+export function isPersistedImage(url) {
+    return typeof url === 'string' && url.includes('blob.vercel-storage.com');
+}
 // Source-frame composition is available on fal (image-to-image /edit slugs) as
 // long as we can host the frame on Vercel Blob. On Higgsfield it depends on a
 // configured reference param (HF_IMAGE_REF_PARAM).
@@ -246,7 +253,14 @@ export async function runImages(generationId, { max = Infinity } = {}) {
 
     let made = 0, pending = 0, failed = 0, rendered = 0, capped = false;
     for (const shot of shots) {
-        if (shot.image_url) continue;
+        // Skip shots that already have a PERMANENT still. A temporary provider
+        // URL (expired/broken) is re-rendered so the grid repairs itself.
+        if (shot.image_url && isPersistedImage(shot.image_url)) continue;
+        if (shot.image_url && !isPersistedImage(shot.image_url)) {
+            // Drop the stale provider URL so this shot regenerates + persists.
+            shot.image_url = null;
+            shot.image_error = null;
+        }
         if (rendered >= max) break;
         if (MAX_IMAGE_RENDERS && imageRendersSpent(shots) >= MAX_IMAGE_RENDERS) { capped = true; break; }
         rendered++;
