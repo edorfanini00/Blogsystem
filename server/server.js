@@ -636,7 +636,7 @@ async function generateImageWithOpenRouter(prompt) {
     const TIMEOUT_MS = 60000; // hard timeout so a hung request can't stall the whole generation
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const model = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview';
+    const model = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image';
 
     try {
         console.log(`   Trying OpenRouter image generation (${model})...`);
@@ -3074,7 +3074,7 @@ app.get('/api/debug-image', async (req, res) => {
         const orKey = process.env.OPENROUTER_API_KEY;
         if (!orKey) { out.openrouter = { skipped: 'no key' }; }
         else {
-            const model = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview';
+            const model = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image';
             const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json' },
@@ -3497,7 +3497,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'img-openrouter-fix-5',
+        build: 'img-openrouter-model-6',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
