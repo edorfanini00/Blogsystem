@@ -701,8 +701,26 @@ async function generateImageWithFal(prompt, options = {}) {
         return null;
     }
 
-    const model = options.model || 'fal-ai/flux/schnell';
-    const TIMEOUT_MS = options.timeoutMs || 45000;
+    // Default to a high-realism model. FLUX.1 [dev] renders far more photorealistic,
+    // detailed blog imagery than the fast "schnell" draft model. Override globally
+    // with FAL_IMAGE_MODEL (e.g. fal-ai/flux-pro/v1.1 for top-tier realism).
+    const model = options.model || process.env.FAL_IMAGE_MODEL || 'fal-ai/flux/dev';
+    const TIMEOUT_MS = options.timeoutMs || 60000;
+    const imageSize = options.imageSize || { width: 1280, height: 720 };
+
+    // Fal validates request bodies strictly and rejects unknown fields, so build
+    // the payload to match the chosen model family.
+    const isSchnell = /schnell/i.test(model);
+    const isPro = /flux-?pro|flux\/pro|flux-1\.1|flux1\.1/i.test(model);
+    const input = { prompt, image_size: imageSize, enable_safety_checker: true, output_format: 'jpeg' };
+    if (isPro) {
+        input.num_images = 1;
+        input.safety_tolerance = '3';
+    } else {
+        // schnell (draft) vs dev (high quality)
+        input.num_inference_steps = options.inferenceSteps || (isSchnell ? 4 : 30);
+        input.guidance_scale = options.guidanceScale || 3.5;
+    }
 
     try {
         console.log(`   Trying Fal.ai model: ${model}`);
@@ -715,12 +733,7 @@ async function generateImageWithFal(prompt, options = {}) {
                 Authorization: `Key ${falKey}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                prompt,
-                image_size: options.imageSize || { width: 1280, height: 720 },
-                num_inference_steps: options.inferenceSteps || 4,
-                enable_safety_checker: true,
-            }),
+            body: JSON.stringify(input),
             signal: controller.signal,
         });
 
@@ -3441,7 +3454,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'img-working-7',
+        build: 'flux-dev-10',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
