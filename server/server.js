@@ -3038,36 +3038,6 @@ app.get('/api/reddit/callback', async (req, res) => {
     }
 });
 
-// ─── TEMPORARY: Debug Fal.ai key/account identity + live status ───
-app.get('/api/debug-fal', async (req, res) => {
-    const out = {};
-    const falKey = process.env.FAL_KEY || '';
-    if (!falKey) return res.json({ error: 'FAL_KEY not set' });
-
-    // A Fal key is "<key_id>:<key_secret>". The key_id identifies the account and
-    // is safe to surface; the secret is masked. This lets us confirm WHICH Fal
-    // account/key is wired into the server vs. the dashboard you're viewing.
-    const [keyId, secret] = falKey.split(':');
-    out.fal_key_id = keyId || '(no colon in key)';
-    out.fal_key_length = falKey.length;
-    out.fal_secret_masked = secret ? `${secret.slice(0, 3)}…${secret.slice(-2)}` : '(none)';
-
-    // Live probe: cheapest real call to see the current account status.
-    try {
-        const r = await fetch('https://fal.run/fal-ai/flux/schnell', {
-            method: 'POST',
-            headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: 'a small grey dot', image_size: { width: 512, height: 512 }, num_inference_steps: 1 }),
-        });
-        const body = await r.text();
-        out.live_status = r.status;
-        out.live_ok = r.ok;
-        out.live_body = body.slice(0, 400);
-    } catch (e) { out.live_error = e.message; }
-
-    res.json(out);
-});
-
 // ─── TEMPORARY: Debug Environment Variables ─────────────────────
 app.get('/api/debug-env', (req, res) => {
     res.json({
@@ -3471,7 +3441,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'fal-debug-8',
+        build: 'img-working-7',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
