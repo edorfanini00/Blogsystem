@@ -1170,19 +1170,33 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
                 }, { timeoutMs: 30000, maxRetries: 1 });
 
                 try {
-                    const raw = promptGenResponse.content[0].text.trim();
-                    imagePrompts = JSON.parse(raw);
-                    // Ensure we don't exceed requested count
-                    imagePrompts = imagePrompts.slice(0, imageCount);
+                    let raw = promptGenResponse.content[0].text.trim();
+                    // Claude sometimes wraps the JSON in ```json fences or adds prose —
+                    // strip fences and pull out the first bracketed array if needed.
+                    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+                    const arrMatch = raw.match(/\[[\s\S]*\]/);
+                    const parsed = JSON.parse(arrMatch ? arrMatch[0] : raw);
+                    // Accept either a bare array or an object like { prompts: [...] }.
+                    const arr = Array.isArray(parsed)
+                        ? parsed
+                        : (Array.isArray(parsed?.prompts) ? parsed.prompts : []);
+                    imagePrompts = arr
+                        .filter(p => typeof p === 'string' && p.trim())
+                        .slice(0, imageCount);
                 } catch {
                     console.log('Could not parse image prompts JSON, using fallback');
+                    imagePrompts = [];
                 }
             } catch (err) {
                 console.error('Image prompt generation error:', err.message);
+                imagePrompts = [];
             }
         }
 
-        // Fallback prompts if Claude analysis failed or too few sections
+        // Fallback prompts if Claude analysis failed, returned too few, or produced a
+        // non-array. Keep any valid Claude prompts and top up with generic ones so we
+        // ALWAYS have exactly `imageCount` prompts to generate.
+        if (!Array.isArray(imagePrompts)) imagePrompts = [];
         if (imageCount > 0 && imagePrompts.length < imageCount) {
             const topicContext = `${keywords}${customization.product ? ' for ' + customization.product : ''}`;
             const fallbacks = [
@@ -1192,7 +1206,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
                 `Aerial or overhead view of a workspace related to "${keywords}". Clean, organized layout with modern technology. Bright, natural lighting. No text.`,
                 `Abstract visualization of innovation and progress in "${keywords}". Dynamic composition with depth and dimension. Professional editorial quality. No text.`,
             ];
-            imagePrompts = fallbacks.slice(0, imageCount);
+            imagePrompts = imagePrompts.concat(fallbacks).slice(0, imageCount);
         }
 
         // Step 4-6: Generate images (Fal.ai → OpenRouter → Gemini)
