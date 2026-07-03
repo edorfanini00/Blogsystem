@@ -3041,6 +3041,60 @@ app.get('/api/debug-env', (req, res) => {
     });
 });
 
+// ─── TEMPORARY: Debug image providers ───────────────────────────
+app.get('/api/debug-image', async (req, res) => {
+    const prompt = 'A simple red apple on a white table, studio lighting';
+    const out = {};
+
+    // Fal.ai
+    try {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) { out.fal = { skipped: 'no FAL_KEY' }; }
+        else {
+            const r = await fetch('https://fal.run/fal-ai/flux/schnell', {
+                method: 'POST',
+                headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, image_size: { width: 1280, height: 720 }, num_inference_steps: 4, enable_safety_checker: true }),
+            });
+            const body = await r.text();
+            out.fal = { status: r.status, ok: r.ok, body: body.slice(0, 400) };
+        }
+    } catch (e) { out.fal = { error: e.message }; }
+
+    // OpenRouter
+    try {
+        const orKey = process.env.OPENROUTER_API_KEY;
+        if (!orKey) { out.openrouter = { skipped: 'no key' }; }
+        else {
+            const r = await fetch('https://openrouter.ai/api/v1/images/generations', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'openai/dall-e-3', prompt, n: 1, size: '1792x1024', response_format: 'b64_json' }),
+            });
+            const body = await r.text();
+            out.openrouter = { status: r.status, ok: r.ok, body: body.slice(0, 400) };
+        }
+    } catch (e) { out.openrouter = { error: e.message }; }
+
+    // Gemini
+    try {
+        const gKey = process.env.GEMINI_API_KEY;
+        if (!gKey) { out.gemini = { skipped: 'no key' }; }
+        else {
+            const model = 'gemini-2.5-flash-image';
+            const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': gKey },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
+            });
+            const body = await r.text();
+            out.gemini = { status: r.status, ok: r.ok, body: body.slice(0, 400) };
+        }
+    } catch (e) { out.gemini = { error: e.message }; }
+
+    res.json(out);
+});
+
 // ─── GET /api/health ─────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 // ─── SOCIAL OAUTH CONNECTIONS ───────────────────────────────────
@@ -3433,7 +3487,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'img-clientgone-fix-3',
+        build: 'img-debug-4',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
