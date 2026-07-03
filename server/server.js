@@ -1058,9 +1058,12 @@ app.post('/api/generate', async (req, res) => {
         res.end();
     }
 
-    // Track client disconnects so we stop doing expensive work for a dead socket.
+    // Track *real* client disconnects so we stop doing expensive work for a dead
+    // socket. Listen on the response, NOT req — `req` emits 'close' as soon as the
+    // request body is consumed by express.json(), which would falsely flag the
+    // client as gone and abort image generation mid-run.
     let clientGone = false;
-    req.on('close', () => { clientGone = true; });
+    res.on('close', () => { if (!res.writableEnded) clientGone = true; });
 
     // Global time budget. Vercel kills the function at maxDuration (300s); we finish
     // well before that so the client always receives a terminal `result`/`error`
@@ -3430,7 +3433,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'img-prompt-fix-2',
+        build: 'img-clientgone-fix-3',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
