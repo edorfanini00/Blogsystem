@@ -3038,23 +3038,6 @@ app.get('/api/reddit/callback', async (req, res) => {
     }
 });
 
-// ─── TEMPORARY: Debug Fal.ai live status ────────────────────────
-app.get('/api/debug-fal', async (req, res) => {
-    const falKey = process.env.FAL_KEY || '';
-    if (!falKey) return res.json({ error: 'FAL_KEY not set' });
-    const keyId = (falKey.split(':')[0] || '').slice(0, 8);
-    try {
-        const r = await fetch('https://fal.run/fal-ai/flux/schnell', {
-            method: 'POST',
-            headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: 'a small grey dot', image_size: { width: 512, height: 512 }, num_inference_steps: 1 }),
-        });
-        const body = await r.text();
-        const hasImage = body.includes('"images"') || body.includes('.jpeg') || body.includes('.png');
-        return res.json({ key_id_prefix: keyId, status: r.status, ok: r.ok, hasImage, body: body.slice(0, 300) });
-    } catch (e) { return res.json({ key_id_prefix: keyId, error: e.message }); }
-});
-
 // ─── TEMPORARY: Debug Environment Variables ─────────────────────
 app.get('/api/debug-env', (req, res) => {
     res.json({
@@ -3458,7 +3441,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'fal-recheck-9',
+        build: 'img-working-7',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
