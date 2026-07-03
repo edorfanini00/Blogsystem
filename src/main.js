@@ -345,6 +345,9 @@ blogForm.addEventListener('submit', async (e) => {
                         showState('content');
                         publishPanel.style.display = 'block';
                         showToast(`Blog generated: "${data.title}"`);
+                        if (data.imageNotice) {
+                            setTimeout(() => showToast(data.imageNotice, 'error'), 1200);
+                        }
 
                         // Handle language tabs
                         const langTabs = document.getElementById('langTabs');

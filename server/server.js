@@ -622,7 +622,10 @@ async function generateImageWithGemini(prompt) {
     return null;
 }
 
-// ─── Generate Image via OpenRouter (FLUX) ─────────────────────────
+// ─── Generate Image via OpenRouter ────────────────────────────────
+// OpenRouter has no /images/generations endpoint (that path 404s). Image models
+// are served through /chat/completions with modalities:["image","text"]; the
+// generated image comes back as a base64 data URL in message.images[].
 async function generateImageWithOpenRouter(prompt) {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey || apiKey === 'your_openrouter_api_key' || apiKey === 'placeholder') {
@@ -633,21 +636,20 @@ async function generateImageWithOpenRouter(prompt) {
     const TIMEOUT_MS = 60000; // hard timeout so a hung request can't stall the whole generation
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const model = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview';
 
     try {
-        console.log('   Trying OpenRouter image generation...');
-        const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
+        console.log(`   Trying OpenRouter image generation (${model})...`);
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'openai/dall-e-3',
-                prompt,
-                n: 1,
-                size: '1792x1024',
-                response_format: 'b64_json',
+                model,
+                messages: [{ role: 'user', content: prompt }],
+                modalities: ['image', 'text'],
             }),
             signal: controller.signal,
         });
@@ -660,20 +662,22 @@ async function generateImageWithOpenRouter(prompt) {
         }
 
         const data = await response.json();
-        if (data.data?.[0]?.b64_json) {
-            console.log('   ✅ Got image from OpenRouter');
-            return {
-                buffer: Buffer.from(data.data[0].b64_json, 'base64'),
-                mimeType: 'image/png',
-                alt: prompt,
-            };
+        const images = data.choices?.[0]?.message?.images;
+        const imgUrl = images?.[0]?.image_url?.url
+            || (typeof images?.[0] === 'string' ? images[0] : null);
+
+        if (imgUrl && imgUrl.startsWith('data:')) {
+            const m = imgUrl.match(/^data:(.+?);base64,(.*)$/s);
+            if (m) {
+                console.log('   ✅ Got image from OpenRouter');
+                return { buffer: Buffer.from(m[2], 'base64'), mimeType: m[1], alt: prompt };
+            }
         }
-        // Fallback: URL-based response
-        if (data.data?.[0]?.url) {
+        if (imgUrl && /^https?:/i.test(imgUrl)) {
             console.log('   ✅ Got image URL from OpenRouter, fetching...');
-            const imgRes = await fetch(data.data[0].url);
+            const imgRes = await fetch(imgUrl);
             const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-            return { buffer: imgBuf, mimeType: 'image/png', alt: prompt };
+            return { buffer: imgBuf, mimeType: imgRes.headers.get('content-type') || 'image/png', alt: prompt };
         }
 
         console.log('   OpenRouter returned no image data');
@@ -1257,10 +1261,13 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         }
 
         console.log(`✅ ${uploadedImages.length} images generated`);
+        let imageNotice = null;
         if (imageCount > 0 && uploadedImages.length === 0) {
             console.warn(`⚠ No blog images were generated (requested ${imageCount}). Check FAL_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY.`);
+            imageNotice = `No images were generated (requested ${imageCount}). Your image providers likely ran out of credit/quota — check Fal.ai billing, Gemini quota, or OpenRouter credits.`;
         } else if (imageCount > 0 && uploadedImages.length < imageCount) {
             console.warn(`⚠ Only ${uploadedImages.length}/${imageCount} blog images were generated.`);
+            imageNotice = `Only ${uploadedImages.length} of ${imageCount} images were generated — some image providers may be out of credit/quota.`;
         }
 
         // Step after images: Inject images into blog HTML (alt text carries the focus keyphrase for SEO)
@@ -1362,6 +1369,7 @@ ${htmlContent}`,
             slug: seo.slug,
             images: uploadedImages,
             featuredMediaId: uploadedImages[0]?.id || null,
+            imageNotice,
             spanishHtmlContent,
             spanishTitle,
         });
@@ -3066,13 +3074,15 @@ app.get('/api/debug-image', async (req, res) => {
         const orKey = process.env.OPENROUTER_API_KEY;
         if (!orKey) { out.openrouter = { skipped: 'no key' }; }
         else {
-            const r = await fetch('https://openrouter.ai/api/v1/images/generations', {
+            const model = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview';
+            const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: 'openai/dall-e-3', prompt, n: 1, size: '1792x1024', response_format: 'b64_json' }),
+                body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'] }),
             });
             const body = await r.text();
-            out.openrouter = { status: r.status, ok: r.ok, body: body.slice(0, 400) };
+            const hasImg = body.includes('"images"') || body.includes('data:image');
+            out.openrouter = { status: r.status, ok: r.ok, model, hasImage: hasImg, body: body.slice(0, 300) };
         }
     } catch (e) { out.openrouter = { error: e.message }; }
 
@@ -3487,7 +3497,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        build: 'img-debug-4',
+        build: 'img-openrouter-fix-5',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
