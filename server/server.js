@@ -3430,6 +3430,7 @@ function oauthResultPage(status, platform, detail) {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
+        build: 'img-prompt-fix-2',
         timestamp: new Date().toISOString(),
         services: {
             anthropic: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key',
