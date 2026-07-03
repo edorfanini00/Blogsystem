@@ -267,6 +267,10 @@ blogForm.addEventListener('submit', async (e) => {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        // Track whether we received a terminal event. If the connection drops
+        // mid-stream (e.g. the serverless function hit its time limit) we must NOT
+        // sit on the loading spinner forever — surface an error so the user can retry.
+        let gotTerminal = false;
 
         while (true) {
             const { done, value } = await reader.read();
@@ -302,6 +306,7 @@ blogForm.addEventListener('submit', async (e) => {
                     }
 
                     if (data.type === 'result') {
+                        gotTerminal = true;
                         // Snap to 100%
                         targetPct = 100;
                         currentPct = 100;
@@ -387,6 +392,7 @@ blogForm.addEventListener('submit', async (e) => {
                     }
 
                     if (data.type === 'error') {
+                        gotTerminal = true;
                         throw new Error(data.error);
                     }
                 } catch (parseErr) {
@@ -397,6 +403,13 @@ blogForm.addEventListener('submit', async (e) => {
             }
 
             if (done) break;
+        }
+
+        // Stream ended without ever delivering a result or error. This happens when
+        // the serverless function is killed mid-generation (Vercel time limit) and
+        // the socket just closes. Don't leave the UI stuck on the loading spinner.
+        if (!gotTerminal) {
+            throw new Error('The generation timed out before it finished. Please try again — reducing the word count or number of images helps it complete faster.');
         }
     } catch (err) {
         console.error('Generation error:', err);

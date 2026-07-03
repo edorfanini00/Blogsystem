@@ -299,21 +299,32 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ─── Clients ─────────────────────────────────────────────────────
+// Disable the SDK's built-in retries (we run our own retry loop below) and give
+// every request a hard timeout so a single hung upstream call can never stall an
+// entire blog generation past Vercel's 300s function limit.
 const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY || 'placeholder',
+    maxRetries: 0,
+    timeout: 120000,
 });
 
 // ─── Claude Retry Wrapper (handles 529 overloaded + 429 rate limit) ──
-async function callClaude(params, maxRetries = 3) {
+// `opts.timeoutMs` bounds each individual request; `opts.maxRetries` bounds how
+// many times we retry transient overload/rate-limit/timeout failures. Callers can
+// still pass a plain number as the 2nd arg for backwards compatibility.
+async function callClaude(params, opts = {}) {
+    if (typeof opts === 'number') opts = { maxRetries: opts };
+    const { maxRetries = 3, timeoutMs = 120000 } = opts;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            return await anthropic.messages.create(params);
+            return await anthropic.messages.create(params, { timeout: timeoutMs });
         } catch (err) {
             const status = err?.status || err?.error?.status || 0;
-            const isRetryable = status === 529 || status === 429 || (err.message && err.message.includes('overloaded'));
+            const isTimeout = err?.name === 'APIConnectionTimeoutError' || /tim|ETIMEDOUT|ECONNRESET|socket hang up/i.test(err?.message || '');
+            const isRetryable = status === 529 || status === 429 || isTimeout || (err.message && err.message.includes('overloaded'));
             if (isRetryable && attempt < maxRetries) {
-                const delay = Math.min(15000 * Math.pow(2, attempt - 1), 60000); // 15s, 30s, 60s
-                console.warn(`⚠ Claude ${status || 'overloaded'} — retry ${attempt}/${maxRetries} in ${delay / 1000}s…`);
+                const delay = Math.min(8000 * Math.pow(2, attempt - 1), 30000); // 8s, 16s, 30s
+                console.warn(`⚠ Claude ${status || (isTimeout ? 'timeout' : 'overloaded')} — retry ${attempt}/${maxRetries} in ${delay / 1000}s…`);
                 await new Promise(r => setTimeout(r, delay));
             } else {
                 throw err;
@@ -412,7 +423,7 @@ Be extremely specific and actionable.`
                 }
             ],
             max_tokens: 4000,
-        });
+        }, { timeout: 55000, maxRetries: 1 });
 
         const research = response.choices?.[0]?.message?.content;
         if (research) {
@@ -999,7 +1010,7 @@ ${catalogList}
 HTML ARTICLE TO ADD INTERNAL LINKS TO:
 ${htmlContent}`,
             }],
-        });
+        }, { timeoutMs: 90000, maxRetries: 1 });
 
         let out = resp.content[0].text.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
         // Safety: only accept the rewrite if it still looks like the same document (kept the wrapper) and actually added a link.
@@ -1031,14 +1042,38 @@ app.post('/api/generate', async (req, res) => {
     }
 
     function sendResult(data) {
+        if (finished) return;
+        finished = true;
+        clearInterval(heartbeat);
         res.write(`data: ${JSON.stringify({ type: 'result', ...data })}\n\n`);
         res.end();
     }
 
+    let finished = false;
     function sendError(error) {
+        if (finished) return;
+        finished = true;
+        clearInterval(heartbeat);
         res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
         res.end();
     }
+
+    // Track client disconnects so we stop doing expensive work for a dead socket.
+    let clientGone = false;
+    req.on('close', () => { clientGone = true; });
+
+    // Global time budget. Vercel kills the function at maxDuration (300s); we finish
+    // well before that so the client always receives a terminal `result`/`error`
+    // event instead of a silently dropped connection (which would hang the UI).
+    const genStart = Date.now();
+    const GEN_DEADLINE_MS = 285000;
+    const timeLeft = () => GEN_DEADLINE_MS - (Date.now() - genStart);
+
+    // Heartbeat comment keeps intermediary proxies from dropping an idle SSE stream
+    // during long LLM calls.
+    const heartbeat = setInterval(() => {
+        if (!finished) { try { res.write(': keep-alive\n\n'); } catch { /* socket closed */ } }
+    }, 15000);
 
     try {
         const { keywords, description, wordCount, target, product, trends, tone, language } = req.body;
@@ -1089,7 +1124,7 @@ app.post('/api/generate', async (req, res) => {
                 },
             ],
             system: systemPrompt,
-        });
+        }, { timeoutMs: 120000, maxRetries: 2 });
 
         let htmlContent = message.content[0].text;
         htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
@@ -1132,7 +1167,7 @@ Rules:
 
 Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prompt 1", "prompt 2"]`,
                     }],
-                });
+                }, { timeoutMs: 30000, maxRetries: 1 });
 
                 try {
                     const raw = promptGenResponse.content[0].text.trim();
@@ -1166,13 +1201,20 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
 
         // Time budgets so the blog ALWAYS finishes, even if an image provider stalls.
         // Vercel maxDuration is 300s — leave room for research/writing/translation.
-        const PER_IMAGE_TIMEOUT_MS = 75000;
-        const IMAGE_TOTAL_BUDGET_MS = 160000;
+        const PER_IMAGE_TIMEOUT_MS = 60000;
+        const IMAGE_TOTAL_BUDGET_MS = 130000;
+        // Reserve time for the remaining steps (insert + SEO + optional Spanish).
+        const IMAGE_RESERVE_MS = language === 'both' ? 120000 : 40000;
         const imageLoopStart = Date.now();
 
         for (let i = 0; i < imagePrompts.length; i++) {
+            if (clientGone) { console.warn('⏹ Client disconnected — aborting image generation'); break; }
             if (Date.now() - imageLoopStart > IMAGE_TOTAL_BUDGET_MS) {
                 console.warn(`⏱ Image time budget exceeded — skipping remaining ${imagePrompts.length - i} image(s) so the blog can finish`);
+                break;
+            }
+            if (timeLeft() < IMAGE_RESERVE_MS) {
+                console.warn(`⏱ Global deadline approaching (${Math.round(timeLeft() / 1000)}s left) — skipping remaining ${imagePrompts.length - i} image(s) so the blog can finish`);
                 break;
             }
             sendProgress(4 + i, TOTAL_STEPS, `Generating image ${i + 1} of ${imagePrompts.length} for section: "${sectionTitles[i] || 'blog'}"…`);
@@ -1209,18 +1251,25 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         htmlContent = injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles, focusKeyphrase);
 
         // Internal linking step: weave this post into the existing blog network for SEO.
-        try {
-            sendProgress(insertStep, TOTAL_STEPS, 'Linking to your blog network…');
-            const networkPosts = await fetchWordPressPosts(50);
-            const internalTargets = networkPosts.filter(p => p.slug !== seo.slug);
-            if (internalTargets.length > 0) {
-                console.log(`🔗 Found ${internalTargets.length} existing post(s) for internal linking`);
-                htmlContent = await insertNetworkLinks(htmlContent, { focusKeyphrase, internalTargets });
-            } else {
-                console.log('🔗 No existing network posts found — skipping internal linking');
+        // This re-emits the whole document through Claude, so only run it when there's
+        // comfortable time left (Spanish, if requested, needs the remaining budget).
+        const linkReserveMs = language === 'both' ? 150000 : 70000;
+        if (timeLeft() < linkReserveMs) {
+            console.log(`🔗 Skipping internal linking — ${Math.round(timeLeft() / 1000)}s left, reserving time to finish the blog`);
+        } else {
+            try {
+                sendProgress(insertStep, TOTAL_STEPS, 'Linking to your blog network…');
+                const networkPosts = await fetchWordPressPosts(50);
+                const internalTargets = networkPosts.filter(p => p.slug !== seo.slug);
+                if (internalTargets.length > 0) {
+                    console.log(`🔗 Found ${internalTargets.length} existing post(s) for internal linking`);
+                    htmlContent = await insertNetworkLinks(htmlContent, { focusKeyphrase, internalTargets });
+                } else {
+                    console.log('🔗 No existing network posts found — skipping internal linking');
+                }
+            } catch (linkErr) {
+                console.error('Internal linking step failed (non-fatal):', linkErr.message);
             }
-        } catch (linkErr) {
-            console.error('Internal linking step failed (non-fatal):', linkErr.message);
         }
 
         // SEO step
@@ -1234,7 +1283,9 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         let spanishHtmlContent = null;
         let spanishTitle = null;
 
-        if (language === 'both') {
+        if (language === 'both' && timeLeft() < 45000) {
+            console.warn(`⏱ Not enough time left (${Math.round(timeLeft() / 1000)}s) for Spanish translation — returning the English blog so generation still completes.`);
+        } else if (language === 'both') {
             sendProgress(insertStep + 2, TOTAL_STEPS, 'Translating blog to Spanish…');
             console.log('🌐 Translating blog to Spanish…');
 
@@ -1263,7 +1314,7 @@ Here is the HTML to translate:
 
 ${htmlContent}`,
                     }],
-                });
+                }, { timeoutMs: Math.max(30000, Math.min(110000, timeLeft() - 8000)), maxRetries: 1 });
 
                 spanishHtmlContent = translationResponse.content[0].text;
                 spanishHtmlContent = spanishHtmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
