@@ -234,20 +234,26 @@ blogForm.addEventListener('submit', async (e) => {
     progressPercent.textContent = '0%';
     loadingText.textContent = 'Starting generation…';
 
-    // Smooth progress animation
+    // Progress animation that actually tracks the server's steps.
+    // - `targetPct` = the % of the last confirmed step (bar jumps up to here).
+    // - `ceilingPct` = just below the NEXT step's mark; between SSE events the bar
+    //   inches toward this ceiling so it feels alive, but never races ahead to the
+    //   next milestone until the server confirms it (no more "stuck at 95%").
     let currentPct = 0;
     let targetPct = 0;
+    let ceilingPct = 0;
     const smoothInterval = setInterval(() => {
         if (currentPct < targetPct) {
-            // Move smoothly toward target (ease toward it)
+            // Catch up to the confirmed step reasonably quickly.
             const diff = targetPct - currentPct;
-            const step = Math.max(0.3, diff * 0.08);
-            currentPct = Math.min(currentPct + step, targetPct);
-        } else if (currentPct < 95 && targetPct > 0) {
-            // Creep slowly even between SSE events so bar never stalls
-            currentPct += 0.15;
+            currentPct = Math.min(currentPct + Math.max(0.5, diff * 0.15), targetPct);
+        } else if (currentPct < ceilingPct) {
+            // Inch forward within the current step toward (but not reaching) the
+            // next milestone — slow enough that long steps keep visibly moving.
+            const diff = ceilingPct - currentPct;
+            currentPct = Math.min(currentPct + Math.max(0.04, diff * 0.02), ceilingPct);
         }
-        const rounded = Math.round(currentPct);
+        const rounded = Math.min(Math.round(currentPct), 99);
         progressFill.style.width = `${rounded}%`;
         progressPercent.textContent = `${rounded}%`;
     }, 200);
@@ -301,7 +307,10 @@ blogForm.addEventListener('submit', async (e) => {
                     const data = JSON.parse(line.slice(6));
 
                     if (data.type === 'progress') {
-                        targetPct = Math.round((data.step / data.total) * 100);
+                        // Jump the bar to this step's mark, then let it creep toward
+                        // (but not into) the next step so it follows the real process.
+                        targetPct = (data.step / data.total) * 100;
+                        ceilingPct = Math.min(((data.step + 0.9) / data.total) * 100, 99);
                         loadingText.textContent = data.message;
                     }
 
