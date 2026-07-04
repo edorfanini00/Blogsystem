@@ -193,6 +193,16 @@ alter table generations add column if not exists posted_url      text;    -- pub
 -- fully rendered (set by an Autopilot run that has auto-publish enabled).
 alter table generations add column if not exists auto_publish    boolean default false;
 
+-- ─── Review-by-email workflow ───────────────────────────────────
+-- When a generation reaches 'review' we email a reviewer a link to watch it,
+-- approve+post it, or request changes (which spawns a regeneration). These
+-- columns make the email idempotent and record the review lineage.
+alter table generations add column if not exists review_email_sent    boolean default false; -- guard: email once per generation
+alter table generations add column if not exists feedback             text;    -- reviewer's requested changes (drives regeneration)
+alter table generations add column if not exists parent_generation_id uuid references generations (id) on delete set null; -- the version this was regenerated from
+alter table generations add column if not exists regen_count          integer default 0;      -- how many times this lineage has been regenerated
+create index if not exists idx_generations_parent on generations (parent_generation_id);
+
 -- Trending sound: the source's own audio, extracted at analyze/keyframe time,
 -- reused as the bed for the remake (video or slideshow reel).
 alter table candidates add column if not exists source_audio_url text;

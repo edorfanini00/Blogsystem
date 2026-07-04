@@ -22,6 +22,7 @@ import { runCopy, isCopyConfigured } from './copy.js';
 import { runSlides, isSlidesConfigured } from './slides.js';
 import { publishGeneration } from './publish.js';
 import { isInstagramPublishConfigured } from './config.js';
+import { notifyReviewReady } from './email.js';
 
 // If a generation just reached 'review' AND it was flagged for auto-publish by
 // an Autopilot run, post it to Instagram now. Best-effort: a failure leaves it
@@ -84,6 +85,7 @@ export async function advanceGeneration(id) {
                     await ensureCopy(id);
                     const a = await runAssembly(id);
                     const pub = await maybeAutoPublish(id, a.status);
+                    if (!pub && a.status === 'review') await notifyReviewReady(id).catch(() => {});
                     return { id, step: 'assemble', status: pub ? 'posted' : a.status, asset_url: a.asset_url, published: pub || undefined };
                 } catch (err) {
                     // Leave it at 'assembling' — the next tick (or manual) retries.
@@ -96,6 +98,7 @@ export async function advanceGeneration(id) {
             if (!isSlidesConfigured) return { id, status: g.status, skipped: 'slides not configured' };
             const out = await runSlides(id);
             const pub = await maybeAutoPublish(id, out.status);
+            if (!pub && out.status === 'review') await notifyReviewReady(id).catch(() => {});
             return { id, step: 'slides', status: pub ? 'posted' : out.status, asset_url: out.asset_url, published: pub || undefined };
         }
         if (g.status === 'assembling') {
@@ -103,6 +106,7 @@ export async function advanceGeneration(id) {
             await ensureCopy(id);
             const out = await runAssembly(id);
             const pub = await maybeAutoPublish(id, out.status);
+            if (!pub && out.status === 'review') await notifyReviewReady(id).catch(() => {});
             return { id, step: 'assemble', status: pub ? 'posted' : out.status, asset_url: out.asset_url, published: pub || undefined };
         }
     } catch (err) {

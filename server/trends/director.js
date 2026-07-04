@@ -500,7 +500,7 @@ async function loadCandidate(candidateId) {
 }
 
 // Run the Director. Returns the shot plan + the concept brief it consumed.
-export async function runDirector(candidateId, { targetMode = 'auto', productId = null, customPrompt = null, outputType = 'video' } = {}) {
+export async function runDirector(candidateId, { targetMode = 'auto', productId = null, customPrompt = null, outputType = 'video', revisionNotes = null } = {}) {
     if (!isLlmConfigured) throw new Error('ANTHROPIC_API_KEY not configured');
     const isSlideshow = outputType === 'slideshow';
     let candidate = await loadCandidate(candidateId);
@@ -534,8 +534,15 @@ export async function runDirector(candidateId, { targetMode = 'auto', productId 
         buildMemoryBlock({ outputType }).catch(() => ''),
     ]);
 
+    // Reviewer feedback from a previous version: apply these changes precisely on
+    // this regeneration. Placed first so it takes priority over the base brief.
+    const revisionBlock = revisionNotes && String(revisionNotes).trim()
+        ? `REVISION NOTES — a reviewer rejected the previous version of this remake and asked for these specific changes. Apply them precisely while keeping the same target and format:\n"""\n${String(revisionNotes).trim().slice(0, 1500)}\n"""\n`
+        : null;
+
     const sourceMediaUrl = candidate.media_url || candidate.url || '';
     const user = [
+        revisionBlock,
         'CONCEPT BRIEF',
         `Platform: ${candidate.platform}`,
         `Output: ${isSlideshow ? 'PHOTO SLIDESHOW (carousel)' : 'VIDEO'}`,

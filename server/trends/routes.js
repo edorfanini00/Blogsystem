@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import express from 'express';
 import multer from 'multer';
-import { isDbConfigured, dbSource, migrate, pingDb } from './db.js';
+import { isDbConfigured, dbSource, migrate, pingDb, query } from './db.js';
 import { isEnsembleConfigured } from './ensembledata.js';
 import { isApifyConfigured } from './apify.js';
 import { runIngestCycle, listCandidates, getCandidateSnapshots } from './ingest.js';
@@ -40,6 +40,10 @@ import { refreshOwnPage, getOwnPageCache } from './ownpage.js';
 import { advanceGeneration, runChainSweep } from './chain.js';
 import { isCaptionsConfigured } from './captions.js';
 import { publishGeneration } from './publish.js';
+import {
+    notifyReviewReady, verifyReviewToken, isEmailConfigured, reviewEmailTo,
+} from './email.js';
+import { approveAndPost, regenerateWithFeedback } from './reviewer.js';
 import {
     SEED_HASHTAGS,
     SURFACE_THRESHOLD,
@@ -187,6 +191,7 @@ router.get('/health', async (req, res) => {
         slideshow: { configured: isSlidesConfigured },
         instagramPublish: { configured: isInstagramPublishConfigured },
         notify: { configured: isNotifyConfigured, channels: notifyChannels },
+        reviewEmail: { configured: isEmailConfigured, to: reviewEmailTo },
         seedHashtags: SEED_HASHTAGS,
         topicKeywords: TOPIC_KEYWORDS,
         surfaceThreshold: SURFACE_THRESHOLD,
@@ -479,6 +484,7 @@ router.post('/generations/:id/assemble', async (req, res) => {
         const out = await runAssembly(req.params.id);
         if (out?.asset_url) {
             await notify(`🎬 CeleriTech remake assembled and ready for review.\nTarget: ${out.generation?.resolved_target || ''}\nReview it in Trend Analysis → Queue.`).catch(() => {});
+            if (out.status === 'review') await notifyReviewReady(req.params.id, { req }).catch(() => {});
         }
         res.json(out);
     } catch (err) {
@@ -498,6 +504,7 @@ router.post('/generations/:id/slides', async (req, res) => {
         const out = await runSlides(req.params.id);
         if (out?.asset_url) {
             await notify(`🖼️ CeleriTech slideshow composed and ready for review (Queue tab).`).catch(() => {});
+            if (out.status === 'review') await notifyReviewReady(req.params.id, { req }).catch(() => {});
         }
         res.json(out);
     } catch (err) {
@@ -546,6 +553,171 @@ async function runChainCronHandler(req, res) {
 }
 router.get('/chain/cron', runChainCronHandler);
 router.post('/chain/cron', runChainCronHandler);
+
+// ═══════════════════════════════════════════════════════════════
+// ─── Review by email: watch → approve & post OR request changes ─
+// A generation that reaches 'review' triggers an email (see email.js) linking
+// here. These endpoints are guarded by an HMAC token (no login needed) so the
+// reviewer can act straight from their inbox.
+// ═══════════════════════════════════════════════════════════════
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+function reviewPageHtml(gen, token) {
+    const title = escHtml(gen.resolved_target || gen.caption || 'Remake');
+    const isSlideshow = gen.output_type === 'slideshow';
+    let slides = [];
+    if (isSlideshow) {
+        try {
+            const raw = typeof gen.slide_urls === 'string' ? JSON.parse(gen.slide_urls) : (gen.slide_urls || []);
+            slides = (raw || []).map((s) => (typeof s === 'string' ? s : s?.url)).filter(Boolean);
+        } catch { slides = []; }
+    }
+    const posted = gen.status === 'posted';
+    const media = isSlideshow && slides.length
+        ? `<div class="slides">${slides.map((u) => `<img src="${escHtml(u)}" alt="slide">`).join('')}</div>`
+        : (gen.asset_url
+            ? `<video src="${escHtml(gen.asset_url)}" controls playsinline style="width:100%;border-radius:12px;background:#000;"></video>`
+            : `<p class="muted">No preview available yet.</p>`);
+    const caption = gen.caption
+        ? `<div class="card"><div class="label">Caption</div><div>${escHtml(gen.caption)}</div></div>` : '';
+    const revLine = gen.regen_count > 0 ? `<div class="pill">Revision #${gen.regen_count}</div>` : '';
+
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Review — ${title}</title>
+<style>
+  :root{--indigo:#6366f1;--ink:#111827;--muted:#6b7280;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);padding:20px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  .head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .brand{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--indigo);}
+  .pill{display:inline-block;font-size:12px;font-weight:600;color:#7c3aed;background:#ede9fe;padding:3px 10px;border-radius:999px;}
+  h1{font-size:20px;margin:6px 0 16px;}
+  .panel{background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .card{margin-top:14px;padding:12px 14px;background:#f9fafb;border-radius:10px;font-size:14px;line-height:1.5;}
+  .label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+  .slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;}
+  .slides img{width:100%;border-radius:8px;display:block;}
+  .muted{color:var(--muted);}
+  .actions{margin-top:20px;display:flex;flex-direction:column;gap:12px;}
+  button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:14px 18px;cursor:pointer;}
+  .primary{background:var(--indigo);color:#fff;font-size:16px;}
+  .primary:disabled{opacity:.5;cursor:default;}
+  .ghost{background:#fff;border:1.5px solid #e5e7eb;color:var(--ink);}
+  textarea{width:100%;min-height:96px;border:1.5px solid #e5e7eb;border-radius:10px;padding:12px;font:inherit;resize:vertical;}
+  .divider{margin:22px 0 6px;border-top:1px solid #eef0f3;}
+  .sub{font-size:13px;color:var(--muted);margin:14px 0 8px;}
+  .toast{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:14px;display:none;}
+  .toast.ok{background:#ecfdf5;color:#065f46;display:block;}
+  .toast.err{background:#fef2f2;color:#991b1b;display:block;}
+</style></head>
+<body><div class="wrap">
+  <div class="head"><span class="brand">CeleriTech Studio</span> ${revLine}</div>
+  <div class="panel">
+    <h1>${title}</h1>
+    ${media}
+    ${caption}
+    <div id="toast" class="toast"></div>
+    <div class="actions" id="actions" ${posted ? 'style="display:none"' : ''}>
+      <button class="primary" id="approveBtn">✓ Approve &amp; Post to Instagram</button>
+      <div class="divider"></div>
+      <div class="sub">Or tell it what to change — it'll regenerate and email you the new version:</div>
+      <textarea id="feedback" placeholder="e.g. Make the hook punchier, swap the second scene for an office setting, warmer color grade..."></textarea>
+      <button class="ghost" id="regenBtn">↻ Regenerate with these changes</button>
+    </div>
+    ${posted ? '<div class="toast ok">This version has already been posted. ✓</div>' : ''}
+  </div>
+</div>
+<script>
+  const ID = ${JSON.stringify(gen.id)};
+  const TOKEN = ${JSON.stringify(token)};
+  const toast = document.getElementById('toast');
+  const actions = document.getElementById('actions');
+  function show(msg, ok){ toast.textContent = msg; toast.className = 'toast ' + (ok ? 'ok' : 'err'); }
+  async function call(path, body){
+    const r = await fetch('/api/trends/review/' + ID + path + '?token=' + encodeURIComponent(TOKEN), {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})
+    });
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.error || ('HTTP '+r.status));
+    return data;
+  }
+  document.getElementById('approveBtn').onclick = async (e)=>{
+    e.target.disabled = true; show('Posting…', true);
+    try{
+      const d = await call('/approve', {});
+      if(d.posted){ show('Posted to Instagram! ' + (d.permalink? d.permalink : ''), true); }
+      else { show('Approved. (Instagram publishing isn\\'t configured, so post it manually.)', true); }
+      actions.style.display='none';
+    }catch(err){ show(err.message, false); e.target.disabled=false; }
+  };
+  document.getElementById('regenBtn').onclick = async (e)=>{
+    const fb = document.getElementById('feedback').value.trim();
+    if(!fb){ show('Please describe what to change first.', false); return; }
+    e.target.disabled = true; show('Starting a new version with your notes…', true);
+    try{
+      await call('/regenerate', { feedback: fb });
+      show('Got it — regenerating now. You\\'ll get another email when the new version is ready.', true);
+      actions.style.display='none';
+    }catch(err){ show(err.message, false); e.target.disabled=false; }
+  };
+</script>
+</body></html>`;
+}
+
+router.get('/review/:id', async (req, res) => {
+    if (!requireDb(res)) return;
+    if (!verifyReviewToken(req.params.id, req.query.token)) {
+        return res.status(403).type('html').send('<h1>Invalid or expired link</h1><p>This review link is not valid.</p>');
+    }
+    try {
+        const gen = await getGeneration(req.params.id);
+        if (!gen) return res.status(404).type('html').send('<h1>Not found</h1>');
+        res.type('html').send(reviewPageHtml(gen, req.query.token));
+    } catch (err) {
+        res.status(500).type('html').send(`<h1>Error</h1><p>${escHtml(err.message)}</p>`);
+    }
+});
+
+router.post('/review/:id/approve', async (req, res) => {
+    if (!requireDb(res)) return;
+    const token = req.query.token || req.body?.token;
+    if (!verifyReviewToken(req.params.id, token)) return res.status(403).json({ error: 'Invalid token' });
+    try {
+        res.json(await approveAndPost(req.params.id));
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.post('/review/:id/regenerate', async (req, res) => {
+    if (!requireDb(res)) return;
+    const token = req.query.token || req.body?.token;
+    if (!verifyReviewToken(req.params.id, token)) return res.status(403).json({ error: 'Invalid token' });
+    try {
+        res.json(await regenerateWithFeedback(req.params.id, req.body?.feedback));
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Manual trigger to (re)send the review email for a generation (e.g. testing).
+router.post('/generations/:id/send-review-email', async (req, res) => {
+    if (!requireDb(res)) return;
+    try {
+        // Allow forcing a resend by clearing the guard first.
+        if (req.body?.force || req.query.force) {
+            await query('update generations set review_email_sent = false where id = $1', [req.params.id]).catch(() => {});
+        }
+        res.json(await notifyReviewReady(req.params.id, { req }));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // GET /api/trends/generations/:id → one generation with shots (chain state)
 router.get('/generations/:id', async (req, res) => {
