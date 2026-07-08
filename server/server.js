@@ -1154,6 +1154,47 @@ app.post('/api/generate', async (req, res) => {
         const focusKeyphrase = seo.focusKeyphrase || (keywords || '').split(',')[0].trim();
         console.log(`🎯 Focus keyphrase: "${focusKeyphrase}" | slug: "${seo.slug}"`);
 
+        // Kick off the Spanish translation NOW (if requested), in parallel with image
+        // generation. It used to run last, serially — by then the time budget was often
+        // exhausted and the Spanish version was silently skipped. Translating the draft
+        // (pre-images) lets it run during the image window; images are injected into the
+        // Spanish HTML afterwards.
+        let translationPromise = null;
+        if (language === 'both') {
+            console.log('🌐 Starting Spanish translation in parallel with image generation…');
+            const draftForTranslation = htmlContent;
+            translationPromise = callClaude({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 16384,
+                messages: [{
+                    role: 'user',
+                    content: `Translate the following HTML blog post to Spanish.
+
+The blog content below may be in English or possibly already partially in another language. Regardless of the input language:
+- Your output MUST be 100% in Spanish
+- ALL visible text content must be in Spanish (headings, paragraphs, list items, blockquotes, CTA text, button text, callout badges)
+
+CRITICAL RULES:
+- DO NOT change any HTML tags, attributes, styles, class names, or structure
+- DO NOT change any image URLs or image alt attributes
+- DO NOT change any inline CSS styles
+- Keep all <!-- SEO comments --> but translate their content to Spanish
+- The translation must be natural, fluent Spanish — not word-for-word translation
+- Maintain the same tone and energy as the original
+- Output ONLY the translated HTML, nothing else
+
+Here is the HTML to translate:
+
+${draftForTranslation}`,
+                }],
+            }, { timeoutMs: 180000, maxRetries: 1 })
+                .then(resp => resp.content[0].text.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim())
+                .catch(err => {
+                    console.error('❌ Spanish translation error:', err.message);
+                    return null;
+                });
+        }
+
         // Step 3: Analyze blog sections and create image prompts
         if (imageCount > 0) {
             sendProgress(3, TOTAL_STEPS, 'Analyzing blog sections for image generation…');
@@ -1237,8 +1278,9 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         // Vercel maxDuration is 300s — leave room for research/writing/translation.
         const PER_IMAGE_TIMEOUT_MS = 60000;
         const IMAGE_TOTAL_BUDGET_MS = 130000;
-        // Reserve time for the remaining steps (insert + SEO + optional Spanish).
-        const IMAGE_RESERVE_MS = language === 'both' ? 120000 : 40000;
+        // Reserve time for the remaining steps (insert + SEO). The Spanish translation
+        // runs in parallel with this loop, so it no longer needs its own reserve here.
+        const IMAGE_RESERVE_MS = 40000;
         const imageLoopStart = Date.now();
 
         for (let i = 0; i < imagePrompts.length; i++) {
@@ -1289,8 +1331,9 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
 
         // Internal linking step: weave this post into the existing blog network for SEO.
         // This re-emits the whole document through Claude, so only run it when there's
-        // comfortable time left (Spanish, if requested, needs the remaining budget).
-        const linkReserveMs = language === 'both' ? 150000 : 70000;
+        // comfortable time left. (The Spanish translation runs in parallel, on the
+        // pre-link draft, so it no longer needs its own reserve here.)
+        const linkReserveMs = 70000;
         if (timeLeft() < linkReserveMs) {
             console.log(`🔗 Skipping internal linking — ${Math.round(timeLeft() / 1000)}s left, reserving time to finish the blog`);
         } else {
@@ -1316,54 +1359,29 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         const titleMatch = htmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
         const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : seo.seoTitle || keywords;
 
-        // Spanish translation step (if language is 'both')
+        // Spanish translation step (if language is 'both'): the translation has been
+        // running in parallel since the English draft was written — collect it here.
         let spanishHtmlContent = null;
         let spanishTitle = null;
+        let spanishNotice = null;
 
-        if (language === 'both' && timeLeft() < 45000) {
-            console.warn(`⏱ Not enough time left (${Math.round(timeLeft() / 1000)}s) for Spanish translation — returning the English blog so generation still completes.`);
-        } else if (language === 'both') {
-            sendProgress(insertStep + 2, TOTAL_STEPS, 'Translating blog to Spanish…');
-            console.log('🌐 Translating blog to Spanish…');
+        if (translationPromise) {
+            sendProgress(insertStep + 2, TOTAL_STEPS, 'Finalizing Spanish version…');
+            // Bound the wait by the remaining budget so the request always completes.
+            spanishHtmlContent = await withTimeout(translationPromise, Math.max(5000, timeLeft() - 10000));
 
-            try {
-                const translationResponse = await callClaude({
-                    model: 'claude-sonnet-4-6',
-                    max_tokens: 8192,
-                    messages: [{
-                        role: 'user',
-                        content: `Translate the following HTML blog post to Spanish.
+            if (spanishHtmlContent) {
+                // Inject the same images into the Spanish HTML (positional: after each H2).
+                const esH2Matches = [...spanishHtmlContent.matchAll(/<h2[^>]*>(.*?)<\/h2>/gi)];
+                const esSectionTitles = esH2Matches.map(m => m[1].replace(/<[^>]+>/g, '').trim());
+                spanishHtmlContent = injectImagesIntoBlogHtml(spanishHtmlContent, uploadedImages, esH2Matches, esSectionTitles, focusKeyphrase);
 
-The blog content below may be in English or possibly already partially in another language. Regardless of the input language:
-- Your output MUST be 100% in Spanish
-- ALL visible text content must be in Spanish (headings, paragraphs, list items, blockquotes, CTA text, button text, callout badges)
-
-CRITICAL RULES:
-- DO NOT change any HTML tags, attributes, styles, class names, or structure
-- DO NOT change any image URLs or image alt attributes
-- DO NOT change any inline CSS styles
-- Keep all <!-- SEO comments --> but translate their content to Spanish
-- The translation must be natural, fluent Spanish — not word-for-word translation
-- Maintain the same tone and energy as the original
-- Output ONLY the translated HTML, nothing else
-
-Here is the HTML to translate:
-
-${htmlContent}`,
-                    }],
-                }, { timeoutMs: Math.max(30000, Math.min(110000, timeLeft() - 8000)), maxRetries: 1 });
-
-                spanishHtmlContent = translationResponse.content[0].text;
-                spanishHtmlContent = spanishHtmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
-
-                // Extract Spanish title
                 const spanishTitleMatch = spanishHtmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
                 spanishTitle = spanishTitleMatch ? spanishTitleMatch[1].replace(/<[^>]+>/g, '') : `[ES] ${title}`;
-
                 console.log(`✅ Spanish translation complete: "${spanishTitle}"`);
-            } catch (transErr) {
-                console.error('❌ Spanish translation error:', transErr.message);
-                // Continue without Spanish — don't fail the whole request
+            } else {
+                console.warn('⏱ Spanish translation did not finish in time — returning the English blog only.');
+                spanishNotice = 'The Spanish version could not be generated this time. The English blog is ready — you can retry for the Spanish version.';
             }
         }
 
@@ -1385,6 +1403,7 @@ ${htmlContent}`,
             imageNotice,
             spanishHtmlContent,
             spanishTitle,
+            spanishNotice,
         });
     } catch (err) {
         console.error('❌ Generation error:', err);

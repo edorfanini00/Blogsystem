@@ -357,6 +357,9 @@ blogForm.addEventListener('submit', async (e) => {
                         if (data.imageNotice) {
                             setTimeout(() => showToast(data.imageNotice, 'error'), 1200);
                         }
+                        if (data.spanishNotice) {
+                            setTimeout(() => showToast(data.spanishNotice, 'error'), 1800);
+                        }
 
                         // Handle language tabs
                         const langTabs = document.getElementById('langTabs');
