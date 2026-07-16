@@ -314,13 +314,36 @@ const anthropic = new Anthropic({
 // still pass a plain number as the 2nd arg for backwards compatibility.
 async function callClaude(params, opts = {}) {
     if (typeof opts === 'number') opts = { maxRetries: opts };
-    const { maxRetries = 3, timeoutMs = 120000 } = opts;
+    const { maxRetries = 3, timeoutMs = 120000, stream = false, stallMs = 90000 } = opts;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // `timeoutMs` may be a function so each retry can be sized from the time
+        // actually remaining in the request budget.
+        const budget = typeof timeoutMs === 'function' ? timeoutMs() : timeoutMs;
         try {
-            return await anthropic.messages.create(params, { timeout: timeoutMs });
+            if (!stream) {
+                return await anthropic.messages.create(params, { timeout: budget });
+            }
+            // Streaming mode for long generations: a slow-but-healthy response keeps
+            // delivering tokens and is never killed mid-write, while a stall watchdog
+            // aborts if NOTHING arrives for `stallMs` so a hung connection doesn't
+            // silently eat the whole budget.
+            const s = anthropic.messages.stream(params, { timeout: budget });
+            let lastActivity = Date.now();
+            s.on('streamEvent', () => { lastActivity = Date.now(); });
+            const watchdog = setInterval(() => {
+                if (Date.now() - lastActivity > stallMs) {
+                    console.warn(`⚠ Claude stream stalled (no data for ${stallMs / 1000}s) — aborting attempt`);
+                    try { s.abort(); } catch { /* already closed */ }
+                }
+            }, 5000);
+            try {
+                return await s.finalMessage();
+            } finally {
+                clearInterval(watchdog);
+            }
         } catch (err) {
             const status = err?.status || err?.error?.status || 0;
-            const isTimeout = err?.name === 'APIConnectionTimeoutError' || /tim|ETIMEDOUT|ECONNRESET|socket hang up/i.test(err?.message || '');
+            const isTimeout = err?.name === 'APIConnectionTimeoutError' || /tim|abort|ETIMEDOUT|ECONNRESET|socket hang up/i.test(err?.message || '');
             const isRetryable = status === 529 || status === 429 || isTimeout || (err.message && err.message.includes('overloaded'));
             if (isRetryable && attempt < maxRetries) {
                 const delay = Math.min(8000 * Math.pow(2, attempt - 1), 30000); // 8s, 16s, 30s
@@ -1249,10 +1272,19 @@ app.post('/api/generate', async (req, res) => {
         const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization, verifiedSources);
 
         // Scale the output budget and per-attempt timeout with the requested length.
-        // A styled 5,000-word HTML post needs ~15k output tokens and can take 4-5
-        // minutes to write — the old fixed 8192 tokens / 120s truncated or timed out.
+        // A styled 5,000-word HTML post needs ~15k output tokens and normally takes
+        // ~4 minutes to write, but during Anthropic peak load token generation can
+        // run 30-50% slower — budget generously so a slow-but-healthy attempt is
+        // never killed. If the write still eats most of the time budget, the steps
+        // after it degrade gracefully (their reserve checks skip them) instead of
+        // failing the whole request.
         const writeMaxTokens = Math.min(Math.max(8192, wordCount * 4), 20000);
-        const writeTimeoutMs = Math.min(Math.max(120000, wordCount * 60), 330000);
+        // Two attempts must fit inside the remaining function budget with ~60s spare
+        // to still deliver a result/error event to the client.
+        const writeTimeoutMs = Math.min(
+            Math.max(150000, wordCount * 75),
+            Math.max(120000, Math.floor((timeLeft() - 60000) / 2)),
+        );
 
         const message = await callClaude({
             model: 'claude-sonnet-4-6',
@@ -1265,7 +1297,7 @@ app.post('/api/generate', async (req, res) => {
                 },
             ],
             system: systemPrompt,
-        }, { timeoutMs: writeTimeoutMs, maxRetries: 2 });
+        }, { timeoutMs: writeTimeoutMs, maxRetries: 2, stream: true });
 
         let htmlContent = message.content[0].text;
         htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
@@ -1315,7 +1347,7 @@ Here is the HTML to translate:
 
 ${draftForTranslation}`,
                 }],
-            }, { timeoutMs: Math.max(writeTimeoutMs, 180000), maxRetries: 1 })
+            }, { timeoutMs: Math.max(writeTimeoutMs, 180000), maxRetries: 1, stream: true })
                 .then(resp => resp.content[0].text.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim())
                 .catch(err => {
                     console.error('❌ Spanish translation error:', err.message);
