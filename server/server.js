@@ -427,8 +427,25 @@ Be extremely specific and actionable.`
 
         const research = response.choices?.[0]?.message?.content;
         if (research) {
-            console.log('✅ Perplexity SEO/GEO research complete');
-            return research;
+            // Perplexity returns the real URLs it browsed while researching. These are
+            // VERIFIED-LIVE pages — the only outbound links the writer is allowed to
+            // use (the model inventing plausible-looking URLs that 404 is what forced
+            // outbound links off in the first place).
+            const sources = [];
+            const seen = new Set();
+            const rawCitations = [
+                ...(Array.isArray(response.citations) ? response.citations : []),
+                ...(Array.isArray(response.search_results) ? response.search_results : []),
+            ];
+            for (const c of rawCitations) {
+                const url = typeof c === 'string' ? c : c?.url;
+                const title = typeof c === 'object' ? (c?.title || '') : '';
+                if (!url || !/^https?:\/\//i.test(url) || seen.has(url)) continue;
+                seen.add(url);
+                sources.push({ url, title });
+            }
+            console.log(`✅ Perplexity SEO/GEO research complete (${sources.length} verified source URL(s))`);
+            return { brief: research, sources };
         }
         return null;
     } catch (err) {
@@ -438,9 +455,23 @@ Be extremely specific and actionable.`
 }
 
 // ─── Claude System Prompt ────────────────────────────────────────
-function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls, customization = {}) {
+function buildSystemPrompt(keywords, description, wordCount, researchInsights, imageUrls, customization = {}, verifiedSources = []) {
+    // Yoast's minimum keyphrase count scales with text length (~0.5% density floor).
+    const keyphraseTarget = Math.max(5, Math.round(wordCount / 170));
+
+    const sourcesBlock = verifiedSources.length > 0
+        ? `\n\nVERIFIED OUTBOUND SOURCES — the ONLY external URLs you may link to (each was verified live during research):
+${verifiedSources.slice(0, 12).map((s, i) => `${i + 1}. ${s.url}${s.title ? ` — "${s.title}"` : ''}`).join('\n')}
+
+OUTBOUND LINK RULES:
+- Include 2-4 outbound links in the body, chosen from the list above ONLY. Copy each URL VERBATIM — never modify, shorten, or invent URLs.
+- Format: <a href="VERIFIED_URL" target="_blank" rel="noopener noreferrer" style="color:#FF8300;text-decoration:underline;font-weight:600;">descriptive anchor text</a>
+- Anchor text must be descriptive (the source/claim being cited), never "click here".
+- Link each URL at most once, where it genuinely supports a claim, statistic, or named entity.\n`
+        : '';
+
     const researchBlock = researchInsights
-        ? `\n\n═══ RESEARCH BRIEF (all research has already been completed for you — use it directly) ═══\n${researchInsights}\n═══ END RESEARCH BRIEF ═══\n\nYOU MUST USE THE RESEARCH ABOVE — do NOT guess, invent stats, or do your own research. Everything you need is in the brief above. Specifically:\n- Treat the FIRST item in the synonym bank (or the primary keyword) as the single FOCUS KEYPHRASE for this article\n- Use the EXACT focus keyphrase in: the H1, the first sentence of the intro (within the first 100 words), at least one H2/H3 subheading, the SEO title (at the very start), the meta description, the URL slug, and at least one image alt text\n- Use the exact focus keyphrase a few more times across the body so its density lands around 0.5–1.5% (roughly once every 200–300 words) — enough for Yoast to detect it, never so much it feels stuffed\n- Everywhere ELSE, reach for SYNONYMS, paraphrases, and varied WORD FORMS from the synonym bank instead of repeating the exact phrase. The focus keyphrase is the only term you may repeat verbatim; balancing exact keyphrase placement with synonym variety is what passes both the "keyphrase density" and "synonyms & word form recognition" SEO checks\n- Weave secondary/long-tail keywords and semantically related terms in naturally, ONLY where they genuinely fit the sentence — never force them\n- Keep keyword density low (~1-2%). Prioritize semantic variety and meaning over repetition. If any sentence sounds repetitive or keyword-stuffed when read aloud, rewrite it\n- Build topical authority by covering the related ENTITIES (brands, tools, people, concepts) from the research, not by repeating keywords\n- Turn question-based keywords into H2/H3 headings, rephrased in natural, human language rather than pasted verbatim\n- Echo the audience's real concerns and pain points, but paraphrase them in fresh wording instead of copying the same phrases over and over\n- Fill the content gaps identified in competitor analysis\n- Include the specific statistics, data points, and authoritative sources from the research for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n`
+        ? `\n\n═══ RESEARCH BRIEF (all research has already been completed for you — use it directly) ═══\n${researchInsights}\n═══ END RESEARCH BRIEF ═══\n\nYOU MUST USE THE RESEARCH ABOVE — do NOT guess, invent stats, or do your own research. Everything you need is in the brief above. Specifically:\n- Treat the FIRST item in the synonym bank (or the primary keyword) as the single FOCUS KEYPHRASE for this article\n- Use the EXACT focus keyphrase in: the H1, the first sentence of the intro (within the first 100 words), at least one H2/H3 subheading, the SEO title (at the very start), the meta description, the URL slug, and at least one image alt text\n- Use the exact focus keyphrase enough times across the body to hit the density target given below — enough for Yoast to detect it, never so much it feels stuffed\n- Everywhere ELSE, reach for SYNONYMS, paraphrases, and varied WORD FORMS from the synonym bank instead of repeating the exact phrase. The focus keyphrase is the only term you may repeat verbatim; balancing exact keyphrase placement with synonym variety is what passes both the "keyphrase density" and "synonyms & word form recognition" SEO checks\n- Weave secondary/long-tail keywords and semantically related terms in naturally, ONLY where they genuinely fit the sentence — never force them\n- Keep keyword density low (~1-2%). Prioritize semantic variety and meaning over repetition. If any sentence sounds repetitive or keyword-stuffed when read aloud, rewrite it\n- Build topical authority by covering the related ENTITIES (brands, tools, people, concepts) from the research, not by repeating keywords\n- Turn question-based keywords into H2/H3 headings, rephrased in natural, human language rather than pasted verbatim\n- Echo the audience's real concerns and pain points, but paraphrase them in fresh wording instead of copying the same phrases over and over\n- Fill the content gaps identified in competitor analysis\n- Include the specific statistics, data points, and authoritative sources from the research for GEO optimization\n- Make definitive, citation-worthy statements that AI engines can extract\n`
         : '';
 
     // Build image injection instructions
@@ -472,7 +503,7 @@ CONTENT CUSTOMIZATION RULES:
 - Frame all examples and use cases around the ${customization.product || 'general'} industry
 - ${customization.trends && customization.trends !== 'None' ? `Weave in the "${customization.trends}" trend throughout — show how it impacts the topic and what readers should do about it` : 'Focus on evergreen, timeless advice'}
 - Maintain a ${customization.tone || 'professional'} tone throughout the entire article
-${researchBlock}${imageBlock}
+${researchBlock}${sourcesBlock}${imageBlock}
 STRICT OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
 
 1. Output ONLY valid, clean HTML — no markdown, no escape characters, no control characters, no code fences.
@@ -513,10 +544,13 @@ CONTENT OBJECTIVES:
 - End with a clear CTA section that feels earned
 - Make the tone conversational, confident, and human
 
-NATURAL LANGUAGE & READABILITY — write for a human first, the algorithm second:
+NATURAL LANGUAGE & READABILITY — write for a human first, the algorithm second (Yoast readability checks grade all of these):
 - Vary your vocabulary. Never repeat the same keyword or noun phrase sentence after sentence — swap in synonyms, paraphrases, and different word forms (e.g. "boost / improve / lift / strengthen" instead of "improve, improve, improve").
-- Vary sentence length and rhythm. Mix short, punchy sentences with longer flowing ones so the prose reads like a skilled human writer, not a template.
-- Use natural transitions and connective phrases between ideas so the article flows instead of feeling like a keyword checklist.
+- SENTENCE LENGTH: keep at least 80% of sentences under 20 words. Mix short, punchy sentences with the occasional longer one — if a sentence runs past 20 words, consider splitting it.
+- TRANSITION WORDS: start at least a third of your sentences with (or include) transition words and phrases — "however", "moreover", "for example", "as a result", "in fact", "meanwhile", "first", "finally", "because of this", "on the other hand". Yoast literally counts these.
+- SUBHEADING DISTRIBUTION: never let more than 250 words go by without an H2 or H3 subheading. Break long sections up.
+- PARAGRAPHS: keep paragraphs short — 2-4 sentences each, never more than ~120 words.
+- WORD COMPLEXITY: prefer short, common words over long or academic ones ("use" not "utilize", "help" not "facilitate").
 - Prefer plain, conversational language. Use contractions, address the reader as "you", and avoid stiff, robotic phrasing.
 - Read every sentence aloud in your head — if it sounds repetitive, stuffed, or unnatural, rewrite it.
 - Demonstrate topical depth through related concepts and entities, not through keyword frequency.
@@ -527,8 +561,8 @@ FOCUS KEYPHRASE & ON-PAGE SEO (these make the post pass Yoast-style SEO analysis
 - H1: must contain the EXACT focus keyphrase.
 - INTRODUCTION: the very first <p> must contain the EXACT focus keyphrase, ideally in the first sentence.
 - SUBHEADINGS: at least one H2 or H3 must contain the EXACT focus keyphrase (others may use synonyms).
-- DENSITY: the exact focus keyphrase should appear naturally a handful of times in the body (~0.5–1.5% density). Use synonyms and word forms for all other mentions.
-- LINKS: do NOT include ANY hyperlinks (<a> tags) in the article — no external links, no placeholder links, nothing. Internal links to our own published posts are inserted automatically in a separate step after writing. You may still name sources/studies in plain text (e.g. "a 2025 Gartner study found…") without linking them.
+- DENSITY: the EXACT focus keyphrase must appear AT LEAST ${keyphraseTarget} times in the body text (Yoast's minimum for a ${wordCount}-word article), spread naturally across the whole article — but never twice in the same paragraph. Beyond those, use synonyms and word forms.
+- LINKS: the ONLY hyperlinks allowed are the 2-4 outbound links to the VERIFIED OUTBOUND SOURCES listed above (if provided). NEVER invent or guess any other URL. Internal links to our own published posts are inserted automatically in a separate step after writing.
 - IMAGE ALT: when you reference images later, alt text should include the focus keyphrase or a close synonym (image tags are added separately, so just keep alt-friendly section headings).
 
 SEO META — Include these as HTML comments at the very top BEFORE the blog div (the focus keyphrase MUST appear at the START of the SEO title, inside the meta description, and inside the slug):
@@ -577,6 +611,9 @@ async function generateImageWithGemini(prompt) {
                     }],
                     generationConfig: {
                         responseModalities: ['IMAGE', 'TEXT'],
+                        // Wide banner format to match the Fal.ai images (default is a
+                        // 1:1 square, which looks wrong in the blog layout).
+                        imageConfig: { aspectRatio: '16:9' },
                     },
                 }),
                 signal: controller.signal,
@@ -795,7 +832,7 @@ async function generateImageWithFallback(prompt, options = {}) {
 }
 
 async function generateBlogImage(prompt) {
-    const wrappedPrompt = `Professional photorealistic blog image: ${prompt}. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.`;
+    const wrappedPrompt = `Professional photorealistic blog image: ${prompt}. Wide 16:9 landscape banner composition. High quality, cinematic lighting, editorial style. No text, no watermarks, no logos. Premium stock photo quality.`;
     return generateImageWithFallback(wrappedPrompt);
 }
 
@@ -811,10 +848,12 @@ function injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectio
 
     const imgStyle = 'width:100%;height:auto;margin:32px 0 24px;display:block;border-radius:12px;';
     const kp = (focusKeyphrase || '').replace(/"/g, '').trim();
-    // Yoast wants the keyphrase (or a synonym) in image alt text — build descriptive, keyphrase-aware alts.
+    // Yoast wants the keyphrase in SOME image alts, but flags it when nearly all of
+    // them have it ("that's a bit much") — so only weave it into every other image.
     const buildAlt = (sectionTitle, image, index) => {
         const base = (sectionTitle || image.alt || '').replace(/<[^>]+>/g, '').replace(/"/g, '').trim();
-        if (!kp) return base || `Blog image ${index + 1}`;
+        const wantKp = kp && index % 2 === 0;
+        if (!wantKp) return base || `Blog image ${index + 1}`;
         if (!base) return index === 0 ? kp : `${kp} — illustration ${index + 1}`;
         return base.toLowerCase().includes(kp.toLowerCase()) ? base : `${base} — ${kp}`;
     };
@@ -939,7 +978,7 @@ function slugify(str) {
 
 // ─── Parse SEO meta from HTML content ────────────────────────────
 function parseSeoMeta(content, fallbackKeyphrase = '') {
-    const seoTitle = content.match(/<!--\s*SEO_TITLE:\s*(.+?)\s*-->/)?.[1] || '';
+    let seoTitle = content.match(/<!--\s*SEO_TITLE:\s*(.+?)\s*-->/)?.[1] || '';
     let metaDesc = content.match(/<!--\s*META_DESC:\s*(.+?)\s*-->/)?.[1] || '';
     const seoKeywords = content.match(/<!--\s*SEO_KEYWORDS:\s*(.+?)\s*-->/)?.[1]?.split(',').map(k => k.trim()).filter(Boolean) || [];
 
@@ -949,6 +988,14 @@ function parseSeoMeta(content, fallbackKeyphrase = '') {
     // Slug: explicit comment → slugified focus keyphrase
     const rawSlug = content.match(/<!--\s*SLUG:\s*(.+?)\s*-->/)?.[1] || '';
     const slug = slugify(rawSlug || focusKeyphrase);
+
+    // Yoast flags SEO titles wider than the SERP viewable limit (~60 chars) — trim on a word boundary.
+    if (seoTitle.length > 60) {
+        seoTitle = seoTitle.slice(0, 60);
+        const lastSpace = seoTitle.lastIndexOf(' ');
+        if (lastSpace > 40) seoTitle = seoTitle.slice(0, lastSpace);
+        seoTitle = seoTitle.replace(/[\s,;:.\-—|]+$/, '');
+    }
 
     // Yoast flags meta descriptions over 156 chars — keep it tight (≤155), cut on a word boundary.
     if (metaDesc.length > 155) {
@@ -988,23 +1035,26 @@ async function fetchWordPressPosts(limit = 50) {
     }
 }
 
-// ─── Link sanitizer: keep only links to our own blog network ─────────────────
-// The article must NEVER link out to external pages (the model sometimes invents
-// URLs that 404). Every legitimate internal link comes from the WordPress REST API
-// and therefore lives on our own domain — so any <a> pointing anywhere else is
-// unwrapped: the anchor text is kept, the hyperlink is removed.
-function sanitizeArticleLinks(html, siteUrl = process.env.WORDPRESS_URL) {
+// ─── Link sanitizer: keep only links we can vouch for ────────────────────────
+// The model sometimes invents plausible-looking URLs that 404, so every <a> must
+// point at either (a) our own domain (internal links come from the WordPress REST
+// API) or (b) a verified outbound source URL that Perplexity actually visited
+// during research. Anything else is unwrapped: anchor text kept, hyperlink removed.
+function sanitizeArticleLinks(html, { siteUrl = process.env.WORDPRESS_URL, allowedUrls = [] } = {}) {
     const hostOf = (u) => {
         try { return new URL(u).hostname.replace(/^www\./i, '').toLowerCase(); } catch { return null; }
     };
+    const normalize = (u) => (u || '').trim().replace(/\/+$/, '').toLowerCase();
     const siteHost = hostOf(siteUrl);
+    const allowed = new Set(allowedUrls.map(normalize));
     let removed = 0;
     const out = html.replace(/<a\b[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, (match, href, inner) => {
         if (siteHost && hostOf(href) === siteHost) return match;
+        if (allowed.has(normalize(href))) return match;
         removed++;
         return inner;
     });
-    if (removed > 0) console.log(`🧹 Removed ${removed} non-network link(s) from article (kept anchor text)`);
+    if (removed > 0) console.log(`🧹 Removed ${removed} unverified link(s) from article (kept anchor text)`);
     return out;
 }
 
@@ -1186,14 +1236,16 @@ app.post('/api/generate', async (req, res) => {
 
         // Step 1: Perplexity research
         sendProgress(1, TOTAL_STEPS, 'Researching target audience & SEO keywords…');
-        const researchInsights = await runPerplexityResearch(keywords, description, customization);
+        const research = await runPerplexityResearch(keywords, description, customization);
+        const researchInsights = research?.brief || null;
+        const verifiedSources = research?.sources || [];
         if (researchInsights) {
-            console.log(`📊 Research insights received (${researchInsights.length} chars)`);
+            console.log(`📊 Research insights received (${researchInsights.length} chars, ${verifiedSources.length} verified sources)`);
         }
 
         // Step 2: Write blog first (no images)
         sendProgress(2, TOTAL_STEPS, 'Writing SEO-optimized blog with Claude…');
-        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization);
+        const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization, verifiedSources);
 
         // Scale the output budget and per-attempt timeout with the requested length.
         // A styled 5,000-word HTML post needs ~15k output tokens and can take 4-5
@@ -1217,9 +1269,10 @@ app.post('/api/generate', async (req, res) => {
         let htmlContent = message.content[0].text;
         htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
 
-        // Strip any links the writer added anyway — only internal network links
-        // (added in the linking step below, from the WordPress API) are allowed.
-        htmlContent = sanitizeArticleLinks(htmlContent);
+        // Strip any link the writer added that we can't vouch for. Verified research
+        // sources stay (Yoast wants outbound links); internal network links are added
+        // in a separate step below from the WordPress API.
+        htmlContent = sanitizeArticleLinks(htmlContent, { allowedUrls: verifiedSources.map(s => s.url) });
 
         // Parse SEO meta up-front so the focus keyphrase can drive image alt text + internal links.
         const seo = parseSeoMeta(htmlContent, keywords);
@@ -1406,6 +1459,8 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         // Internal linking step: weave this post into the existing blog network for SEO.
         // The model only returns anchor/URL pairs (links are spliced in locally), so
         // this is fast — but still skip it if we're unexpectedly close to the deadline.
+        // `internalTargets` is reused below to interlink the Spanish version too.
+        let internalTargets = [];
         const linkReserveMs = 45000;
         if (timeLeft() < linkReserveMs) {
             console.log(`🔗 Skipping internal linking — ${Math.round(timeLeft() / 1000)}s left, reserving time to finish the blog`);
@@ -1413,7 +1468,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
             try {
                 sendProgress(insertStep, TOTAL_STEPS, 'Linking to your blog network…');
                 const networkPosts = await fetchWordPressPosts(50);
-                const internalTargets = networkPosts.filter(p => p.slug !== seo.slug);
+                internalTargets = networkPosts.filter(p => p.slug !== seo.slug);
                 if (internalTargets.length > 0) {
                     console.log(`🔗 Found ${internalTargets.length} existing post(s) for internal linking`);
                     htmlContent = await insertNetworkLinks(htmlContent, { focusKeyphrase, internalTargets });
@@ -1437,6 +1492,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         let spanishHtmlContent = null;
         let spanishTitle = null;
         let spanishNotice = null;
+        let spanishSeo = null;
 
         if (translationPromise) {
             sendProgress(insertStep + 2, TOTAL_STEPS, 'Finalizing Spanish version…');
@@ -1444,14 +1500,27 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
             spanishHtmlContent = await withTimeout(translationPromise, Math.max(5000, timeLeft() - 10000));
 
             if (spanishHtmlContent) {
-                // Inject the same images into the Spanish HTML (positional: after each H2).
+                // The Spanish version is its own page for Yoast — it needs its OWN
+                // (translated) keyphrase and meta, not the English ones. The SEO
+                // comments were translated along with the article, so parse them.
+                spanishHtmlContent = sanitizeArticleLinks(spanishHtmlContent, { allowedUrls: verifiedSources.map(s => s.url) });
+                spanishSeo = parseSeoMeta(spanishHtmlContent, focusKeyphrase);
+
+                // Inject the same images into the Spanish HTML (positional: after each H2),
+                // with alt text built around the Spanish keyphrase.
                 const esH2Matches = [...spanishHtmlContent.matchAll(/<h2[^>]*>(.*?)<\/h2>/gi)];
                 const esSectionTitles = esH2Matches.map(m => m[1].replace(/<[^>]+>/g, '').trim());
-                spanishHtmlContent = injectImagesIntoBlogHtml(spanishHtmlContent, uploadedImages, esH2Matches, esSectionTitles, focusKeyphrase);
+                spanishHtmlContent = injectImagesIntoBlogHtml(spanishHtmlContent, uploadedImages, esH2Matches, esSectionTitles, spanishSeo.focusKeyphrase);
+
+                // Interlink the Spanish version into the network too — it's a separate
+                // published page and Yoast checks it separately.
+                if (internalTargets.length > 0 && timeLeft() > 30000) {
+                    spanishHtmlContent = await insertNetworkLinks(spanishHtmlContent, { focusKeyphrase: spanishSeo.focusKeyphrase, internalTargets });
+                }
 
                 const spanishTitleMatch = spanishHtmlContent.match(/<h1[^>]*>(.+?)<\/h1>/i);
                 spanishTitle = spanishTitleMatch ? spanishTitleMatch[1].replace(/<[^>]+>/g, '') : `[ES] ${title}`;
-                console.log(`✅ Spanish translation complete: "${spanishTitle}"`);
+                console.log(`✅ Spanish translation complete: "${spanishTitle}" (keyphrase: "${spanishSeo.focusKeyphrase}")`);
             } else {
                 console.warn('⏱ Spanish translation did not finish in time — returning the English blog only.');
                 spanishNotice = 'The Spanish version could not be generated this time. The English blog is ready — you can retry for the Spanish version.';
@@ -1477,6 +1546,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
             spanishHtmlContent,
             spanishTitle,
             spanishNotice,
+            spanishSeo,
         });
     } catch (err) {
         console.error('❌ Generation error:', err);
@@ -1487,8 +1557,18 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
 // ─── POST /api/publish ───────────────────────────────────────────
 app.post('/api/publish', async (req, res) => {
     try {
-        const { title, htmlContent, featuredMediaId, focusKeyphrase, metaTitle, metaDescription, seoKeywords } = req.body;
-        let { slug } = req.body;
+        const { title, htmlContent, featuredMediaId } = req.body;
+        let { slug, focusKeyphrase, metaTitle, metaDescription, seoKeywords } = req.body;
+
+        // Safety net: any meta the client didn't send gets parsed from the SEO
+        // comments embedded in the document itself (important for the Spanish
+        // version, whose comments were translated along with the article).
+        const embedded = parseSeoMeta(htmlContent || '');
+        focusKeyphrase = focusKeyphrase || embedded.focusKeyphrase;
+        metaTitle = metaTitle || embedded.seoTitle;
+        metaDescription = metaDescription || embedded.metaDesc;
+        slug = slug || embedded.slug;
+        if (!Array.isArray(seoKeywords) || !seoKeywords.length) seoKeywords = embedded.seoKeywords;
 
         const wpUrl = process.env.WORDPRESS_URL;
         const wpUser = process.env.WORDPRESS_USERNAME;
@@ -1608,7 +1688,7 @@ async function saveBlogs(blogs) {
 
 // ─── POST /api/blogs — Save a generated blog ───────────────────
 app.post('/api/blogs', async (req, res) => {
-    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, focusKeyphrase, slug, keywords, description, wordCount, userName, spanishHtml, spanishTitle } = req.body;
+    const { title, html, markdown, seoTitle, seoDescription, seoKeywords, focusKeyphrase, slug, keywords, description, wordCount, userName, spanishHtml, spanishTitle, spanishSeo } = req.body;
     const blogs = await loadBlogs();
     const blog = {
         id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
@@ -1627,6 +1707,7 @@ app.post('/api/blogs', async (req, res) => {
         wordCount: wordCount || 0,
         spanishHtml: spanishHtml || null,
         spanishTitle: spanishTitle || null,
+        spanishSeo: spanishSeo || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         published: false,

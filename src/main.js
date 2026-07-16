@@ -391,6 +391,7 @@ blogForm.addEventListener('submit', async (e) => {
                                 userName: window.currentUser?.name || 'Unknown',
                                 spanishHtml: data.spanishHtmlContent || null,
                                 spanishTitle: data.spanishTitle || null,
+                                spanishSeo: data.spanishSeo || null,
                             };
                             const saveRes = await fetch(`${API_BASE}/api/blogs`, {
                                 method: 'POST',
@@ -494,6 +495,10 @@ publishBtn.addEventListener('click', async () => {
         if (spanishBlogHtml) {
             try {
                 const spanishTitle = generatedBlog.spanishTitle || `[ES] ${generatedBlog.title}`;
+                // The Spanish post is analyzed by Yoast as its own page — publish it
+                // with the SPANISH keyphrase/meta (parsed server-side from the
+                // translated SEO comments), never the English ones.
+                const esSeo = generatedBlog.spanishSeo || {};
                 const spanishRes = await fetch(`${API_BASE}/api/publish`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -501,8 +506,11 @@ publishBtn.addEventListener('click', async () => {
                         title: spanishTitle,
                         htmlContent: spanishBlogHtml,
                         featuredMediaId: generatedBlog.featuredMediaId || null,
-                        focusKeyphrase: generatedBlog.focusKeyphrase || '',
-                        slug: generatedBlog.slug ? `${generatedBlog.slug}-es` : '',
+                        focusKeyphrase: esSeo.focusKeyphrase || '',
+                        metaTitle: esSeo.seoTitle || '',
+                        metaDescription: esSeo.metaDesc || '',
+                        seoKeywords: esSeo.seoKeywords || [],
+                        slug: esSeo.slug || (generatedBlog.slug ? `${generatedBlog.slug}-es` : ''),
                     }),
                 });
                 if (spanishRes.ok) {
@@ -848,7 +856,10 @@ async function viewBlog(blogId) {
             metaTitle: blog.seoTitle,
             metaDescription: blog.seoDescription,
             seoKeywords: blog.seoKeywords,
+            focusKeyphrase: blog.focusKeyphrase || '',
+            slug: blog.slug || '',
             spanishTitle: blog.spanishTitle || null,
+            spanishSeo: blog.spanishSeo || null,
         };
 
         // Restore Spanish content
