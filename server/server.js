@@ -1108,11 +1108,12 @@ Your job: judge which catalog posts are a genuinely good topical fit for this ar
 
 STRICT RULES:
 - Return ONLY a JSON array (no markdown, no commentary) of at most 5 objects: [{"anchor": "...", "url": "..."}]
-- "anchor" must be a phrase of 2-8 words copied VERBATIM (exact characters) from a body <p> paragraph of the article — never from headings, image alt text, or the SEO comment block, and never text that is already inside an <a> tag.
+- "anchor" must be a phrase of 2-8 words copied VERBATIM (exact characters, including accents) from a body <p> paragraph of the article — never from headings, image alt text, or the SEO comment block, and never text that is already inside an <a> tag.
 - "url" must be copied VERBATIM from the catalog below. NEVER invent, guess, modify, or shorten a URL.
-- A catalog post is a good fit only if it genuinely expands on a topic the article discusses. Quality over quantity.
+- A catalog post is a good fit if it covers a topic the article touches on. Aim for 2-5 links whenever the catalog allows — internal links are important for SEO.
+- The article and the catalog may be in DIFFERENT LANGUAGES (e.g. a Spanish article linking to English posts on the same site). That is fine and links are still wanted: judge fit by topic, and the anchor must be in the article's own language.
 - Use each URL at most once, and each anchor phrase at most once.
-- If NO catalog post is a good fit, return [] — that is a perfectly valid result.
+- Only if NO catalog post is even loosely related, return [].
 
 CATALOG OF EXISTING POSTS:
 ${catalogList}
@@ -1260,7 +1261,7 @@ app.post('/api/generate', async (req, res) => {
             messages: [
                 {
                     role: 'user',
-                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}.${language === 'spanish' ? ' IMPORTANT: Write the ENTIRE blog in Spanish. All headings, body text, callout badges, CTA — everything must be in Spanish.' : ' IMPORTANT: Write the ENTIRE blog in ENGLISH. Even if the topic, keywords, or description are provided in another language (e.g. Spanish), you MUST write the blog entirely in English. All headings, body text, callout badges, CTA — everything must be in English.'} Write naturally and conversationally: vary your sentence length, use synonyms and different word forms instead of repeating the same keyword, and make every paragraph flow into the next. Do not keyword-stuff. Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
+                    content: `Write the blog post now as valid, styled HTML. Make it approximately ${wordCount} words. Topic: ${keywords}. Context: ${description}.${language === 'spanish' ? ' IMPORTANT: Write the ENTIRE blog in Spanish. All headings, body text, callout badges, CTA — everything must be in Spanish.' : ' IMPORTANT: Write the ENTIRE blog in ENGLISH. Even if the topic, keywords, or description are provided in another language (e.g. Spanish), you MUST write the blog entirely in English. All headings, body text, callout badges, CTA — everything must be in English.'} Write naturally and conversationally: vary your sentence length, use synonyms and different word forms instead of repeating the same keyword, and make every paragraph flow into the next. Do not keyword-stuff. NON-NEGOTIABLE: the exact focus keyphrase must appear in the body text at least ${Math.max(5, Math.round(wordCount / 170))} separate times (count them before finishing — SEO tooling rejects the article below that count), spread across the article, at most once per paragraph. Remember: output ONLY the HTML, no markdown, no code fences. Do NOT include any <img> tags — images will be added separately.`,
                 },
             ],
             system: systemPrompt,
