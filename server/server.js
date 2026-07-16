@@ -301,7 +301,7 @@ app.post('/api/auth/login', async (req, res) => {
 // ─── Clients ─────────────────────────────────────────────────────
 // Disable the SDK's built-in retries (we run our own retry loop below) and give
 // every request a hard timeout so a single hung upstream call can never stall an
-// entire blog generation past Vercel's 300s function limit.
+// entire blog generation past Vercel's function time limit.
 const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY || 'placeholder',
     maxRetries: 0,
@@ -528,7 +528,7 @@ FOCUS KEYPHRASE & ON-PAGE SEO (these make the post pass Yoast-style SEO analysis
 - INTRODUCTION: the very first <p> must contain the EXACT focus keyphrase, ideally in the first sentence.
 - SUBHEADINGS: at least one H2 or H3 must contain the EXACT focus keyphrase (others may use synonyms).
 - DENSITY: the exact focus keyphrase should appear naturally a handful of times in the body (~0.5–1.5% density). Use synonyms and word forms for all other mentions.
-- OUTBOUND LINKS: include 2-4 contextual outbound links to authoritative EXTERNAL sources (studies, official docs, reputable publications, the named entities/sources from the research brief). Format: <a href="https://full-real-url" target="_blank" rel="noopener noreferrer" style="color:#FF8300;text-decoration:underline;font-weight:600;">descriptive anchor text</a>. Only link to real, well-known URLs — never invent links. Anchor text must be descriptive, never "click here".
+- LINKS: do NOT include ANY hyperlinks (<a> tags) in the article — no external links, no placeholder links, nothing. Internal links to our own published posts are inserted automatically in a separate step after writing. You may still name sources/studies in plain text (e.g. "a 2025 Gartner study found…") without linking them.
 - IMAGE ALT: when you reference images later, alt text should include the focus keyphrase or a close synonym (image tags are added separately, so just keep alt-friendly section headings).
 
 SEO META — Include these as HTML comments at the very top BEFORE the blog div (the focus keyphrase MUST appear at the START of the SEO title, inside the meta description, and inside the slug):
@@ -988,7 +988,52 @@ async function fetchWordPressPosts(limit = 50) {
     }
 }
 
+// ─── Link sanitizer: keep only links to our own blog network ─────────────────
+// The article must NEVER link out to external pages (the model sometimes invents
+// URLs that 404). Every legitimate internal link comes from the WordPress REST API
+// and therefore lives on our own domain — so any <a> pointing anywhere else is
+// unwrapped: the anchor text is kept, the hyperlink is removed.
+function sanitizeArticleLinks(html, siteUrl = process.env.WORDPRESS_URL) {
+    const hostOf = (u) => {
+        try { return new URL(u).hostname.replace(/^www\./i, '').toLowerCase(); } catch { return null; }
+    };
+    const siteHost = hostOf(siteUrl);
+    let removed = 0;
+    const out = html.replace(/<a\b[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, (match, href, inner) => {
+        if (siteHost && hostOf(href) === siteHost) return match;
+        removed++;
+        return inner;
+    });
+    if (removed > 0) console.log(`🧹 Removed ${removed} non-network link(s) from article (kept anchor text)`);
+    return out;
+}
+
 // ─── Insert internal links to existing network posts (SEO interlinking) ───────
+// Wrap the first safe occurrence of `anchor` inside a body <p> with a link.
+// Skips matches that land inside a tag, inside an existing <a>, or in headings
+// (only paragraph content is scanned). Returns the new HTML, or null if the
+// anchor couldn't be placed safely.
+function linkAnchorInParagraphs(html, anchor, url) {
+    let done = false;
+    const out = html.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, (para) => {
+        if (done) return para;
+        const idx = para.toLowerCase().indexOf(anchor.toLowerCase());
+        if (idx === -1) return para;
+        const before = para.slice(0, idx);
+        // Inside a tag (between "<" and ">")?
+        if (before.lastIndexOf('<') > before.lastIndexOf('>')) return para;
+        // Inside an existing <a>…</a>?
+        if ((before.match(/<a\b/gi) || []).length > (before.match(/<\/a>/gi) || []).length) return para;
+        done = true;
+        const original = para.slice(idx, idx + anchor.length);
+        return `${before}<a href="${url}" style="color:#FF8300;text-decoration:underline;font-weight:600;">${original}</a>${para.slice(idx + anchor.length)}`;
+    });
+    return done ? out : null;
+}
+
+// Instead of having the model re-emit the entire article (slow — output tokens
+// dominate LLM latency, and long posts blew the time budget), it returns a tiny
+// JSON list of anchor-phrase → catalog-URL pairs and we splice the links in here.
 async function insertNetworkLinks(htmlContent, { focusKeyphrase = '', internalTargets = [] } = {}) {
     if (!internalTargets || internalTargets.length === 0) return htmlContent;
 
@@ -1001,43 +1046,60 @@ async function insertNetworkLinks(htmlContent, { focusKeyphrase = '', internalTa
     try {
         const resp = await callClaude({
             model: 'claude-sonnet-4-6',
-            max_tokens: 8192,
-            temperature: 0.3,
+            max_tokens: 1000,
+            temperature: 0.2,
             messages: [{
                 role: 'user',
                 content: `You are an SEO interlinking specialist building a connected network of blog posts.
 
 Below is an HTML blog post (focus keyphrase: "${focusKeyphrase}"). Underneath it is a CATALOG of OTHER existing posts on the same site.
 
-Your job: analyze the article and insert contextually relevant INTERNAL links to the most topically related posts in the catalog. This builds a strong internal link network for SEO.
+Your job: judge which catalog posts are a genuinely good topical fit for this article, and pick existing phrases in the article's body paragraphs to serve as internal-link anchor text for them.
 
 STRICT RULES:
-- Insert between 2 and 5 internal links total (only as many as are genuinely relevant — quality over quantity).
-- Link from words/phrases that ALREADY EXIST in the body paragraphs, choosing anchor text that is descriptive and naturally matches the target post's topic.
-- Wrap the chosen existing anchor text like: <a href="TARGET_URL" style="color:#FF8300;text-decoration:underline;font-weight:600;">existing anchor text</a>
-- Use each target URL at most ONCE. Do not link the same phrase twice.
-- Only link where it makes real editorial sense (the linked post genuinely expands on that phrase). If fewer than 2 are genuinely relevant, add fewer (or none).
-- Do NOT add links inside headings (h1-h3), inside existing <a> tags, inside image alt text, or inside the SEO comment block.
-- Do NOT change, add, or remove ANY other text, HTML tags, attributes, inline styles, images, or SEO comments. Preserve the document EXACTLY except for the inserted <a> wrappers.
-- Output ONLY the full, updated HTML — no markdown, no code fences, no commentary.
+- Return ONLY a JSON array (no markdown, no commentary) of at most 5 objects: [{"anchor": "...", "url": "..."}]
+- "anchor" must be a phrase of 2-8 words copied VERBATIM (exact characters) from a body <p> paragraph of the article — never from headings, image alt text, or the SEO comment block, and never text that is already inside an <a> tag.
+- "url" must be copied VERBATIM from the catalog below. NEVER invent, guess, modify, or shorten a URL.
+- A catalog post is a good fit only if it genuinely expands on a topic the article discusses. Quality over quantity.
+- Use each URL at most once, and each anchor phrase at most once.
+- If NO catalog post is a good fit, return [] — that is a perfectly valid result.
 
 CATALOG OF EXISTING POSTS:
 ${catalogList}
 
-HTML ARTICLE TO ADD INTERNAL LINKS TO:
+HTML ARTICLE:
 ${htmlContent}`,
             }],
-        }, { timeoutMs: 90000, maxRetries: 1 });
+        }, { timeoutMs: 60000, maxRetries: 1 });
 
-        let out = resp.content[0].text.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
-        // Safety: only accept the rewrite if it still looks like the same document (kept the wrapper) and actually added a link.
-        if (out.includes('<div') && out.length > htmlContent.length * 0.7 && /<a\s+href=/i.test(out)) {
-            const added = (out.match(/<a\s+href=/gi) || []).length - (htmlContent.match(/<a\s+href=/gi) || []).length;
-            console.log(`🔗 Inserted ${Math.max(added, 0)} internal network link(s)`);
-            return out;
+        let raw = resp.content[0].text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        const arrMatch = raw.match(/\[[\s\S]*\]/);
+        const pairs = JSON.parse(arrMatch ? arrMatch[0] : raw);
+        if (!Array.isArray(pairs)) throw new Error('link pass did not return a JSON array');
+
+        // Hard guarantee: only catalog URLs ever make it into the article.
+        const normalize = (u) => (u || '').trim().replace(/\/+$/, '').toLowerCase();
+        const catalogByNorm = new Map(catalog.map(t => [normalize(t.url), t.url]));
+
+        let out = htmlContent;
+        let added = 0;
+        const usedUrls = new Set();
+        const usedAnchors = new Set();
+        for (const pair of pairs.slice(0, 5)) {
+            const anchor = String(pair?.anchor || '').trim();
+            const url = catalogByNorm.get(normalize(pair?.url));
+            if (!anchor || anchor.length < 3 || !url) continue;
+            if (usedUrls.has(url) || usedAnchors.has(anchor.toLowerCase())) continue;
+            const linked = linkAnchorInParagraphs(out, anchor, url);
+            if (linked) {
+                out = linked;
+                added++;
+                usedUrls.add(url);
+                usedAnchors.add(anchor.toLowerCase());
+            }
         }
-        console.warn('⚠ Internal-link pass produced unexpected output — keeping original HTML');
-        return htmlContent;
+        console.log(added > 0 ? `🔗 Inserted ${added} internal network link(s)` : '🔗 No catalog post was a good fit — no internal links added');
+        return out;
     } catch (err) {
         console.error('insertNetworkLinks error:', err.message);
         return htmlContent;
@@ -1082,11 +1144,11 @@ app.post('/api/generate', async (req, res) => {
     let clientGone = false;
     res.on('close', () => { if (!res.writableEnded) clientGone = true; });
 
-    // Global time budget. Vercel kills the function at maxDuration (300s); we finish
+    // Global time budget. Vercel kills the function at maxDuration (800s); we finish
     // well before that so the client always receives a terminal `result`/`error`
     // event instead of a silently dropped connection (which would hang the UI).
     const genStart = Date.now();
-    const GEN_DEADLINE_MS = 285000;
+    const GEN_DEADLINE_MS = 780000;
     const timeLeft = () => GEN_DEADLINE_MS - (Date.now() - genStart);
 
     // Heartbeat comment keeps intermediary proxies from dropping an idle SSE stream
@@ -1133,9 +1195,15 @@ app.post('/api/generate', async (req, res) => {
         sendProgress(2, TOTAL_STEPS, 'Writing SEO-optimized blog with Claude…');
         const systemPrompt = buildSystemPrompt(keywords, description, wordCount, researchInsights, [], customization);
 
+        // Scale the output budget and per-attempt timeout with the requested length.
+        // A styled 5,000-word HTML post needs ~15k output tokens and can take 4-5
+        // minutes to write — the old fixed 8192 tokens / 120s truncated or timed out.
+        const writeMaxTokens = Math.min(Math.max(8192, wordCount * 4), 20000);
+        const writeTimeoutMs = Math.min(Math.max(120000, wordCount * 60), 330000);
+
         const message = await callClaude({
             model: 'claude-sonnet-4-6',
-            max_tokens: 8192,
+            max_tokens: writeMaxTokens,
             temperature: 0.85,
             messages: [
                 {
@@ -1144,10 +1212,14 @@ app.post('/api/generate', async (req, res) => {
                 },
             ],
             system: systemPrompt,
-        }, { timeoutMs: 120000, maxRetries: 2 });
+        }, { timeoutMs: writeTimeoutMs, maxRetries: 2 });
 
         let htmlContent = message.content[0].text;
         htmlContent = htmlContent.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+        // Strip any links the writer added anyway — only internal network links
+        // (added in the linking step below, from the WordPress API) are allowed.
+        htmlContent = sanitizeArticleLinks(htmlContent);
 
         // Parse SEO meta up-front so the focus keyphrase can drive image alt text + internal links.
         const seo = parseSeoMeta(htmlContent, keywords);
@@ -1165,7 +1237,9 @@ app.post('/api/generate', async (req, res) => {
             const draftForTranslation = htmlContent;
             translationPromise = callClaude({
                 model: 'claude-sonnet-4-6',
-                max_tokens: 16384,
+                // Translation output is the same size as the article itself, so it
+                // needs the same generous token/time budget as the writing step.
+                max_tokens: Math.max(writeMaxTokens, 16384),
                 messages: [{
                     role: 'user',
                     content: `Translate the following HTML blog post to Spanish.
@@ -1187,7 +1261,7 @@ Here is the HTML to translate:
 
 ${draftForTranslation}`,
                 }],
-            }, { timeoutMs: 180000, maxRetries: 1 })
+            }, { timeoutMs: Math.max(writeTimeoutMs, 180000), maxRetries: 1 })
                 .then(resp => resp.content[0].text.replace(/^```html?\n?/i, '').replace(/\n?```$/i, '').trim())
                 .catch(err => {
                     console.error('❌ Spanish translation error:', err.message);
@@ -1275,9 +1349,9 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         const hasWpCredentials = process.env.WORDPRESS_URL && process.env.WORDPRESS_USERNAME && process.env.WORDPRESS_APP_PASSWORD;
 
         // Time budgets so the blog ALWAYS finishes, even if an image provider stalls.
-        // Vercel maxDuration is 300s — leave room for research/writing/translation.
+        // Vercel maxDuration is 800s — enough for all 5 images at the per-image cap.
         const PER_IMAGE_TIMEOUT_MS = 60000;
-        const IMAGE_TOTAL_BUDGET_MS = 130000;
+        const IMAGE_TOTAL_BUDGET_MS = 320000;
         // Reserve time for the remaining steps (insert + SEO). The Spanish translation
         // runs in parallel with this loop, so it no longer needs its own reserve here.
         const IMAGE_RESERVE_MS = 40000;
@@ -1330,10 +1404,9 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         htmlContent = injectImagesIntoBlogHtml(htmlContent, uploadedImages, h2Matches, sectionTitles, focusKeyphrase);
 
         // Internal linking step: weave this post into the existing blog network for SEO.
-        // This re-emits the whole document through Claude, so only run it when there's
-        // comfortable time left. (The Spanish translation runs in parallel, on the
-        // pre-link draft, so it no longer needs its own reserve here.)
-        const linkReserveMs = 70000;
+        // The model only returns anchor/URL pairs (links are spliced in locally), so
+        // this is fast — but still skip it if we're unexpectedly close to the deadline.
+        const linkReserveMs = 45000;
         if (timeLeft() < linkReserveMs) {
             console.log(`🔗 Skipping internal linking — ${Math.round(timeLeft() / 1000)}s left, reserving time to finish the blog`);
         } else {
