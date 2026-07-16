@@ -1506,6 +1506,12 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
                 // comments were translated along with the article, so parse them.
                 spanishHtmlContent = sanitizeArticleLinks(spanishHtmlContent, { allowedUrls: verifiedSources.map(s => s.url) });
                 spanishSeo = parseSeoMeta(spanishHtmlContent, focusKeyphrase);
+                // The translator sometimes keeps the English slug — the Spanish page
+                // needs its own keyphrase-bearing slug (and must not collide with the
+                // English post's slug on WordPress).
+                if (!spanishSeo.slug || spanishSeo.slug === seo.slug) {
+                    spanishSeo.slug = slugify(spanishSeo.focusKeyphrase) || `${seo.slug}-es`;
+                }
 
                 // Inject the same images into the Spanish HTML (positional: after each H2),
                 // with alt text built around the Spanish keyphrase.
