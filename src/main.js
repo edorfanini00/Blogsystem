@@ -259,63 +259,68 @@ blogForm.addEventListener('submit', async (e) => {
     }, 200);
 
     try {
-        const res = await fetch(`${API_BASE}/api/generate`, {
+        // Start the generation as a server-side JOB, then poll its status. Holding
+        // one connection open for a ~10-minute stream is fragile in browsers — a
+        // tab/laptop sleep, proxy, or brief network blip kills it and surfaces as a
+        // "network error" even though the server is still generating. With polling,
+        // each check is a fresh tiny request and a failed poll simply retries.
+        const startRes = await fetch(`${API_BASE}/api/generate/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keywords, description, wordCount, imageCount, target, product, trends, tone, language }),
         });
-
-        if (!res.ok || !res.body) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || `Generation failed (HTTP ${res.status})`);
+        if (!startRes.ok) {
+            const errData = await startRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Generation failed to start (HTTP ${startRes.status})`);
         }
+        const { jobId } = await startRes.json();
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        // Track whether we received a terminal event. If the connection drops
-        // mid-stream (e.g. the serverless function hit its time limit) we must NOT
-        // sit on the loading spinner forever — surface an error so the user can retry.
-        let gotTerminal = false;
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        let pollFailures = 0;
+        let data = null;
 
         while (true) {
-            const { done, value } = await reader.read();
-
-            if (!done) {
-                buffer += decoder.decode(value, { stream: true });
-            } else {
-                // Flush decoder and add any remaining buffer data
-                buffer += decoder.decode();
+            await sleep(2500);
+            let job;
+            try {
+                const pollRes = await fetch(`${API_BASE}/api/generate/status/${jobId}`);
+                if (!pollRes.ok) throw new Error(`HTTP ${pollRes.status}`);
+                job = await pollRes.json();
+                pollFailures = 0;
+            } catch {
+                // Network blip or laptop wake-up — the job keeps running server-side,
+                // so just keep polling. Only give up after ~2.5 minutes of silence.
+                if (++pollFailures >= 60) {
+                    throw new Error('Lost contact with the server. The blog may still be finishing — check your blog history in a few minutes.');
+                }
+                continue;
             }
 
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            // When stream is done, any remaining buffer content is the last line
-            // (it won't have a trailing \n so pop() pulled it out of lines)
-            if (done && buffer.trim()) {
-                lines.push(buffer);
-                buffer = '';
+            if (job.status === 'error') {
+                throw new Error(job.error || 'Blog generation failed');
             }
 
-            // Process all complete lines (the for loop below handles them)
-            // After processing, break if the stream is done
+            if (job.status === 'done' && job.result) {
+                data = job.result;
+                break;
+            }
 
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                try {
-                    const data = JSON.parse(line.slice(6));
+            // Still running — track the server's real progress.
+            if (job.total > 0) {
+                targetPct = (job.step / job.total) * 100;
+                ceilingPct = Math.min(((job.step + 0.9) / job.total) * 100, 99);
+                loadingText.textContent = job.message;
+            }
+            // If the job stops being updated entirely, the serverless function died
+            // (e.g. hit its time limit) — don't spin forever.
+            if (job.updatedAt && Date.now() - new Date(job.updatedAt).getTime() > 15 * 60 * 1000) {
+                throw new Error('The generation timed out before it finished. Please try again — reducing the word count or number of images helps it complete faster.');
+            }
+        }
 
-                    if (data.type === 'progress') {
-                        // Jump the bar to this step's mark, then let it creep toward
-                        // (but not into) the next step so it follows the real process.
-                        targetPct = (data.step / data.total) * 100;
-                        ceilingPct = Math.min(((data.step + 0.9) / data.total) * 100, 99);
-                        loadingText.textContent = data.message;
-                    }
-
-                    if (data.type === 'result') {
-                        gotTerminal = true;
+        // Render the finished blog. (Indentation below is kept from the previous
+        // stream-based handler to preserve the diff.)
+        {
                         // Snap to 100%
                         targetPct = 100;
                         currentPct = 100;
@@ -405,27 +410,6 @@ blogForm.addEventListener('submit', async (e) => {
                         } catch (saveErr) {
                             console.error('Blog save error:', saveErr);
                         }
-                    }
-
-                    if (data.type === 'error') {
-                        gotTerminal = true;
-                        throw new Error(data.error);
-                    }
-                } catch (parseErr) {
-                    if (parseErr.message && !parseErr.message.includes('JSON')) {
-                        throw parseErr;
-                    }
-                }
-            }
-
-            if (done) break;
-        }
-
-        // Stream ended without ever delivering a result or error. This happens when
-        // the serverless function is killed mid-generation (Vercel time limit) and
-        // the socket just closes. Don't leave the UI stuck on the loading spinner.
-        if (!gotTerminal) {
-            throw new Error('The generation timed out before it finished. Please try again — reducing the word count or number of images helps it complete faster.');
         }
     } catch (err) {
         console.error('Generation error:', err);

@@ -1180,60 +1180,22 @@ ${htmlContent}`,
     }
 }
 
-// ─── POST /api/generate (SSE progress streaming) ────────────────
-app.post('/api/generate', async (req, res) => {
-    // Set up SSE headers
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-    });
-
-    function sendProgress(step, total, message) {
-        res.write(`data: ${JSON.stringify({ type: 'progress', step, total, message })}\n\n`);
-    }
-
-    function sendResult(data) {
-        if (finished) return;
-        finished = true;
-        clearInterval(heartbeat);
-        res.write(`data: ${JSON.stringify({ type: 'result', ...data })}\n\n`);
-        res.end();
-    }
-
-    let finished = false;
-    function sendError(error) {
-        if (finished) return;
-        finished = true;
-        clearInterval(heartbeat);
-        res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
-        res.end();
-    }
-
-    // Track *real* client disconnects so we stop doing expensive work for a dead
-    // socket. Listen on the response, NOT req — `req` emits 'close' as soon as the
-    // request body is consumed by express.json(), which would falsely flag the
-    // client as gone and abort image generation mid-run.
-    let clientGone = false;
-    res.on('close', () => { if (!res.writableEnded) clientGone = true; });
+// ─── Core blog generation pipeline ───────────────────────────────
+// Shared by the job-based route (primary) and the SSE route (legacy fallback).
+// Reports progress through `onProgress(step, total, message)` and returns the
+// full result payload; throws on fatal errors.
+async function generateBlogCore(body, { onProgress = () => { }, isCancelled = () => false } = {}) {
+    const sendProgress = (step, total, message) => { try { onProgress(step, total, message); } catch { /* progress reporting must never kill the run */ } };
 
     // Global time budget. Vercel kills the function at maxDuration (800s); we finish
-    // well before that so the client always receives a terminal `result`/`error`
-    // event instead of a silently dropped connection (which would hang the UI).
+    // well before that so the caller always gets a terminal result/error.
     const genStart = Date.now();
     const GEN_DEADLINE_MS = 780000;
     const timeLeft = () => GEN_DEADLINE_MS - (Date.now() - genStart);
 
-    // Heartbeat comment keeps intermediary proxies from dropping an idle SSE stream
-    // during long LLM calls.
-    const heartbeat = setInterval(() => {
-        if (!finished) { try { res.write(': keep-alive\n\n'); } catch { /* socket closed */ } }
-    }, 15000);
-
-    try {
-        const { keywords, description, wordCount, target, product, trends, tone, language } = req.body;
-        const parsedImageCount = parseInt(req.body.imageCount);
+    {
+        const { keywords, description, wordCount, target, product, trends, tone, language } = body;
+        const parsedImageCount = parseInt(body.imageCount);
         const imageCount = Math.min(Math.max(isNaN(parsedImageCount) ? 3 : parsedImageCount, 0), 5);
         // Steps: research(1) + write(2) + [analyze + N images if N>0] + insert + SEO + [Spanish] + blogReady
         const hasImages = imageCount > 0;
@@ -1243,7 +1205,7 @@ app.post('/api/generate', async (req, res) => {
         const TOTAL_STEPS = insertStep + 1 + (hasSpanish ? 1 : 0) + 1; // +1 SEO, +1 spanish?, +1 blogReady
 
         if (!keywords || !description || !wordCount) {
-            return sendError('Missing required fields: keywords, description, wordCount');
+            throw new Error('Missing required fields: keywords, description, wordCount');
         }
 
         // Map tone dropdown value to readable label
@@ -1444,7 +1406,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         const imageLoopStart = Date.now();
 
         for (let i = 0; i < imagePrompts.length; i++) {
-            if (clientGone) { console.warn('⏹ Client disconnected — aborting image generation'); break; }
+            if (isCancelled()) { console.warn('⏹ Client disconnected — aborting image generation'); break; }
             if (Date.now() - imageLoopStart > IMAGE_TOTAL_BUDGET_MS) {
                 console.warn(`⏱ Image time budget exceeded — skipping remaining ${imagePrompts.length - i} image(s) so the blog can finish`);
                 break;
@@ -1570,7 +1532,7 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
         sendProgress(TOTAL_STEPS, TOTAL_STEPS, 'Blog ready!');
         console.log(`✅ Blog generated: "${title}"`);
 
-        sendResult({
+        return {
             title,
             content: htmlContent,
             htmlContent,
@@ -1586,10 +1548,139 @@ Return ONLY a JSON array of ${imageCount} strings, nothing else. Example: ["prom
             spanishTitle,
             spanishNotice,
             spanishSeo,
+        };
+    }
+}
+
+// ─── Job-based generation (poll-friendly; survives dropped connections) ───────
+// A browser holding one connection open for a 10-minute generation is fragile:
+// tab/laptop sleep, proxies, or a brief network blip kill the stream and surface
+// as a "network error" even though the server is still working. Instead the
+// frontend starts a job and polls its status — each poll is a fresh, tiny
+// request, so dropped polls simply retry. Job state lives in Redis (poll
+// requests may hit a different serverless instance), with an in-memory
+// fallback for local dev.
+const genJobs = new Map();
+const GEN_JOB_TTL_S = 2 * 60 * 60;
+
+async function saveGenJob(job) {
+    job.updatedAt = new Date().toISOString();
+    genJobs.set(job.id, job);
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            await r.set(`orbit_genjob_${job.id}`, JSON.stringify(job), 'EX', GEN_JOB_TTL_S);
+        } catch (err) {
+            console.error('Redis saveGenJob error:', err.message);
+        }
+    }
+}
+
+async function loadGenJob(id) {
+    if (useKV) {
+        try {
+            const r = getRedis();
+            await r.connect().catch(() => { });
+            const data = await r.get(`orbit_genjob_${id}`);
+            if (data) return JSON.parse(data);
+        } catch (err) {
+            console.error('Redis loadGenJob error:', err.message);
+        }
+    }
+    return genJobs.get(id) || null;
+}
+
+// On Vercel the function instance freezes as soon as the response is sent unless
+// the background work is registered with waitUntil.
+let vercelWaitUntil = null;
+try {
+    ({ waitUntil: vercelWaitUntil } = await import('@vercel/functions'));
+} catch { /* not on Vercel (local dev) — pending promises keep running anyway */ }
+
+// ─── POST /api/generate/start — kick off a generation job ───────
+app.post('/api/generate/start', async (req, res) => {
+    const { keywords, description, wordCount } = req.body || {};
+    if (!keywords || !description || !wordCount) {
+        return res.status(400).json({ error: 'Missing required fields: keywords, description, wordCount' });
+    }
+
+    const job = {
+        id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10),
+        status: 'running',
+        step: 0,
+        total: 0,
+        message: 'Starting generation…',
+        createdAt: new Date().toISOString(),
+    };
+    await saveGenJob(job);
+
+    const run = (async () => {
+        try {
+            const result = await generateBlogCore(req.body, {
+                onProgress: (step, total, message) => {
+                    job.step = step;
+                    job.total = total;
+                    job.message = message;
+                    saveGenJob(job).catch(() => { });
+                },
+            });
+            job.status = 'done';
+            job.result = result;
+            await saveGenJob(job);
+        } catch (err) {
+            console.error('❌ Generation job error:', err);
+            job.status = 'error';
+            job.error = err.message || 'Blog generation failed';
+            await saveGenJob(job);
+        }
+    })();
+    if (vercelWaitUntil) vercelWaitUntil(run);
+
+    res.json({ jobId: job.id });
+});
+
+// ─── GET /api/generate/status/:id — poll a generation job ───────
+app.get('/api/generate/status/:id', async (req, res) => {
+    const job = await loadGenJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    res.json(job);
+});
+
+// ─── POST /api/generate (SSE progress streaming — legacy path) ──
+app.post('/api/generate', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+    });
+
+    const sendEvent = (obj) => { try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch { /* socket closed */ } };
+
+    // Track *real* client disconnects so we stop doing expensive work for a dead
+    // socket. Listen on the response, NOT req — `req` emits 'close' as soon as the
+    // request body is consumed by express.json(), which would falsely flag the
+    // client as gone and abort image generation mid-run.
+    let clientGone = false;
+    res.on('close', () => { if (!res.writableEnded) clientGone = true; });
+
+    // Heartbeat comment keeps intermediary proxies from dropping an idle SSE stream
+    // during long LLM calls.
+    const heartbeat = setInterval(() => { try { res.write(': keep-alive\n\n'); } catch { /* socket closed */ } }, 15000);
+
+    try {
+        const result = await generateBlogCore(req.body, {
+            onProgress: (step, total, message) => sendEvent({ type: 'progress', step, total, message }),
+            isCancelled: () => clientGone,
         });
+        sendEvent({ type: 'result', ...result });
     } catch (err) {
         console.error('❌ Generation error:', err);
-        sendError(err.message || 'Blog generation failed');
+        sendEvent({ type: 'error', error: err.message || 'Blog generation failed' });
+    } finally {
+        clearInterval(heartbeat);
+        try { res.end(); } catch { /* already closed */ }
     }
 });
 
