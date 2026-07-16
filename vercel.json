@@ -2,7 +2,7 @@
     "functions": {
         "api/index.js": {
             "includeFiles": "server/**",
-            "maxDuration": 300
+            "maxDuration": 800
         }
     },
     "crons": [
